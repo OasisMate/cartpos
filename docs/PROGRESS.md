@@ -307,8 +307,64 @@ This file tracks the completion status of all milestones and development progres
 
 ---
 
-### ⏳ M7 – POS (Online Only)
-**Status:** NOT STARTED
+### ✅ M7 – POS (Online Only)
+**Status:** COMPLETED  
+**Date:** 2025-11-15
+
+**Completed:**
+- ✅ Sales domain logic implemented (`src/lib/domain/sales.ts`)
+  - `createSale()` - Creates invoice with validation and stock/customer ledger integration
+  - `listSales()` - Returns paginated list with filters (customer, payment status, date range)
+  - **Stock Ledger Integration:**
+    - Creates StockLedger entry for each sale line (type SALE, negative changeQty)
+    - Validates stock availability for products that track stock
+  - **Payment Handling:**
+    - For paid sales: Creates Payment row, paymentStatus = PAID
+    - For udhaar sales: paymentStatus = UDHAAR, creates CustomerLedger DEBIT entry (sale_udhaar)
+    - All operations in a transaction for data consistency
+  - `checkSalePermission()` - Validates user has permission (ADMIN, OWNER, or CASHIER)
+- ✅ API routes implemented:
+  - `POST /api/sales` - Create sale (invoice) with lines, payment, and stock updates
+  - `GET /api/sales` - List sales with pagination and filters
+  - `GET /api/customers` - List customers (minimal for POS udhaar sales)
+- ✅ Frontend (`/pos` page):
+  - Product loading from `/api/products/pos` on mount
+  - **Product Selection:**
+    - Barcode input (scan or enter code)
+    - Product search dropdown
+    - Product grid with click-to-add
+  - **Cart Management:**
+    - Add/remove items
+    - Update quantities
+    - Calculate subtotal, discount, total
+  - **Payment UI:**
+    - Payment status selection (PAID/UDHAAR)
+    - Payment method selection (CASH/CARD/OTHER)
+    - Amount received input (for cash)
+    - Change calculation
+    - Customer selection (for udhaar)
+  - **Sale Completion:**
+    - Validates cart, payment, and customer (for udhaar)
+    - Calls `/api/sales` to complete sale
+    - Resets cart and shows success message
+- ✅ Sale validation:
+  - Validates items (quantity > 0, products exist)
+  - Checks stock availability for products that track stock
+  - Validates totals (subtotal, discount, total)
+  - Validates customer for udhaar sales
+  - Validates payment method for paid sales
+  - Validates amount received for cash payments
+
+**Files Created:**
+- `src/lib/domain/sales.ts` - Sales domain logic with stock and customer ledger integration
+- `src/app/api/sales/route.ts` - Sales list/create API
+- `src/app/api/customers/route.ts` - Customers list API (minimal for POS)
+- `src/app/pos/page.tsx` - Complete POS UI with product selection, cart, and payment
+
+**Files Modified:**
+- None (new module)
+
+**Commit:** M7 - POS (Online Only)
 
 ---
 
@@ -364,9 +420,9 @@ This file tracks the completion status of all milestones and development progres
 
 ## Current Status Summary
 
-**Completed Milestones:** 7/17 (M0, M1, M2, M3, M4, M5, M6)  
+**Completed Milestones:** 8/17 (M0, M1, M2, M3, M4, M5, M6, M7)  
 **In Progress:** None  
-**Next Milestone:** M7 – POS (Online Only)
+**Next Milestone:** M8 – PWA Shell (Offline Page Load)
 
 **Last Updated:** 2025-11-15
 
@@ -387,4 +443,5 @@ This file tracks the completion status of all milestones and development progres
 - Products module complete - full CRUD with validation, permissions, and POS-ready API
 - Suppliers module complete - minimal supplier management ready for purchases integration
 - Purchases & Stock Ledger complete - purchase creation with automatic stock updates, cost price tracking, and stock calculation
+- POS (Online Only) complete - full POS interface with product selection, cart, payment processing, stock updates, and udhaar support
 
