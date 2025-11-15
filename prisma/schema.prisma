@@ -1,0 +1,301 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -----------------------------------------------------
+// Core: Shops, Users, Settings
+// -----------------------------------------------------
+
+model Shop {
+  id          String        @id @default(cuid())
+  name        String
+  city        String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  owners      UserShop[]
+  settings    ShopSettings?
+  products    Product[]
+  suppliers   Supplier[]
+  customers   Customer[]
+  invoices    Invoice[]
+  purchases   Purchase[]
+  stockLedger StockLedger[]
+  payments    Payment[]
+  customerLedger CustomerLedger[]
+
+  @@index([name])
+}
+
+model User {
+  id        String      @id @default(cuid())
+  name      String
+  email     String      @unique
+  password  String      // hashed password
+  role      UserRole    @default(NORMAL)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  shops            UserShop[]
+  createdInvoices  Invoice[]   @relation("InvoiceCreatedBy")
+  createdPurchases Purchase[]  @relation("PurchaseCreatedBy")
+}
+
+model UserShop {
+  id        String    @id @default(cuid())
+  userId    String
+  shopId    String
+  shopRole  ShopRole
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+  shop      Shop      @relation(fields: [shopId], references: [id])
+
+  @@unique([userId, shopId])
+}
+
+enum UserRole {
+  ADMIN
+  NORMAL
+}
+
+enum ShopRole {
+  OWNER
+  CASHIER
+}
+
+model ShopSettings {
+  id                              String        @id @default(cuid())
+  shopId                          String        @unique
+  requireCostPriceForStockItems   Boolean       @default(false)
+  requireBarcodeForProducts       Boolean       @default(false)
+  allowCustomUnits                Boolean       @default(true)
+  languageMode                    LanguageMode  @default(EN_BILINGUAL)
+  shop                            Shop          @relation(fields: [shopId], references: [id])
+}
+
+enum LanguageMode {
+  EN_ONLY
+  EN_BILINGUAL    // v1
+  URDU_EN         // future
+}
+
+// -----------------------------------------------------
+// Products & Stock
+// -----------------------------------------------------
+
+model Product {
+  id           String         @id @default(cuid())
+  shopId       String
+  name         String
+  sku          String?
+  barcode      String?
+  unit         String
+  price        Decimal        @db.Decimal(10, 2)
+  costPrice    Decimal?       @db.Decimal(10, 2)
+  category     String?
+  trackStock   Boolean        @default(true)
+  reorderLevel Int?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  shop         Shop           @relation(fields: [shopId], references: [id])
+  invoiceLines InvoiceLine[]
+  purchaseLines PurchaseLine[]
+  stockLedger  StockLedger[]
+
+  @@index([shopId, name])
+  @@unique([shopId, barcode], map: "unique_barcode_per_shop")
+  @@index([shopId, barcode])
+}
+
+model StockLedger {
+  id          String         @id @default(cuid())
+  shopId      String
+  productId   String
+  changeQty   Decimal        @db.Decimal(10, 3) // quantity can be fractional
+  type        StockMoveType
+  refType     String?        // e.g. "purchase_line", "invoice_line", "adjustment"
+  refId       String?
+  createdAt   DateTime       @default(now())
+  shop        Shop           @relation(fields: [shopId], references: [id])
+  product     Product        @relation(fields: [productId], references: [id])
+
+  @@index([shopId, productId])
+}
+
+enum StockMoveType {
+  PURCHASE
+  SALE
+  ADJUSTMENT
+}
+
+// -----------------------------------------------------
+// Suppliers & Purchases
+// -----------------------------------------------------
+
+model Supplier {
+  id        String     @id @default(cuid())
+  shopId    String
+  name      String
+  phone     String?
+  notes     String?
+  createdAt DateTime   @default(now())
+  shop      Shop       @relation(fields: [shopId], references: [id])
+  purchases Purchase[]
+
+  @@index([shopId, name])
+}
+
+model Purchase {
+  id              String         @id @default(cuid())
+  shopId          String
+  supplierId      String?
+  date            DateTime       @default(now())
+  reference       String?
+  notes           String?
+  createdByUserId String?
+  createdAt       DateTime       @default(now())
+  shop            Shop           @relation(fields: [shopId], references: [id])
+  supplier        Supplier?      @relation(fields: [supplierId], references: [id])
+  lines           PurchaseLine[]
+  createdBy       User?          @relation("PurchaseCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([shopId, date])
+}
+
+model PurchaseLine {
+  id          String          @id @default(cuid())
+  purchaseId  String
+  productId   String
+  quantity    Decimal         @db.Decimal(10, 3)
+  unitCost    Decimal?        @db.Decimal(10, 2)
+  createdAt   DateTime        @default(now())
+  purchase    Purchase        @relation(fields: [purchaseId], references: [id])
+  product     Product         @relation(fields: [productId], references: [id])
+
+  @@index([purchaseId])
+}
+
+// -----------------------------------------------------
+// Customers & Udhaar
+// -----------------------------------------------------
+
+model Customer {
+  id        String           @id @default(cuid())
+  shopId    String
+  name      String
+  phone     String?
+  notes     String?
+  createdAt DateTime         @default(now())
+  shop      Shop             @relation(fields: [shopId], references: [id])
+  invoices  Invoice[]
+  ledger    CustomerLedger[]
+  payments  Payment[]
+
+  @@index([shopId, name])
+  @@index([shopId, phone])
+}
+
+model CustomerLedger {
+  id          String             @id @default(cuid())
+  shopId      String
+  customerId  String
+  type        CustomerEntryType
+  direction   LedgerDirection
+  amount      Decimal            @db.Decimal(10, 2)
+  refType     String?
+  refId       String?
+  createdAt   DateTime           @default(now())
+  shop        Shop               @relation(fields: [shopId], references: [id])
+  customer    Customer           @relation(fields: [customerId], references: [id])
+
+  @@index([shopId])
+  @@index([customerId])
+}
+
+enum CustomerEntryType {
+  SALE_UDHAAR
+  PAYMENT_RECEIVED
+  ADJUSTMENT
+}
+
+enum LedgerDirection {
+  DEBIT   // customer owes more
+  CREDIT  // owes less
+}
+
+// -----------------------------------------------------
+// Sales, Invoices, Payments
+// -----------------------------------------------------
+
+model Invoice {
+  id              String          @id @default(cuid())
+  shopId          String
+  customerId      String?
+  number          String?         // human-readable invoice no., optional
+  status          InvoiceStatus   @default(COMPLETED)
+  paymentStatus   PaymentStatus
+  paymentMethod   PaymentMethod?  // null for UDHAAR
+  subtotal        Decimal         @db.Decimal(10, 2)
+  discount        Decimal         @default(0) @db.Decimal(10, 2)
+  total           Decimal         @db.Decimal(10, 2)
+  createdByUserId String?
+  createdAt       DateTime        @default(now())
+  shop            Shop            @relation(fields: [shopId], references: [id])
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  lines           InvoiceLine[]
+  payments        Payment[]
+  createdBy       User?           @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([shopId, createdAt])
+}
+
+model InvoiceLine {
+  id          String     @id @default(cuid())
+  invoiceId   String
+  productId   String
+  quantity    Decimal    @db.Decimal(10, 3)
+  unitPrice   Decimal    @db.Decimal(10, 2)
+  lineTotal   Decimal    @db.Decimal(10, 2)
+  createdAt   DateTime   @default(now())
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id])
+  product     Product     @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+}
+
+enum InvoiceStatus {
+  COMPLETED
+  VOID
+}
+
+enum PaymentStatus {
+  PAID
+  UDHAAR
+  PARTIAL  // for future
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  OTHER
+}
+
+model Payment {
+  id          String          @id @default(cuid())
+  shopId      String
+  invoiceId   String?
+  customerId  String?
+  amount      Decimal         @db.Decimal(10, 2)
+  method      PaymentMethod
+  note        String?
+  createdAt   DateTime        @default(now())
+  shop        Shop            @relation(fields: [shopId], references: [id])
+  invoice     Invoice?        @relation(fields: [invoiceId], references: [id])
+  customer    Customer?       @relation(fields: [customerId], references: [id])
+
+  @@index([shopId, createdAt])
+}
+

@@ -5,6 +5,8 @@ Built as a modern web app (PWA) with support for basic stock, udhaar, and daily 
 
 > **Status:** Early development (v1 – internal use only)
 
+> 📋 **Product Requirements:** See [`docs/PRD.md`](./docs/PRD.md) for the complete Product Requirements Document (single source of truth for all project requirements).
+
 ---
 
 ## 🎯 Project Goals
