@@ -214,13 +214,96 @@ This file tracks the completion status of all milestones and development progres
 
 ---
 
-### ⏳ M5 – Suppliers Module
-**Status:** NOT STARTED
+### ✅ M5 – Suppliers Module
+**Status:** COMPLETED  
+**Date:** 2025-11-15
+
+**Completed:**
+- ✅ Supplier domain logic implemented (`src/lib/domain/suppliers.ts`)
+  - `createSupplier()` - Creates supplier with validation (name required)
+  - `updateSupplier()` - Updates supplier with same validation
+  - `listSuppliers()` - Returns paginated list with search filter (name, phone)
+  - `getSupplier()` - Gets single supplier with purchase count
+  - `checkSupplierPermission()` - Validates user has permission (ADMIN or OWNER) to manage suppliers
+- ✅ API routes implemented:
+  - `GET /api/suppliers` - List suppliers with pagination and search filter
+  - `POST /api/suppliers` - Create supplier
+  - `GET /api/suppliers/:id` - Get single supplier
+  - `PUT /api/suppliers/:id` - Update supplier
+- ✅ Frontend (`/backoffice/suppliers` page):
+  - Supplier list table with pagination
+  - Search functionality (name, phone)
+  - Create/Edit supplier form (modal):
+    - Fields: name* (required), phone, notes
+    - Validation: name required, trimmed inputs
+  - Edit button for each supplier
+  - Purchase count displayed for each supplier
+  - Pagination controls
+- ✅ Supplier validation:
+  - Required fields: name
+  - Permission check: Only ADMIN or OWNER can create/update suppliers
+  - Shop context: Suppliers are scoped to current shop
+
+**Files Created:**
+- `src/lib/domain/suppliers.ts` - Supplier domain logic
+- `src/app/api/suppliers/route.ts` - Supplier list/create API
+- `src/app/api/suppliers/[id]/route.ts` - Supplier get/update API
+- `src/app/backoffice/suppliers/page.tsx` - Complete suppliers CRUD UI
+
+**Files Modified:**
+- None (new module)
+
+**Commit:** M5 - Suppliers Module
 
 ---
 
-### ⏳ M6 – Purchases & Stock Ledger
-**Status:** NOT STARTED
+### ✅ M6 – Purchases & Stock Ledger
+**Status:** COMPLETED  
+**Date:** 2025-11-15
+
+**Completed:**
+- ✅ Purchase domain logic implemented (`src/lib/domain/purchases.ts`)
+  - `createPurchase()` - Creates purchase with validation (shop access, product exists, quantity > 0)
+  - `listPurchases()` - Returns paginated list with filters (supplier, date range)
+  - `getPurchase()` - Gets single purchase with lines, supplier, createdBy
+  - `getProductStock()` - Utility function to calculate stock by summing StockLedger.changeQty
+  - `getShopStock()` - Gets stock for all products in a shop
+  - `checkPurchasePermission()` - Validates user has permission (ADMIN or OWNER) to manage purchases
+  - **Stock Ledger Integration:**
+    - Creates StockLedger entry for each purchase line (type PURCHASE, positive changeQty)
+    - Updates Product.costPrice when unitCost provided
+    - All operations in a transaction for data consistency
+- ✅ API routes implemented:
+  - `GET /api/purchases` - List purchases with pagination and filters (supplier, date range)
+  - `POST /api/purchases` - Create purchase with lines
+  - `GET /api/purchases/:id` - Get single purchase
+  - `GET /api/stock` - Get stock for products (single product or all products in shop)
+- ✅ Frontend (`/backoffice/purchases` page):
+  - Purchase list table with pagination
+  - Create purchase form (modal):
+    - Header fields: supplier (optional), date, reference (optional), notes (optional)
+    - Dynamic lines table: product dropdown, quantity, unit cost (optional)
+    - Add/Remove line items dynamically
+    - Validation: at least one line with product and quantity > 0
+  - Purchase details display: date, supplier, reference, item count, created by, notes
+  - Pagination controls
+- ✅ Stock management:
+  - Stock ledger automatically updated on purchase creation
+  - Stock calculated by summing StockLedger.changeQty for each product
+  - Product costPrice updated when unitCost provided in purchase
+  - All operations atomic (transaction-based)
+
+**Files Created:**
+- `src/lib/domain/purchases.ts` - Purchase domain logic with stock ledger integration
+- `src/app/api/purchases/route.ts` - Purchase list/create API
+- `src/app/api/purchases/[id]/route.ts` - Purchase get API
+- `src/app/api/stock/route.ts` - Stock API (product stock or shop stock)
+- `src/app/backoffice/purchases/page.tsx` - Complete purchases CRUD UI
+
+**Files Modified:**
+- None (new module)
+
+**Commit:** M6 - Purchases & Stock Ledger
 
 ---
 
@@ -281,9 +364,9 @@ This file tracks the completion status of all milestones and development progres
 
 ## Current Status Summary
 
-**Completed Milestones:** 5/17 (M0, M1, M2, M3, M4)  
+**Completed Milestones:** 7/17 (M0, M1, M2, M3, M4, M5, M6)  
 **In Progress:** None  
-**Next Milestone:** M5 – Suppliers Module
+**Next Milestone:** M7 – POS (Online Only)
 
 **Last Updated:** 2025-11-15
 
@@ -302,4 +385,6 @@ This file tracks the completion status of all milestones and development progres
 - Performance optimized - reduced unnecessary API calls (React Strict Mode double-render handled)
 - All backoffice routes fixed - pages moved from route groups to actual routes
 - Products module complete - full CRUD with validation, permissions, and POS-ready API
+- Suppliers module complete - minimal supplier management ready for purchases integration
+- Purchases & Stock Ledger complete - purchase creation with automatic stock updates, cost price tracking, and stock calculation
 
