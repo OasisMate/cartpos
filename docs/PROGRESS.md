@@ -426,8 +426,55 @@ This file tracks the completion status of all milestones and development progres
 
 ---
 
-### ⏳ M9 – Local DB (IndexedDB) & Product Cache
-**Status:** NOT STARTED
+### ✅ M9 – Local DB (IndexedDB) & Product Cache
+**Status:** COMPLETED  
+**Date:** 2025-11-15
+
+**Completed:**
+- ✅ IndexedDB wrapper implemented (`src/lib/offline/indexedDb.ts`):
+  - Installed `dexie` package (IndexedDB wrapper library)
+  - Created `CartPOSDatabase` class with stores:
+    - `meta` - Key-value pairs (currentShopId, lastSyncTime, etc.)
+    - `products` - Cached products for POS (indexed by id, shopId, barcode, updatedAt)
+    - `customers` - Cached customers (indexed by id, shopId, name, phone, syncStatus, updatedAt)
+    - `suppliers` - Cached suppliers (indexed by id, shopId, name, syncStatus, updatedAt)
+  - Helper functions for each store (save, get, search, delete)
+- ✅ Product caching implementation (`src/lib/offline/products.ts`):
+  - `fetchAndCacheProducts()` - Fetches from API and caches in IndexedDB
+  - `getCachedProducts()` - Gets products from cache
+  - `getProductsWithCache()` - Smart function that tries API first if online, falls back to cache
+  - `findProductByBarcode()` - Finds product by barcode in cache
+  - `searchCachedProducts()` - Searches products in cache by name/barcode
+- ✅ POS page updated to use cached products:
+  - `fetchProducts()` now uses `getProductsWithCache()` for cache-aware fetching
+  - `handleBarcodeSubmit()` uses `findProductByBarcode()` to search in IndexedDB
+  - Product search dropdown uses `searchCachedProducts()` when offline
+  - Products automatically cached when fetched from API
+  - Offline search works entirely from IndexedDB
+- ✅ Caching strategy:
+  - On app load (POS): Fetches `/api/products/pos` when online, saves to IndexedDB
+  - POS reads products from local DB first when offline
+  - Only calls API to refresh when online, not for every search
+  - Products cached per shop (shopId indexed)
+  - Updated timestamp stored for each cached record
+- ✅ Testing:
+  - Build compiles successfully
+  - POS product search works with network off (after initial sync)
+  - Barcode search works offline from IndexedDB
+  - Product list available offline after first online visit
+
+**Files Created:**
+- `src/lib/offline/indexedDb.ts` - IndexedDB wrapper with Dexie (stores: meta, products, customers, suppliers)
+- `src/lib/offline/products.ts` - Product caching functions (fetch, cache, search, barcode lookup)
+
+**Files Modified:**
+- `src/app/pos/page.tsx` - Updated to use cached products (offline-first product fetching)
+- `package.json` / `package-lock.json` - Added dexie dependency
+
+**Files Removed:**
+- `src/lib/offline/index.ts` - Replaced by indexedDb.ts
+
+**Commit:** M9 - Local DB (IndexedDB) & Product Cache
 
 ---
 
@@ -473,9 +520,9 @@ This file tracks the completion status of all milestones and development progres
 
 ## Current Status Summary
 
-**Completed Milestones:** 9/17 (M0, M1, M2, M3, M4, M5, M6, M7, M8)  
+**Completed Milestones:** 10/17 (M0, M1, M2, M3, M4, M5, M6, M7, M8, M9)  
 **In Progress:** None  
-**Next Milestone:** M9 – Local DB (IndexedDB) & Product Cache
+**Next Milestone:** M10 – Local Sales Store & Sales Sync (Core Offline)
 
 **Last Updated:** 2025-11-15
 
@@ -498,4 +545,5 @@ This file tracks the completion status of all milestones and development progres
 - Purchases & Stock Ledger complete - purchase creation with automatic stock updates, cost price tracking, and stock calculation
 - POS (Online Only) complete - full POS interface with product selection, cart, payment processing, stock updates, and udhaar support
 - PWA Shell complete - offline page load support with service worker, manifest, and offline status indicator
+- Local DB (IndexedDB) & Product Cache complete - product caching for offline access, barcode search, and product search working offline
 

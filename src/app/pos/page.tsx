@@ -4,15 +4,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { getProductsWithCache, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 
-interface Product {
-  id: string
-  name: string
-  barcode: string | null
-  unit: string
-  price: number
-  trackStock: boolean
-}
+// Product interface is imported from lib/offline/products
 
 interface Customer {
   id: string
@@ -49,12 +43,27 @@ export default function POSPage() {
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  const fetchProducts = useCallback(async () => {
+    try {
+      setLoading(true)
+      if (!user?.currentShopId) return
+
+      // Use cache-aware product fetching
+      const productsList = await getProductsWithCache(user.currentShopId, isOnline)
+      setProducts(productsList)
+    } catch (err) {
+      console.error('Failed to fetch products:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.currentShopId, isOnline])
+
   useEffect(() => {
     if (user?.currentShopId) {
       fetchProducts()
       fetchCustomers()
     }
-  }, [user?.currentShopId])
+  }, [user?.currentShopId, fetchProducts])
 
   useEffect(() => {
     // Focus barcode input on mount
@@ -62,21 +71,6 @@ export default function POSPage() {
       barcodeInputRef.current.focus()
     }
   }, [])
-
-  async function fetchProducts() {
-    try {
-      setLoading(true)
-      const response = await fetch('/api/products/pos')
-      if (response.ok) {
-        const data = await response.json()
-        setProducts(data.products || [])
-      }
-    } catch (err) {
-      console.error('Failed to fetch products:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   async function fetchCustomers() {
     try {
@@ -148,15 +142,38 @@ export default function POSPage() {
     )
   }
 
-  function handleBarcodeSubmit(e: React.FormEvent) {
+  async function handleBarcodeSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!barcodeInput.trim()) return
+    if (!barcodeInput.trim() || !user?.currentShopId) return
 
-    const product = products.find((p) => p.barcode === barcodeInput.trim())
-    if (product) {
-      addToCart(product, 1)
-    } else {
-      setError('Product not found with this barcode')
+    try {
+      // Try to find product by barcode in cache
+      const product = await findProductByBarcode(user.currentShopId, barcodeInput.trim())
+      if (product) {
+        addToCart(
+          {
+            id: product.id,
+            name: product.name,
+            barcode: product.barcode,
+            unit: product.unit,
+            price: product.price,
+            trackStock: product.trackStock,
+          },
+          1
+        )
+      } else {
+        // Fallback to products array search
+        const foundProduct = products.find((p) => p.barcode === barcodeInput.trim())
+        if (foundProduct) {
+          addToCart(foundProduct, 1)
+        } else {
+          setError('Product not found with this barcode')
+          setTimeout(() => setError(''), 3000)
+        }
+      }
+    } catch (err) {
+      console.error('Error finding product by barcode:', err)
+      setError('Error finding product')
       setTimeout(() => setError(''), 3000)
     }
   }
@@ -258,11 +275,50 @@ export default function POSPage() {
       ? parseFloat(amountReceived) - total
       : 0
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.barcode && p.barcode.includes(searchTerm))
-  )
+  // Use cached search when offline, or filter products array when online
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredProducts(products)
+      return
+    }
+
+    async function performSearch() {
+      if (!user?.currentShopId) return
+
+      if (!isOnline) {
+        // Offline: use IndexedDB search
+        try {
+          const results = await searchCachedProducts(user.currentShopId, searchTerm)
+          setFilteredProducts(
+            results.map((p) => ({
+              id: p.id,
+              name: p.name,
+              barcode: p.barcode,
+              unit: p.unit,
+              price: p.price,
+              trackStock: p.trackStock,
+            }))
+          )
+        } catch (err) {
+          console.error('Error searching cached products:', err)
+          setFilteredProducts([])
+        }
+      } else {
+        // Online: filter products array
+        setFilteredProducts(
+          products.filter(
+            (p) =>
+              p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              (p.barcode && p.barcode.includes(searchTerm))
+          )
+        )
+      }
+    }
+
+    performSearch()
+  }, [searchTerm, products, user?.currentShopId, isOnline])
 
   if (!user?.currentShopId) {
     return (
