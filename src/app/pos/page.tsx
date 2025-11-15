@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 
 interface Product {
   id: string
@@ -29,6 +30,7 @@ interface CartItem {
 export default function POSPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const isOnline = useOnlineStatus()
   const [products, setProducts] = useState<Product[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -273,9 +275,19 @@ export default function POSPage() {
 
   return (
     <div className="flex h-screen bg-gray-50">
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white text-center py-2 z-50">
+          <div className="flex items-center justify-center gap-2">
+            <span>⚠️</span>
+            <span className="font-semibold">You are offline. Some features may be limited.</span>
+          </div>
+        </div>
+      )}
+
       {/* Left Panel - Product Selection */}
       <div className="w-1/2 border-r bg-white overflow-y-auto">
-        <div className="p-4 sticky top-0 bg-white border-b z-10">
+        <div className={`p-4 sticky top-0 bg-white border-b z-10 ${!isOnline ? 'mt-8' : ''}`}>
           <h1 className="text-2xl font-bold mb-4">POS</h1>
 
           {/* Barcode Input */}

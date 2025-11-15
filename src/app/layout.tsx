@@ -7,6 +7,19 @@ import Sidebar from '@/components/layout/Sidebar'
 export const metadata: Metadata = {
   title: 'CartPOS',
   description: 'Offline-first POS for small retail shops',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'CartPOS',
+  },
+  icons: {
+    apple: '/icon-192x192.png',
+  },
+}
+
+export const viewport = {
+  themeColor: '#2563eb',
 }
 
 export default function RootLayout({
