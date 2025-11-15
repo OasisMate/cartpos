@@ -7,6 +7,8 @@ Built as a modern web app (PWA) with support for basic stock, udhaar, and daily 
 
 > 📋 **Product Requirements:** See [`docs/PRD.md`](./docs/PRD.md) for the complete Product Requirements Document (single source of truth for all project requirements).
 
+> 📊 **Development Progress:** See [`docs/PROGRESS.md`](./docs/PROGRESS.md) for current milestone completion status and what's been done.
+
 ---
 
 ## 🎯 Project Goals
