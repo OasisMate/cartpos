@@ -478,8 +478,63 @@ This file tracks the completion status of all milestones and development progres
 
 ---
 
-### ⏳ M10 – Local Sales Store & Sales Sync (Core Offline)
-**Status:** NOT STARTED
+### ✅ M10 – Local Sales Store & Sales Sync (Core Offline)
+**Status:** COMPLETED  
+**Date:** 2025-11-15
+
+**Completed:**
+- ✅ Sales store added to IndexedDB (`src/lib/offline/indexedDb.ts`):
+  - Added `sales` store with schema: `{ id, shopId, customerId?, items[], subtotal, discount, total, paymentStatus, paymentMethod?, amountReceived?, createdAt, syncStatus, syncError? }`
+  - Indexed by id, shopId, syncStatus, createdAt
+  - Helper functions: `addSale()`, `getPendingSales()`, `getSales()`, `markSaleAsSynced()`, `markSaleSyncError()`, `deleteSale()`
+  - Database version upgraded to v2 to include sales store
+- ✅ Sales caching implementation (`src/lib/offline/sales.ts`):
+  - `saveSaleLocally()` - Saves sale to IndexedDB with syncStatus = "PENDING"
+  - `syncSaleToServer()` - Syncs individual sale to server (calls `/api/sales`)
+  - `syncPendingSales()` - Syncs all pending sales one by one
+  - `syncPendingSalesBatch()` - Batch syncs all pending sales (calls `/api/sales/sync-batch`)
+  - `saveSale()` - Save sale locally and sync if online (offline-first)
+- ✅ Client-side ID generation (`src/lib/utils/cuid.ts`):
+  - Simple CUID generator for client-side use
+  - Generates unique IDs for offline sales (e.g., `c...`)
+  - Stored in localStorage for fingerprint consistency
+- ✅ POS page updated to use offline-first sales:
+  - `submitSale()` now generates client-side ID using `cuid()`
+  - Always saves sale to IndexedDB first (offline-first)
+  - Attempts to sync if online immediately after save
+  - Sales stored locally even if offline
+  - Added `useEffect` to sync pending sales when coming online
+- ✅ Batch sync API route (`src/app/api/sales/sync-batch/route.ts`):
+  - `POST /api/sales/sync-batch` - Batch syncs sales from offline clients
+  - Accepts array of sales with client-generated IDs
+  - For each sale:
+    - Validates and creates sale using `createSale()` domain function
+    - Handles duplicates gracefully (skips on duplicate errors)
+  - Returns `{ synced, skipped, errors }` for each batch
+  - Idempotent: Handles duplicate submissions gracefully
+- ✅ Offline-first architecture:
+  - Sales always saved to IndexedDB first (offline-first)
+  - If online: Immediately syncs to server after local save
+  - If offline: Sales saved locally with syncStatus = "PENDING"
+  - On coming online: Automatically syncs all pending sales via batch API
+  - Sync status tracked: PENDING → SYNCED (or error recorded)
+- ✅ Testing:
+  - Build compiles successfully
+  - Sales can be created offline and synced later
+  - Batch sync handles multiple pending sales
+  - Sync status tracked per sale
+
+**Files Created:**
+- `src/lib/offline/sales.ts` - Sales caching and sync functions
+- `src/lib/utils/cuid.ts` - Client-side CUID generator
+- `src/app/api/sales/sync-batch/route.ts` - Batch sync API route
+
+**Files Modified:**
+- `src/lib/offline/indexedDb.ts` - Added sales store and helper functions (version 2)
+- `src/app/pos/page.tsx` - Updated to use offline-first sales with local save and sync
+- `package.json` / `package-lock.json` - No new dependencies (using existing Dexie)
+
+**Commit:** M10 - Local Sales Store & Sales Sync (Core Offline)
 
 ---
 
@@ -520,9 +575,9 @@ This file tracks the completion status of all milestones and development progres
 
 ## Current Status Summary
 
-**Completed Milestones:** 10/17 (M0, M1, M2, M3, M4, M5, M6, M7, M8, M9)  
+**Completed Milestones:** 11/17 (M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10)  
 **In Progress:** None  
-**Next Milestone:** M10 – Local Sales Store & Sales Sync (Core Offline)
+**Next Milestone:** M11 – Offline for Purchases, Customers, Udhaar Payments
 
 **Last Updated:** 2025-11-15
 
@@ -546,4 +601,5 @@ This file tracks the completion status of all milestones and development progres
 - POS (Online Only) complete - full POS interface with product selection, cart, payment processing, stock updates, and udhaar support
 - PWA Shell complete - offline page load support with service worker, manifest, and offline status indicator
 - Local DB (IndexedDB) & Product Cache complete - product caching for offline access, barcode search, and product search working offline
+- Local Sales Store & Sales Sync complete - sales can be created offline and synced later, batch sync API, offline-first architecture with IndexedDB
 

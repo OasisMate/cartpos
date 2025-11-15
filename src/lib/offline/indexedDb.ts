@@ -42,12 +42,35 @@ export interface CachedSupplier {
   updatedAt: number
 }
 
+// Sale store type (for offline sales)
+export interface CachedSale {
+  id: string // client-generated ID (cuid or uuid)
+  shopId: string
+  customerId?: string
+  items: Array<{
+    productId: string
+    quantity: number
+    unitPrice: number
+    lineTotal: number
+  }>
+  subtotal: number
+  discount: number
+  total: number
+  paymentStatus: 'PAID' | 'UDHAAR'
+  paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
+  amountReceived?: number
+  createdAt: number // timestamp
+  syncStatus: 'PENDING' | 'SYNCED'
+  syncError?: string
+}
+
 // Database class
 class CartPOSDatabase extends Dexie {
   meta!: Table<MetaRecord, string>
   products!: Table<CachedProduct, string>
   customers!: Table<CachedCustomer, string>
   suppliers!: Table<CachedSupplier, string>
+  sales!: Table<CachedSale, string>
 
   constructor() {
     super('CartPOS_DB')
@@ -56,6 +79,13 @@ class CartPOSDatabase extends Dexie {
       products: 'id, shopId, barcode, updatedAt', // indexed by id, shopId, barcode, updatedAt
       customers: 'id, shopId, name, phone, syncStatus, updatedAt',
       suppliers: 'id, shopId, name, syncStatus, updatedAt',
+    })
+    this.version(2).stores({
+      meta: 'key',
+      products: 'id, shopId, barcode, updatedAt',
+      customers: 'id, shopId, name, phone, syncStatus, updatedAt',
+      suppliers: 'id, shopId, name, syncStatus, updatedAt',
+      sales: 'id, shopId, syncStatus, createdAt', // indexed by id, shopId, syncStatus, createdAt
     })
   }
 }
@@ -161,4 +191,38 @@ export async function saveSuppliers(shopId: string, suppliers: Omit<CachedSuppli
 
 export async function getSuppliers(shopId: string): Promise<CachedSupplier[]> {
   return await db.suppliers.where('shopId').equals(shopId).toArray()
+}
+
+// Helper functions for sales store
+export async function addSale(sale: Omit<CachedSale, 'createdAt' | 'syncStatus'>): Promise<string> {
+  const saleWithMetadata: CachedSale = {
+    ...sale,
+    createdAt: Date.now(),
+    syncStatus: 'PENDING',
+  }
+  await db.sales.add(saleWithMetadata)
+  return sale.id
+}
+
+export async function getPendingSales(shopId: string): Promise<CachedSale[]> {
+  return await db.sales
+    .where('[shopId+syncStatus]')
+    .equals([shopId, 'PENDING'])
+    .toArray()
+}
+
+export async function getSales(shopId: string): Promise<CachedSale[]> {
+  return await db.sales.where('shopId').equals(shopId).toArray()
+}
+
+export async function markSaleAsSynced(saleId: string): Promise<void> {
+  await db.sales.update(saleId, { syncStatus: 'SYNCED', syncError: undefined })
+}
+
+export async function markSaleSyncError(saleId: string, error: string): Promise<void> {
+  await db.sales.update(saleId, { syncError: error })
+}
+
+export async function deleteSale(saleId: string): Promise<void> {
+  await db.sales.delete(saleId)
 }

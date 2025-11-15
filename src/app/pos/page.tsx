@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getProductsWithCache, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
+import { saveSale, syncPendingSalesBatch } from '@/lib/offline/sales'
+import { cuid } from '@/lib/utils/cuid'
 
 // Product interface is imported from lib/offline/products
 
@@ -64,6 +66,16 @@ export default function POSPage() {
       fetchCustomers()
     }
   }, [user?.currentShopId, fetchProducts])
+
+  // Sync pending sales when coming online
+  useEffect(() => {
+    if (isOnline && user?.currentShopId) {
+      // Sync pending sales when going online
+      syncPendingSalesBatch(user.currentShopId).catch((err) => {
+        console.error('Error syncing pending sales:', err)
+      })
+    }
+  }, [isOnline, user?.currentShopId])
 
   useEffect(() => {
     // Focus barcode input on mount
@@ -210,10 +222,22 @@ export default function POSPage() {
     setSubmitting(true)
 
     try {
+      if (!user?.currentShopId) {
+        setError('No shop selected')
+        setSubmitting(false)
+        return
+      }
+
       const subtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0)
       const total = subtotal - discount
 
-      const payload = {
+      // Generate client-side ID for offline-first
+      const saleId = cuid()
+
+      // Create sale input
+      const sale = {
+        id: saleId,
+        shopId: user.currentShopId,
         customerId: paymentStatus === 'UDHAAR' ? customerId : undefined,
         items: cart.map((item) => ({
           productId: item.product.id,
@@ -226,21 +250,17 @@ export default function POSPage() {
         total,
         paymentStatus,
         paymentMethod: paymentStatus === 'PAID' ? paymentMethod : undefined,
-        amountReceived: paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
-          ? parseFloat(amountReceived)
-          : undefined,
+        amountReceived:
+          paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
+            ? parseFloat(amountReceived)
+            : undefined,
       }
 
-      const response = await fetch('/api/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      // Save sale locally (offline-first) and sync if online
+      const result = await saveSale(sale, isOnline)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to complete sale')
+      if (!result.saved) {
+        setError('Failed to save sale')
         setSubmitting(false)
         return
       }
@@ -261,8 +281,9 @@ export default function POSPage() {
         }
         router.refresh()
       }, 2000)
-    } catch (err) {
-      setError('An error occurred. Please try again.')
+    } catch (err: any) {
+      setError(err.message || 'An error occurred. Please try again.')
+      console.error('Sale submission error:', err)
     } finally {
       setSubmitting(false)
     }
