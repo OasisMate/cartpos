@@ -89,16 +89,23 @@ export async function getCurrentUser() {
     return null
   }
 
+  const shops = user.shops.map((us) => ({
+    shopId: us.shopId,
+    shopRole: us.shopRole,
+    shop: us.shop,
+  }))
+
+  // Get current shop from cookie (or default to first shop)
+  const cookieStore = await cookies()
+  const currentShopId = cookieStore.get('currentShopId')?.value || shops[0]?.shopId || null
+
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     role: user.role,
-    shops: user.shops.map((us) => ({
-      shopId: us.shopId,
-      shopRole: us.shopRole,
-      shop: us.shop,
-    })),
+    shops,
+    currentShopId,
   }
 }
 

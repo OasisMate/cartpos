@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 interface User {
@@ -17,6 +17,7 @@ interface User {
       city: string | null
     }
   }>
+  currentShopId?: string | null
 }
 
 interface AuthContextType {
@@ -24,6 +25,7 @@ interface AuthContextType {
   loading: boolean
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
+  selectShop: (shopId: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -33,8 +35,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
+  const hasFetchedRef = useRef(false)
 
   async function fetchUser() {
+    // Prevent double-fetching (React Strict Mode in dev causes double render)
+    if (hasFetchedRef.current) {
+      return
+    }
+
+    hasFetchedRef.current = true
+
     try {
       const response = await fetch('/api/me')
       if (response.ok) {
@@ -42,9 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user)
       } else {
         setUser(null)
+        hasFetchedRef.current = false // Reset on error so we can retry
       }
     } catch (error) {
       setUser(null)
+      hasFetchedRef.current = false // Reset on error so we can retry
     } finally {
       setLoading(false)
     }
@@ -62,7 +74,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshUser() {
+    hasFetchedRef.current = false // Reset flag to allow refetch
     await fetchUser()
+  }
+
+  async function selectShop(shopId: string) {
+    try {
+      const response = await fetch('/api/shop/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shopId }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to select shop')
+      }
+
+      // Update user state directly instead of full refresh to avoid extra API calls
+      if (user) {
+        setUser({ ...user, currentShopId: shopId })
+      }
+    } catch (error) {
+      console.error('Select shop error:', error)
+      // If update fails, refresh user data
+      await refreshUser()
+    }
   }
 
   // Fetch user only on initial mount
@@ -81,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loading, pathname, router])
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, logout, refreshUser, selectShop }}>
       {children}
     </AuthContext.Provider>
   )
