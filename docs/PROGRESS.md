@@ -169,8 +169,48 @@ This file tracks the completion status of all milestones and development progres
 
 ---
 
-### ⏳ M4 – Products Module
-**Status:** NOT STARTED
+### ✅ M4 – Products Module
+**Status:** COMPLETED  
+**Date:** 2025-11-15
+
+**Completed:**
+- ✅ Product domain logic implemented (`src/lib/domain/products.ts`)
+  - `createProduct()` - Creates product with validation (name, price, unit, barcode uniqueness per shop)
+  - `updateProduct()` - Updates product with same validation
+  - `listProducts()` - Returns paginated list with search, category, trackStock filters
+  - `getProduct()` - Gets single product
+  - `getProductsForPOS()` - Lightweight product list for POS (id, name, barcode, unit, price, trackStock)
+  - `checkProductPermission()` - Validates user has permission (ADMIN or OWNER) to manage products
+- ✅ API routes implemented:
+  - `GET /api/products` - List products with pagination and filters (search, category, trackStock)
+  - `POST /api/products` - Create product
+  - `GET /api/products/:id` - Get single product
+  - `PUT /api/products/:id` - Update product
+  - `GET /api/products/pos` - Get lightweight products for POS
+- ✅ Frontend (`/backoffice/products` page):
+  - Product list table with pagination
+  - Search functionality (name, SKU, barcode)
+  - Create/Edit product form (modal):
+    - Fields: name*, sku, barcode, unit* (common units dropdown + custom), price*, costPrice, category, trackStock checkbox, reorderLevel
+    - Validation: required fields (name, unit, price), barcode uniqueness per shop
+  - Edit button for each product
+  - Pagination controls
+- ✅ Product validation:
+  - Required fields: name, unit, price
+  - Barcode uniqueness per shop (validated on create and update)
+  - Permission check: Only ADMIN or OWNER can create/update products
+  - Shop context: Products are scoped to current shop
+
+**Files Created:**
+- `src/lib/domain/products.ts` - Product domain logic
+- `src/app/api/products/route.ts` - Product list/create API
+- `src/app/api/products/[id]/route.ts` - Product get/update API
+- `src/app/api/products/pos/route.ts` - POS products API
+
+**Files Modified:**
+- `src/app/backoffice/products/page.tsx` - Complete products CRUD UI
+
+**Commit:** M4 - Products Module
 
 ---
 
@@ -241,9 +281,9 @@ This file tracks the completion status of all milestones and development progres
 
 ## Current Status Summary
 
-**Completed Milestones:** 4/17 (M0, M1, M2, M3)  
+**Completed Milestones:** 5/17 (M0, M1, M2, M3, M4)  
 **In Progress:** None  
-**Next Milestone:** M4 – Products Module
+**Next Milestone:** M5 – Suppliers Module
 
 **Last Updated:** 2025-11-15
 
@@ -261,4 +301,5 @@ This file tracks the completion status of all milestones and development progres
 - Role-based navigation implemented - users only see links relevant to their role
 - Performance optimized - reduced unnecessary API calls (React Strict Mode double-render handled)
 - All backoffice routes fixed - pages moved from route groups to actual routes
+- Products module complete - full CRUD with validation, permissions, and POS-ready API
 
