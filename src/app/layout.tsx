@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { AuthProvider } from '@/contexts/AuthContext'
 import Navbar from '@/components/layout/Navbar'
 import Sidebar from '@/components/layout/Sidebar'
 
@@ -16,17 +17,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-gray-50">
-        <Navbar />
-        <Sidebar />
-        <main className="md:pl-64 pt-16">
-          <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                {children}
+        <AuthProvider>
+          <Navbar />
+          <Sidebar />
+          <main className="md:pl-64 pt-16">
+            <div className="py-6">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  {children}
+                </div>
               </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </AuthProvider>
       </body>
     </html>
   )

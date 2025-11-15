@@ -16,6 +16,11 @@ const navigation = [
 export default function Sidebar() {
   const pathname = usePathname()
 
+  // Don't show sidebar on login page
+  if (pathname === '/login') {
+    return null
+  }
+
   return (
     <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:pt-16">
       <div className="flex-1 flex flex-col min-h-0 bg-white border-r border-gray-200">

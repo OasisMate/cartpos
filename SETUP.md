@@ -21,9 +21,12 @@ npm install
 
 ```env
 DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
+JWT_SECRET="your-secret-key-change-in-production-min-32-characters"
 ```
 
-**⚠️ Important:** Replace the connection string with your actual database credentials.
+**⚠️ Important:** 
+- Replace the connection string with your actual database credentials
+- Generate a secure random string for JWT_SECRET (at least 32 characters)
 
 ### 3. Run Prisma Migrations
 
@@ -40,13 +43,33 @@ npx prisma migrate dev --name init_schema
 npx prisma studio
 ```
 
-### 4. Start Development Server
+### 4. Create Admin User
+
+After running migrations, create your first admin user:
+
+```bash
+npm run create-admin
+```
+
+This will create an admin user with:
+- Email: `admin@cartpos.com` (or set `ADMIN_EMAIL` env var)
+- Password: `admin123` (or set `ADMIN_PASSWORD` env var)
+- Name: `Admin User` (or set `ADMIN_NAME` env var)
+- Role: `ADMIN`
+
+**⚠️ Important:** Change the default password after first login!
+
+### 5. Start Development Server
 
 ```bash
 npm run dev
 ```
 
-Visit `http://localhost:3000` to see the app running.
+Visit `http://localhost:3000` to see the app running. You'll be redirected to `/login` if not authenticated.
+
+**Login Credentials:**
+- Email: `admin@cartpos.com` (or your custom `ADMIN_EMAIL`)
+- Password: `admin123` (or your custom `ADMIN_PASSWORD`)
 
 ## Project Structure
 

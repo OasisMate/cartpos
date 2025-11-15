@@ -53,16 +53,57 @@ This file tracks the completion status of all milestones and development progres
 
 ---
 
-### ⏳ M2 – Auth & User Sessions (Basic)
-**Status:** NOT STARTED
+### ✅ M2 – Auth & User Sessions (Basic)
+**Status:** COMPLETED  
+**Date:** 2025-11-15
 
-**Next Steps:**
-- Implement `/app/api/auth/login`
-- Implement `/app/api/auth/logout`
-- Implement `/app/api/me`
-- Create `/login` page
-- Add auth context/hook
-- Add route protection
+**Completed:**
+- ✅ Authentication library implemented (`src/lib/auth.ts`)
+  - Password hashing with bcryptjs
+  - JWT-based session management (using jose library)
+  - Session creation, deletion, and retrieval functions
+  - Current user helper function
+- ✅ API routes implemented:
+  - `POST /api/auth/login` - Login with email/password
+  - `POST /api/auth/logout` - Logout (deletes session)
+  - `GET /api/me` - Get current user info with shops
+- ✅ Frontend authentication:
+  - `/login` page with email/password form
+  - `AuthContext` and `useAuth` hook for session management
+  - AuthProvider wrapped around app
+- ✅ Route protection:
+  - Middleware redirects unauthenticated users to `/login`
+  - Protected routes require authentication
+  - Authenticated users redirected from `/login` to home
+- ✅ UI updates:
+  - Navbar shows user name and logout button
+  - Navbar/sidebar hidden on login page
+  - User avatar shows first letter of name
+- ✅ Admin user creation:
+  - Script: `scripts/create-admin-user.ts`
+  - NPM command: `npm run create-admin`
+  - Creates default admin user (admin@cartpos.com / admin123)
+- ✅ Environment configuration:
+  - JWT_SECRET added to `.env`
+  - Updated SETUP.md with auth setup instructions
+
+**Files Created:**
+- `src/lib/auth.ts` - Authentication utilities
+- `src/app/api/auth/login/route.ts` - Login API
+- `src/app/api/auth/logout/route.ts` - Logout API
+- `src/app/api/me/route.ts` - Current user API
+- `src/app/login/page.tsx` - Login page
+- `src/contexts/AuthContext.tsx` - Auth context provider
+- `src/middleware.ts` - Route protection middleware
+- `scripts/create-admin-user.ts` - Admin user creation script
+
+**Dependencies Added:**
+- `bcryptjs` - Password hashing
+- `jose` - JWT handling
+- `@types/bcryptjs` - TypeScript types
+- `tsx` - TypeScript execution (for scripts)
+
+**Commit:** M2 - Auth & User Sessions (Basic)
 
 ---
 
@@ -143,9 +184,9 @@ This file tracks the completion status of all milestones and development progres
 
 ## Current Status Summary
 
-**Completed Milestones:** 2/17 (M0, M1)  
+**Completed Milestones:** 3/17 (M0, M1, M2)  
 **In Progress:** None  
-**Next Milestone:** M2 – Auth & User Sessions (Basic)
+**Next Milestone:** M3 – Shops & User–Shop Roles
 
 **Last Updated:** 2025-11-15
 
@@ -156,5 +197,7 @@ This file tracks the completion status of all milestones and development progres
 - Database connection configured with Supabase Session Pooler (IPv4 compatible)
 - SSL certificate configured for secure connection
 - All route groups created and tested
-- Navigation structure ready for auth implementation
+- Authentication system fully implemented with JWT sessions
+- Default admin user: admin@cartpos.com / admin123 (change after first login!)
+- All routes protected - unauthenticated users redirected to /login
 
