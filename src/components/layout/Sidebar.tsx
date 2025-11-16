@@ -25,36 +25,36 @@ export default function Sidebar() {
   }
 
   // Define all navigation items with roles that can access them
-  const posNav = [{ name: 'POS', href: '/pos', roles: ['ADMIN', 'OWNER', 'CASHIER'] }]
+  const posNav = [{ name: 'POS', href: '/pos', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER', 'CASHIER'] }]
   const backofficeNav = [
-    { name: 'Dashboard', href: '/backoffice', roles: ['ADMIN', 'OWNER'] },
-    { name: 'Products', href: '/backoffice/products', roles: ['ADMIN', 'OWNER'] },
-    { name: 'Purchases', href: '/backoffice/purchases', roles: ['ADMIN', 'OWNER'] },
-    { name: 'Sales', href: '/backoffice/sales', roles: ['ADMIN', 'OWNER'] },
-    { name: 'Customers', href: '/backoffice/customers', roles: ['ADMIN', 'OWNER'] },
-    { name: 'Udhaar', href: '/backoffice/udhaar', roles: ['ADMIN', 'OWNER'] },
-    { name: 'Reports', href: '/backoffice/reports', roles: ['ADMIN', 'OWNER'] },
+    { name: 'Dashboard', href: '/backoffice', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
+    { name: 'Products', href: '/backoffice/products', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
+    { name: 'Purchases', href: '/backoffice/purchases', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
+    { name: 'Sales', href: '/backoffice/sales', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
+    { name: 'Customers', href: '/backoffice/customers', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
+    { name: 'Udhaar', href: '/backoffice/udhaar', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
+    { name: 'Reports', href: '/backoffice/reports', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
   ]
   const adminNav = [
-    { name: 'Admin', href: '/admin', roles: ['ADMIN'] },
-    { name: 'Shops', href: '/admin/shops', roles: ['ADMIN'] },
+    { name: 'Admin', href: '/admin', roles: ['PLATFORM_ADMIN'] },
+    { name: 'Shops', href: '/admin/shops', roles: ['PLATFORM_ADMIN'] },
   ]
 
   // Filter navigation based on user role
   const canSee = (item: { roles: string[] }) => {
     if (!user) return false
 
-    // ADMIN can see everything
-    if (user.role === 'ADMIN') return true
+    // PLATFORM_ADMIN can see everything
+    if (user.role === 'PLATFORM_ADMIN') return true
 
     // For NORMAL users, check shop roles
     if (user.role === 'NORMAL' && user.shops && user.shops.length > 0) {
       const userShopRoles = user.shops.map((s) => s.shopRole)
-      const isOwner = userShopRoles.includes('OWNER')
+      const isOwner = userShopRoles.includes('SHOP_OWNER')
       const isCashier = userShopRoles.includes('CASHIER')
 
       // Check if user has required role for this nav item
-      if (item.roles.includes('OWNER') && isOwner) return true
+      if (item.roles.includes('SHOP_OWNER') && isOwner) return true
       if (item.roles.includes('CASHIER') && isCashier) return true
 
       return false

@@ -11,12 +11,38 @@ generator client {
 // Core: Shops, Users, Settings
 // -----------------------------------------------------
 
+model Organization {
+  id          String      @id @default(cuid())
+  name        String
+  status      OrgStatus   @default(PENDING)
+  requestedBy String?
+  approvedBy  String?
+  approvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  shops       Shop[]
+  users       OrganizationUser[]
+
+  @@index([name])
+  @@index([status])
+}
+
+enum OrgStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
 model Shop {
   id          String        @id @default(cuid())
+  orgId       String
   name        String
   city        String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  organization Organization  @relation(fields: [orgId], references: [id])
   owners      UserShop[]
   settings    ShopSettings?
   products    Product[]
@@ -28,7 +54,7 @@ model Shop {
   payments    Payment[]
   customerLedger CustomerLedger[]
 
-  @@index([name])
+  @@index([orgId, name])
 }
 
 model User {
@@ -40,6 +66,7 @@ model User {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   shops            UserShop[]
+  organizations    OrganizationUser[]
   createdInvoices  Invoice[]   @relation("InvoiceCreatedBy")
   createdPurchases Purchase[]  @relation("PurchaseCreatedBy")
 }
@@ -57,13 +84,30 @@ model UserShop {
 }
 
 enum UserRole {
-  ADMIN
+  PLATFORM_ADMIN
   NORMAL
 }
 
 enum ShopRole {
-  OWNER
+  SHOP_OWNER
   CASHIER
+}
+
+model OrganizationUser {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  orgRole   OrgRole
+  createdAt DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([userId, orgId])
+}
+
+enum OrgRole {
+  ORG_ADMIN
 }
 
 model ShopSettings {

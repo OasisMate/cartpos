@@ -38,7 +38,7 @@ export default function AdminShopsPage() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (user?.role === 'ADMIN') {
+    if (user?.role === 'PLATFORM_ADMIN') {
       fetchShops()
     }
   }, [user])
@@ -94,7 +94,7 @@ export default function AdminShopsPage() {
     }
   }
 
-  if (user?.role !== 'ADMIN') {
+  if (user?.role !== 'PLATFORM_ADMIN') {
     return (
       <div>
         <h1 className="text-2xl font-bold mb-4">Access Denied</h1>

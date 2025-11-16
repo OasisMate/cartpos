@@ -36,12 +36,12 @@ async function checkProductPermission(userId: string, shopId: string): Promise<b
 
   if (!user) return false
 
-  // ADMIN can access any shop
-  if (user.role === 'ADMIN') return true
+  // PLATFORM_ADMIN can access any shop
+  if (user.role === 'PLATFORM_ADMIN') return true
 
-  // OWNER can manage products in their shop
+  // SHOP_OWNER can manage products in their shop
   const userShop = user.shops.find((us) => us.shopId === shopId)
-  return userShop?.shopRole === 'OWNER'
+  return userShop?.shopRole === 'SHOP_OWNER'
 }
 
 export async function createProduct(

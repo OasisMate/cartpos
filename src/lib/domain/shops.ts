@@ -15,7 +15,7 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
     where: { id: createdByUserId },
   })
 
-  if (!creator || creator.role !== 'ADMIN') {
+  if (!creator || creator.role !== 'PLATFORM_ADMIN') {
     throw new Error('Only admins can create shops')
   }
 
@@ -51,12 +51,12 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
       },
     })
 
-    // Link user to shop as OWNER
+    // Link user to shop as SHOP_OWNER
     await tx.userShop.create({
       data: {
         userId: owner.id,
         shopId: shop.id,
-        shopRole: 'OWNER',
+        shopRole: 'SHOP_OWNER',
       },
     })
 
@@ -83,7 +83,7 @@ export async function listShops(adminUserId: string) {
     where: { id: adminUserId },
   })
 
-  if (!admin || admin.role !== 'ADMIN') {
+  if (!admin || admin.role !== 'PLATFORM_ADMIN') {
     throw new Error('Only admins can list shops')
   }
 
@@ -101,7 +101,7 @@ export async function listShops(adminUserId: string) {
           },
         },
         where: {
-          shopRole: 'OWNER',
+          shopRole: 'SHOP_OWNER',
         },
       },
       _count: {

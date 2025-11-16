@@ -162,7 +162,17 @@ export default function SuppliersPage() {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">Suppliers</h1>
-        <p className="text-gray-600">Please select a shop first</p>
+        {user?.role === 'PLATFORM_ADMIN' ? (
+          <div className="space-y-3">
+            <p className="text-[hsl(var(--muted-foreground))]">No shop selected. Go to Admin to manage or create a shop.</p>
+            <div className="flex gap-2">
+              <a href="/admin/shops" className="btn btn-primary h-9 px-4">Open Shops</a>
+              <a href="/admin" className="btn btn-outline h-9 px-4">Admin</a>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[hsl(var(--muted-foreground))]">Please select a shop first</p>
+        )}
       </div>
     )
   }

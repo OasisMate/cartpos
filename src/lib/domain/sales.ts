@@ -33,12 +33,12 @@ async function checkSalePermission(userId: string, shopId: string): Promise<bool
 
   if (!user) return false
 
-  // ADMIN can access any shop
-  if (user.role === 'ADMIN') return true
+  // PLATFORM_ADMIN can access any shop
+  if (user.role === 'PLATFORM_ADMIN') return true
 
-  // OWNER and CASHIER can create sales
+  // SHOP_OWNER and CASHIER can create sales
   const userShop = user.shops.find((us) => us.shopId === shopId)
-  return userShop?.shopRole === 'OWNER' || userShop?.shopRole === 'CASHIER'
+  return userShop?.shopRole === 'SHOP_OWNER' || userShop?.shopRole === 'CASHIER'
 }
 
 export async function createSale(

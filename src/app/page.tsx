@@ -10,12 +10,12 @@ export default async function Home() {
   }
 
   // Admins go to Admin
-  if (user.role === 'ADMIN') {
+  if (user.role === 'PLATFORM_ADMIN') {
     redirect('/admin')
   }
 
   // Normal users: if any OWNER role → Backoffice, otherwise POS (cashier)
-  const hasOwnerRole = user.shops?.some((s) => s.shopRole === 'OWNER')
+  const hasOwnerRole = user.shops?.some((s) => s.shopRole === 'SHOP_OWNER')
   if (hasOwnerRole) {
     redirect('/backoffice')
   }
