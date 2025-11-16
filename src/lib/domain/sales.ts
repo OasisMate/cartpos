@@ -298,3 +298,84 @@ export async function listSales(shopId: string, filters: {
     },
   }
 }
+
+export async function voidSale(shopId: string, invoiceId: string, userId: string) {
+  // Check permission (OWNER or CASHIER; ADMIN also allowed)
+  const hasPermission = await checkSalePermission(userId, shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to void sales in this shop')
+  }
+
+  // Load invoice with lines and related info
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      lines: true,
+      payments: true,
+      customer: true,
+    },
+  })
+
+  if (!invoice || invoice.shopId !== shopId) {
+    throw new Error('Invoice not found')
+  }
+
+  if (invoice.status === 'VOID') {
+    return invoice
+  }
+
+  // Void in a transaction: mark VOID, reverse stock, add ledger/payment reversals
+  const result = await prisma.$transaction(async (tx) => {
+    // Mark invoice as VOID
+    const updated = await tx.invoice.update({
+      where: { id: invoice.id },
+      data: { status: 'VOID' },
+    })
+
+    // Reverse stock for each line (add back quantities)
+    for (const line of invoice.lines) {
+      await tx.stockLedger.create({
+        data: {
+          shopId,
+          productId: line.productId,
+          changeQty: line.quantity, // positive to add back
+          type: 'ADJUSTMENT',
+          refType: 'invoice_void',
+          refId: invoice.id,
+        },
+      })
+    }
+
+    // If UDHAAR, reverse customer ledger (CREDIT to cancel previous DEBIT)
+    if (invoice.paymentStatus === 'UDHAAR' && invoice.customerId) {
+      await tx.customerLedger.create({
+        data: {
+          shopId,
+          customerId: invoice.customerId,
+          type: 'ADJUSTMENT',
+          direction: 'CREDIT',
+          amount: invoice.total,
+          refType: 'invoice_void',
+          refId: invoice.id,
+        },
+      })
+    }
+
+    // If PAID, create negative payment record to reflect reversal
+    if (invoice.paymentStatus === 'PAID') {
+      await tx.payment.create({
+        data: {
+          shopId,
+          invoiceId: invoice.id,
+          amount: invoice.total.mul(-1),
+          method: invoice.paymentMethod || 'CASH',
+          note: 'Void sale - reversal',
+        },
+      })
+    }
+
+    return updated
+  })
+
+  return result
+}
