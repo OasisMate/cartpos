@@ -8,6 +8,10 @@ interface Shop {
   name: string
   city: string | null
   createdAt: string
+  organization?: {
+    id: string
+    name: string
+  }
   owners: Array<{
     user: {
       id: string
@@ -213,6 +217,9 @@ export default function AdminShopsPage() {
                 Shop Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Organization
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 City
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -231,6 +238,9 @@ export default function AdminShopsPage() {
               <tr key={shop.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {shop.name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {shop.organization?.name || '-'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {shop.city || '-'}

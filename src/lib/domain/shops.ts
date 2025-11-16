@@ -90,6 +90,7 @@ export async function listShops(adminUserId: string) {
   const shops = await prisma.shop.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
+      organization: true,
       owners: {
         include: {
           user: {
