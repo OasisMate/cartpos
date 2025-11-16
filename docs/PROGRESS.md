@@ -538,33 +538,82 @@ This file tracks the completion status of all milestones and development progres
 
 ---
 
-### ⏳ M11 – Offline for Purchases, Customers, Udhaar Payments
-**Status:** NOT STARTED
+### ✅ M11 – Offline for Purchases, Customers, Udhaar Payments
+**Status:** COMPLETED  
+**Date:** 2025-11-16
+
+**Completed:**
+- ✅ IndexedDB: Added `purchases` store and helpers; pending customers helpers
+- ✅ Offline modules:
+  - `lib/offline/purchases.ts` - save local + batch sync
+  - `lib/offline/customers.ts` - batch sync pending customers
+  - `lib/offline/udhaarPayments.ts` - local store + batch sync
+- ✅ API batch endpoints:
+  - `POST /api/purchases/sync-batch`
+  - `POST /api/customers/sync-batch`
+  - `POST /api/udhaar-payments/sync-batch`
+- ✅ Orchestrator: Registered purchases, customers, udhaar payments tasks
+- ✅ Build passes; minimal network calls (batch-only)
+
+**Commit:** feat(m11): offline purchases foundation; purchases form offline-first; customers and udhaar payments offline sync
 
 ---
 
 ### ⏳ M12 – Customers & Udhaar UI (Online+Offline Integrated)
-**Status:** NOT STARTED
+**Status:** IN PROGRESS (backend/offline foundations ready)
 
 ---
 
-### ⏳ M13 – Void & Edit Sales
-**Status:** NOT STARTED
+### ✅ M13 – Void & Edit Sales
+**Status:** COMPLETED  
+**Date:** 2025-11-16
+
+**Completed:**
+- ✅ Domain: `voidSale()` with stock reversal (ADJUSTMENT), ledger/payment reversals
+- ✅ API: `POST /api/sales/{id}/void`
+- ✅ Backoffice: Sales list page with Void action
+
+**Commit:** feat(m13): void sale flow with stock and ledger reversals; backoffice sales list with void action
 
 ---
 
-### ⏳ M14 – Daily Summary
-**Status:** NOT STARTED
+### ✅ M14 – Daily Summary
+**Status:** COMPLETED  
+**Date:** 2025-11-16
+
+**Completed:**
+- ✅ Domain: `getDailySummary()` aggregates sales, invoices count, udhaar, payments
+- ✅ API: `GET /api/reports/daily`
+- ✅ Backoffice: Reports page with date picker and summary cards
+
+**Commit:** feat(m14): daily summary report
 
 ---
 
-### ⏳ M15 – Platform Admin Polish
-**Status:** NOT STARTED
+### ✅ M15 – Platform Admin Polish
+**Status:** COMPLETED  
+**Date:** 2025-11-16
+
+**Completed:**
+- ✅ Backoffice: Sales list with pagination, filter, print, void (confirm dialog)
+- ✅ UI: Reusable `ConfirmDialog` (useConfirm hook) and `EmptyState`
+- ✅ Sidebar: Added Sales link
+- ✅ Build passes
+
+**Commit:** feat(m15): backoffice sales list with void action; polish(m15): reusable confirm dialog and empty state
 
 ---
 
-### ⏳ M16 – Receipt Printing (Thermal Printer)
-**Status:** NOT STARTED
+### ✅ M16 – Receipt Printing (Thermal Printer)
+**Status:** COMPLETED  
+**Date:** 2025-11-16
+
+**Completed:**
+- ✅ API: `GET /api/sales/{id}`
+- ✅ UI: Printable 80mm receipt at `/backoffice/sales/[id]/receipt` with auto print
+- ✅ Sales list: Print action opens receipt in new tab
+
+**Commit:** feat(m16): printable sales receipt
 
 ---
 
@@ -575,9 +624,9 @@ This file tracks the completion status of all milestones and development progres
 
 ## Current Status Summary
 
-**Completed Milestones:** 11/17 (M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10)  
+**Completed Milestones:** 16/17 (M0–M16)  
 **In Progress:** None  
-**Next Milestone:** M11 – Offline for Purchases, Customers, Udhaar Payments
+**Next Milestone:** M17 – Polish, QA & Deployment Prep
 
 **Last Updated:** 2025-11-15
 
