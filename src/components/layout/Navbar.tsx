@@ -27,11 +27,15 @@ export default function Navbar() {
                 CartPOS
               </Link>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-4">
               {(user?.role === 'ADMIN' || user?.shops && user.shops.length > 0) && (
                 <Link
                   href="/pos"
-                  className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] inline-flex items-center px-2 pt-1 text-sm font-medium"
+                  className={`inline-flex items-center px-2 pt-1 text-sm font-medium ${
+                    pathname?.startsWith('/pos')
+                      ? 'text-[hsl(var(--foreground))]'
+                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                  }`}
                 >
                   POS
                 </Link>
@@ -40,7 +44,11 @@ export default function Navbar() {
                 <>
                   <Link
                     href="/backoffice"
-                    className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] inline-flex items-center px-2 pt-1 text-sm font-medium"
+                    className={`inline-flex items-center px-2 pt-1 text-sm font-medium ${
+                      pathname?.startsWith('/backoffice')
+                        ? 'text-[hsl(var(--foreground))]'
+                        : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                    }`}
                   >
                     Backoffice
                   </Link>
@@ -49,7 +57,11 @@ export default function Navbar() {
               {user?.role === 'ADMIN' && (
                 <Link
                   href="/admin"
-                  className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] inline-flex items-center px-2 pt-1 text-sm font-medium"
+                  className={`inline-flex items-center px-2 pt-1 text-sm font-medium ${
+                    pathname?.startsWith('/admin')
+                      ? 'text-[hsl(var(--foreground))]'
+                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                  }`}
                 >
                   Admin
                 </Link>
@@ -62,6 +74,7 @@ export default function Navbar() {
                 value={user.currentShopId || ''}
                 onChange={(e) => selectShop(e.target.value)}
                 className="input h-9 w-[200px]"
+                disabled={!user?.shops?.length}
               >
                 {user.shops.map((s) => (
                   <option key={s.shopId} value={s.shopId}>
