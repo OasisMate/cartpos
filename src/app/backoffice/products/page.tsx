@@ -5,6 +5,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import { Table, THead, TR, TH, TD, EmptyRow, SkeletonRow } from '@/components/ui/DataTable'
+import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface Product {
@@ -36,6 +37,7 @@ const COMMON_UNITS = ['pcs', 'kg', 'g', 'L', 'mL', 'pack', 'box', 'dozen', 'piec
 
 export default function ProductsPage() {
   const { user } = useAuth()
+  const { show } = useToast()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -161,7 +163,9 @@ export default function ProductsPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || `Failed to ${editingProduct ? 'update' : 'create'} product`)
+        const msg = data.error || `Failed to ${editingProduct ? 'update' : 'create'} product`
+        setError(msg)
+        show({ title: 'Error', message: msg, variant: 'destructive' })
         setSubmitting(false)
         return
       }
@@ -170,8 +174,10 @@ export default function ProductsPage() {
       setShowForm(false)
       setEditingProduct(null)
       await fetchProducts()
+      show({ message: editingProduct ? 'Product updated' : 'Product created', variant: 'success' })
     } catch (err) {
       setError('An error occurred. Please try again.')
+      show({ title: 'Error', message: 'Unexpected error', variant: 'destructive' })
     } finally {
       setSubmitting(false)
     }

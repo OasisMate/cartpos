@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
+import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface Supplier {
@@ -29,6 +30,7 @@ interface SuppliersResponse {
 
 export default function SuppliersPage() {
   const { user } = useAuth()
+  const { show } = useToast()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -130,7 +132,9 @@ export default function SuppliersPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || `Failed to ${editingSupplier ? 'update' : 'create'} supplier`)
+        const msg = data.error || `Failed to ${editingSupplier ? 'update' : 'create'} supplier`
+        setError(msg)
+        show({ title: 'Error', message: msg, variant: 'destructive' })
         setSubmitting(false)
         return
       }
@@ -139,8 +143,10 @@ export default function SuppliersPage() {
       setShowForm(false)
       setEditingSupplier(null)
       await fetchSuppliers()
+      show({ message: editingSupplier ? 'Supplier updated' : 'Supplier created', variant: 'success' })
     } catch (err) {
       setError('An error occurred. Please try again.')
+      show({ title: 'Error', message: 'Unexpected error', variant: 'destructive' })
     } finally {
       setSubmitting(false)
     }

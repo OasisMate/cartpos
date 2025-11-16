@@ -10,6 +10,7 @@ import { cuid } from '@/lib/utils/cuid'
 import { sumCartLines, calculateTotals } from '@/lib/utils/money'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import { useToast } from '@/components/ui/ToastProvider'
 
 // Product interface is imported from lib/offline/products
 
@@ -28,6 +29,7 @@ interface CartItem {
 
 export default function POSPage() {
   const { user } = useAuth()
+  const { show } = useToast()
   const router = useRouter()
   const isOnline = useOnlineStatus()
   const [products, setProducts] = useState<Product[]>([])
@@ -272,6 +274,7 @@ export default function POSPage() {
 
       // Success - reset cart
       setSuccess(true)
+      show({ message: 'Sale saved locally', variant: 'success' })
       setTimeout(() => {
         setCart([])
         setDiscount(0)
@@ -288,6 +291,7 @@ export default function POSPage() {
       }, 2000)
     } catch (err: any) {
       setError(err.message || 'An error occurred. Please try again.')
+      show({ title: 'Error', message: err.message || 'Failed to complete sale', variant: 'destructive' })
       console.error('Sale submission error:', err)
     } finally {
       setSubmitting(false)
