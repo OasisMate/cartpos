@@ -51,7 +51,7 @@ export default function Sidebar() {
 
   return (
     <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:pt-16">
-      <div className="flex-1 flex flex-col min-h-0 bg-white border-r border-gray-200">
+      <div className="flex-1 flex flex-col min-h-0 bg-[hsl(var(--card))] border-r border-[hsl(var(--border))]">
         <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
           <nav className="flex-1 px-2 space-y-1">
             {navigation.map((item) => {
@@ -62,8 +62,8 @@ export default function Sidebar() {
                   href={item.href}
                   className={`${
                     isActive
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]'
+                      : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'
                   } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
                 >
                   {item.name}

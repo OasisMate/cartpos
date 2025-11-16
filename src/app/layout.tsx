@@ -4,6 +4,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import Navbar from '@/components/layout/Navbar'
 import Sidebar from '@/components/layout/Sidebar'
 import { SyncBootstrapper } from '@/components/SyncBootstrapper'
+import { ToastProvider } from '@/components/ui/ToastProvider'
 
 export const metadata: Metadata = {
   title: 'CartPOS',
@@ -31,20 +32,22 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-gray-50">
-        <AuthProvider>
-                  <SyncBootstrapper />
-          <Navbar />
-          <Sidebar />
-          <main className="md:pl-64 pt-16">
-            <div className="py-6">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                  {children}
-                </div>
-              </div>
-            </div>
-          </main>
-        </AuthProvider>
+                <ToastProvider>
+                  <AuthProvider>
+                    <SyncBootstrapper />
+                    <Navbar />
+                    <Sidebar />
+                    <main className="md:pl-64 pt-16">
+                      <div className="py-6">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+                          <div className="bg-white rounded-lg shadow-sm p-6">
+                            {children}
+                          </div>
+                        </div>
+                      </div>
+                    </main>
+                  </AuthProvider>
+                </ToastProvider>
       </body>
     </html>
   )
