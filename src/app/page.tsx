@@ -20,10 +20,10 @@ export default async function Home() {
     redirect('/org')
   }
 
-  // Normal users: if any OWNER role → Backoffice, otherwise POS (cashier)
+  // Normal users: if any SHOP_OWNER role → Shop dashboard, otherwise POS (cashier)
   const hasOwnerRole = user.shops?.some((s) => s.shopRole === 'SHOP_OWNER')
   if (hasOwnerRole) {
-    redirect('/backoffice')
+    redirect('/shop')
   }
 
   redirect('/pos')
