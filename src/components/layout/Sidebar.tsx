@@ -18,6 +18,7 @@ export default function Sidebar() {
     { name: 'POS', href: '/pos', roles: ['ADMIN', 'OWNER', 'CASHIER'] },
     { name: 'Products', href: '/backoffice/products', roles: ['ADMIN', 'OWNER'] },
     { name: 'Purchases', href: '/backoffice/purchases', roles: ['ADMIN', 'OWNER'] },
+    { name: 'Sales', href: '/backoffice/sales', roles: ['ADMIN', 'OWNER'] },
     { name: 'Customers', href: '/backoffice/customers', roles: ['ADMIN', 'OWNER'] },
     { name: 'Udhaar', href: '/backoffice/udhaar', roles: ['ADMIN', 'OWNER'] },
     { name: 'Reports', href: '/backoffice/reports', roles: ['ADMIN', 'OWNER'] },
