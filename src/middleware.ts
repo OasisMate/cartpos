@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/login']
+  const publicRoutes = ['/login', '/signup', '/api/health']
   const isPublicRoute = publicRoutes.includes(pathname)
 
   // Allow API routes to handle their own auth
@@ -26,6 +26,12 @@ export function middleware(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
+  }
+
+  // Simple role-scoped guards (defense in depth; server routes also check)
+  if (session) {
+    // For now, rely on server-side handlers for fine-grained checks.
+    // Middleware keeps generic auth flow and public routes handling.
   }
 
   return NextResponse.next()
