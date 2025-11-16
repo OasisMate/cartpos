@@ -8,6 +8,16 @@ interface User {
   name: string
   email: string
   role: string
+  organizations?: Array<{
+    orgId: string
+    orgRole: string
+    organization: {
+      id: string
+      name: string
+      status: string
+    }
+  }>
+  currentOrgId?: string | null
   shops?: Array<{
     shopId: string
     shopRole: string
@@ -25,6 +35,7 @@ interface AuthContextType {
   loading: boolean
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
+  selectOrg: (orgId: string) => Promise<void>
   selectShop: (shopId: string) => Promise<void>
 }
 
@@ -101,6 +112,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function selectOrg(orgId: string) {
+    try {
+      const response = await fetch('/api/org/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to select organization')
+      }
+
+      // Update user state directly
+      if (user) {
+        setUser({ ...user, currentOrgId: orgId })
+      }
+    } catch (error) {
+      console.error('Select org error:', error)
+      await refreshUser()
+    }
+  }
+
   // Fetch user only on initial mount
   useEffect(() => {
     fetchUser()
@@ -117,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loading, pathname, router])
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, refreshUser, selectShop }}>
+    <AuthContext.Provider value={{ user, loading, logout, refreshUser, selectOrg, selectShop }}>
       {children}
     </AuthContext.Provider>
   )
