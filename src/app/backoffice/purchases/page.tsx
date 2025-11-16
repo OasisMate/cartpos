@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineSync } from '@/hooks/useOnlineSync'
-import { syncPendingPurchasesBatch } from '@/lib/offline/purchases'
+import { savePurchaseLocally, syncPendingPurchasesBatch } from '@/lib/offline/purchases'
+import { cuid } from '@/lib/utils/cuid'
 
 interface Product {
   id: string
@@ -191,30 +192,33 @@ export default function PurchasesPage() {
     setSubmitting(true)
 
     try {
-      const payload = {
-        supplierId: formData.supplierId || null,
-        date: formData.date || new Date().toISOString(),
-        reference: formData.reference || null,
-        notes: formData.notes || null,
+      if (!user?.currentShopId) {
+        setError('No shop selected')
+        setSubmitting(false)
+        return
+      }
+
+      const id = cuid()
+      const purchase = {
+        id,
+        shopId: user.currentShopId,
+        supplierId: formData.supplierId || undefined,
+        date: formData.date ? new Date(formData.date).getTime() : undefined,
+        reference: formData.reference || undefined,
+        notes: formData.notes || undefined,
         lines: validLines.map((line) => ({
           productId: line.productId,
           quantity: parseFloat(line.quantity),
-          unitCost: line.unitCost ? parseFloat(line.unitCost) : null,
+          unitCost: line.unitCost ? parseFloat(line.unitCost) : undefined,
         })),
       }
 
-      const response = await fetch('/api/purchases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      // Save locally (offline-first)
+      await savePurchaseLocally(purchase)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to create purchase')
-        setSubmitting(false)
-        return
+      // Attempt sync if online
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        await syncPendingPurchasesBatch(user.currentShopId)
       }
 
       // Reset form and refresh list
