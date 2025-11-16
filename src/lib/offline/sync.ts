@@ -1,4 +1,5 @@
 type SyncResult = { synced: number; failed: number }
+import { withBackoff } from './backoff'
 
 interface SyncConfig<LocalRecord, Payload> {
   shopId: string
@@ -19,19 +20,19 @@ export async function syncPendingBatch<LocalRecord, Payload>(
   }
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sales: pending.map(toPayload),
-      }),
+    const data = await withBackoff(async () => {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sales: pending.map(toPayload),
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(`Failed to sync batch: ${response.status}`)
+      }
+      return await response.json()
     })
-
-    if (!response.ok) {
-      throw new Error(`Failed to sync batch: ${response.status}`)
-    }
-
-    const data = await response.json()
     for (const rec of pending as any[]) {
       const error = data.errors?.find((e: any) => e.id === rec.id)
       if (!error) {

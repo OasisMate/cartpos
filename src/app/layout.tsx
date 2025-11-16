@@ -3,6 +3,7 @@ import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import Navbar from '@/components/layout/Navbar'
 import Sidebar from '@/components/layout/Sidebar'
+import { SyncBootstrapper } from '@/components/SyncBootstrapper'
 
 export const metadata: Metadata = {
   title: 'CartPOS',
@@ -31,6 +32,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-gray-50">
         <AuthProvider>
+                  <SyncBootstrapper />
           <Navbar />
           <Sidebar />
           <main className="md:pl-64 pt-16">

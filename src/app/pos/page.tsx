@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
-import { useOnlineSync } from '@/hooks/useOnlineSync'
 import { getProductsWithCache, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 import { saveSale, syncPendingSalesBatch } from '@/lib/offline/sales'
 import { cuid } from '@/lib/utils/cuid'
@@ -69,8 +68,7 @@ export default function POSPage() {
     }
   }, [user?.currentShopId, fetchProducts])
 
-  // Background sync for pending sales when online
-  useOnlineSync(user?.currentShopId || undefined, syncPendingSalesBatch)
+  // Per-page sync removed; handled by global background sync orchestrator
 
   // Sync pending sales when coming online
   useEffect(() => {

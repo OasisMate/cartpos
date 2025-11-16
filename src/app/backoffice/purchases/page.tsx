@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { useOnlineSync } from '@/hooks/useOnlineSync'
 import { savePurchaseLocally, syncPendingPurchasesBatch } from '@/lib/offline/purchases'
 import { cuid } from '@/lib/utils/cuid'
 
@@ -85,8 +84,7 @@ export default function PurchasesPage() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Background sync for offline purchases
-  useOnlineSync(user?.currentShopId || undefined, syncPendingPurchasesBatch)
+  // Per-page sync removed; handled by global background sync orchestrator
 
   const fetchPurchases = useCallback(async () => {
     if (!user?.currentShopId) return
