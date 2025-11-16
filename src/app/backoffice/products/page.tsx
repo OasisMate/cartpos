@@ -1,6 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Button from '@/components/ui/Button'
+import Input from '@/components/ui/Input'
+import Select from '@/components/ui/Select'
+import { Table, THead, TR, TH, TD, EmptyRow, SkeletonRow } from '@/components/ui/DataTable'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface Product {
@@ -192,30 +196,20 @@ export default function ProductsPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Products</h1>
-        <button
-          onClick={openCreateForm}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Add Product
-        </button>
+        <Button onClick={openCreateForm}>Add Product</Button>
       </div>
 
       {/* Search */}
       <form onSubmit={handleSearch} className="mb-4">
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             placeholder="Search products (name, SKU, barcode)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1"
           />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-          >
-            Search
-          </button>
+          <Button type="submit" variant="outline">Search</Button>
         </div>
       </form>
 
@@ -239,32 +233,26 @@ export default function ProductsPage() {
                   <label className="block text-sm font-medium mb-1">
                     Name <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <Input
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">SKU</label>
-                  <input
-                    type="text"
+                  <Input
                     value={formData.sku}
                     onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Barcode</label>
-                  <input
-                    type="text"
+                  <Input
                     value={formData.barcode}
                     onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -273,23 +261,22 @@ export default function ProductsPage() {
                     Unit <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-2">
-                    <select
+                    <Select
                       value={formData.unit}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1"
                     >
                       {COMMON_UNITS.map((unit) => (
                         <option key={unit} value={unit}>
                           {unit}
                         </option>
                       ))}
-                    </select>
-                    <input
-                      type="text"
+                    </Select>
+                    <Input
                       placeholder="Custom"
                       value={!COMMON_UNITS.includes(formData.unit) ? formData.unit : ''}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1"
                     />
                   </div>
                 </div>
@@ -298,44 +285,39 @@ export default function ProductsPage() {
                   <label className="block text-sm font-medium mb-1">
                     Price <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     type="number"
                     step="0.01"
                     required
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Cost Price</label>
-                  <input
+                  <Input
                     type="number"
                     step="0.01"
                     value={formData.costPrice}
                     onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Category</label>
-                  <input
-                    type="text"
+                  <Input
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Reorder Level</label>
-                  <input
+                  <Input
                     type="number"
                     value={formData.reorderLevel}
                     onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -353,24 +335,20 @@ export default function ProductsPage() {
               </div>
 
               <div className="mt-6 flex justify-end gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => {
                     setShowForm(false)
                     setEditingProduct(null)
                     setError('')
                   }}
-                  className="px-4 py-2 border rounded hover:bg-gray-50"
                 >
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                >
+                </Button>
+                <Button type="submit" disabled={submitting}>
                   {submitting ? 'Saving...' : editingProduct ? 'Update' : 'Create'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -381,63 +359,60 @@ export default function ProductsPage() {
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : products.length === 0 ? (
-        <div className="text-center py-8 text-gray-600">
+        <div className="text-center py-8 text-[hsl(var(--muted-foreground))]">
           {searchTerm ? 'No products found' : 'No products yet. Create your first product!'}
         </div>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border p-2 text-left">Name</th>
-                  <th className="border p-2 text-left">SKU</th>
-                  <th className="border p-2 text-left">Barcode</th>
-                  <th className="border p-2 text-left">Unit</th>
-                  <th className="border p-2 text-right">Price</th>
-                  <th className="border p-2 text-right">Cost Price</th>
-                  <th className="border p-2 text-left">Category</th>
-                  <th className="border p-2 text-center">Track Stock</th>
-                  <th className="border p-2 text-right">Reorder Level</th>
-                  <th className="border p-2 text-center">Actions</th>
-                </tr>
-              </thead>
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Name</TH>
+                  <TH>SKU</TH>
+                  <TH>Barcode</TH>
+                  <TH>Unit</TH>
+                  <TH className="text-right">Price</TH>
+                  <TH className="text-right">Cost Price</TH>
+                  <TH>Category</TH>
+                  <TH className="text-center">Track Stock</TH>
+                  <TH className="text-right">Reorder Level</TH>
+                  <TH className="text-center">Actions</TH>
+                </TR>
+              </THead>
               <tbody>
-                {products.map((product) => (
-                  <tr key={product.id} className="hover:bg-gray-50">
-                    <td className="border p-2">{product.name}</td>
-                    <td className="border p-2">{product.sku || '-'}</td>
-                    <td className="border p-2">{product.barcode || '-'}</td>
-                    <td className="border p-2">{product.unit}</td>
-                    <td className="border p-2 text-right">
-                      {parseFloat(product.price).toFixed(2)}
-                    </td>
-                    <td className="border p-2 text-right">
-                      {product.costPrice ? parseFloat(product.costPrice).toFixed(2) : '-'}
-                    </td>
-                    <td className="border p-2">{product.category || '-'}</td>
-                    <td className="border p-2 text-center">
-                      {product.trackStock ? (
-                        <span className="text-green-600">Yes</span>
-                      ) : (
-                        <span className="text-gray-400">No</span>
-                      )}
-                    </td>
-                    <td className="border p-2 text-right">
-                      {product.reorderLevel || '-'}
-                    </td>
-                    <td className="border p-2 text-center">
-                      <button
-                        onClick={() => openEditForm(product)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {products.length === 0 ? (
+                  <EmptyRow colSpan={10} message="No products" />
+                ) : (
+                  products.map((product) => (
+                    <TR key={product.id}>
+                      <TD>{product.name}</TD>
+                      <TD>{product.sku || '-'}</TD>
+                      <TD>{product.barcode || '-'}</TD>
+                      <TD>{product.unit}</TD>
+                      <TD className="text-right">{parseFloat(product.price).toFixed(2)}</TD>
+                      <TD className="text-right">
+                        {product.costPrice ? parseFloat(product.costPrice).toFixed(2) : '-'}
+                      </TD>
+                      <TD>{product.category || '-'}</TD>
+                      <TD className="text-center">
+                        {product.trackStock ? (
+                          <span className="text-green-600">Yes</span>
+                        ) : (
+                          <span className="text-[hsl(var(--muted-foreground))]">No</span>
+                        )}
+                      </TD>
+                      <TD className="text-right">{product.reorderLevel || '-'}</TD>
+                      <TD className="text-center">
+                        <Button variant="outline" onClick={() => openEditForm(product)} size="sm">
+                          Edit
+                        </Button>
+                      </TD>
+                    </TR>
+                  ))
+                )}
               </tbody>
-            </table>
+            </Table>
           </div>
 
           {/* Pagination */}
