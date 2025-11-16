@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import { useOnlineSync } from '@/hooks/useOnlineSync'
+import { syncPendingPurchasesBatch } from '@/lib/offline/purchases'
 
 interface Product {
   id: string
@@ -81,6 +83,9 @@ export default function PurchasesPage() {
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Background sync for offline purchases
+  useOnlineSync(user?.currentShopId || undefined, syncPendingPurchasesBatch)
 
   const fetchPurchases = useCallback(async () => {
     if (!user?.currentShopId) return

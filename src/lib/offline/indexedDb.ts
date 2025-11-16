@@ -87,6 +87,14 @@ class CartPOSDatabase extends Dexie {
       suppliers: 'id, shopId, name, syncStatus, updatedAt',
       sales: 'id, shopId, syncStatus, createdAt', // indexed by id, shopId, syncStatus, createdAt
     })
+    this.version(3).stores({
+      meta: 'key',
+      products: 'id, shopId, barcode, updatedAt',
+      customers: 'id, shopId, name, phone, syncStatus, updatedAt',
+      suppliers: 'id, shopId, name, syncStatus, updatedAt',
+      sales: 'id, shopId, syncStatus, createdAt',
+      purchases: 'id, shopId, syncStatus, createdAt', // new purchases store
+    })
   }
 }
 
@@ -225,4 +233,52 @@ export async function markSaleSyncError(saleId: string, error: string): Promise<
 
 export async function deleteSale(saleId: string): Promise<void> {
   await db.sales.delete(saleId)
+}
+
+// Purchase store type (for offline purchases)
+export interface CachedPurchase {
+  id: string // client-generated ID
+  shopId: string
+  supplierId?: string
+  date?: number
+  reference?: string
+  notes?: string
+  lines: Array<{
+    productId: string
+    quantity: number
+    unitCost?: number
+  }>
+  createdAt: number
+  syncStatus: 'PENDING' | 'SYNCED'
+  syncError?: string
+}
+
+// Dexie table type
+declare module 'dexie' {
+  interface Dexie {
+    purchases: Table<CachedPurchase, string>
+  }
+}
+
+// Helper functions for purchases store
+export async function addPurchaseLocal(purchase: Omit<CachedPurchase, 'createdAt' | 'syncStatus'>): Promise<string> {
+  const record: CachedPurchase = {
+    ...purchase,
+    createdAt: Date.now(),
+    syncStatus: 'PENDING',
+  }
+  await (db as any).purchases.add(record)
+  return purchase.id
+}
+
+export async function getPendingPurchases(shopId: string): Promise<CachedPurchase[]> {
+  return await (db as any).purchases.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
+}
+
+export async function markPurchaseAsSynced(id: string): Promise<void> {
+  await (db as any).purchases.update(id, { syncStatus: 'SYNCED', syncError: undefined })
+}
+
+export async function markPurchaseSyncError(id: string, error: string): Promise<void> {
+  await (db as any).purchases.update(id, { syncError: error })
 }
