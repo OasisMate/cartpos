@@ -107,6 +107,11 @@ export default function LoginPage() {
             </button>
           </div>
         </form>
+        <div className="text-center mt-4">
+          <Link href="/signup" className="text-sm text-blue-600 hover:underline">
+            Don&apos;t have an account? Sign up your organization
+          </Link>
+        </div>
       </div>
     </div>
   )
