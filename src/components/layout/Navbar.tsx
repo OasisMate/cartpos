@@ -8,7 +8,7 @@ import { useState } from 'react'
 import MobileSidebar from '@/components/layout/MobileSidebar'
 
 export default function Navbar() {
-  const { user, logout, selectShop } = useAuth()
+  const { user, logout, selectShop, selectOrg } = useAuth()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -18,6 +18,7 @@ export default function Navbar() {
   }
 
   const currentShop = user?.shops?.find((s) => s.shopId === user.currentShopId)?.shop
+  const hasMultipleOrgs = (user?.organizations?.length || 0) > 1
   const hasMultipleShops = (user?.shops?.length || 0) > 1
 
   return (
@@ -40,6 +41,20 @@ export default function Navbar() {
             {/* Primary navigation moved to Sidebar/MobileSidebar to reduce redundancy */}
           </div>
           <div className="flex items-center space-x-4">
+            {user?.organizations && user.organizations.length > 0 && (
+              <select
+                value={user.currentOrgId || ''}
+                onChange={(e) => selectOrg(e.target.value)}
+                className="input h-9 w-[220px]"
+                disabled={user.organizations.length === 0}
+              >
+                {user.organizations.map((o) => (
+                  <option key={o.orgId} value={o.orgId}>
+                    {o.organization.name}
+                  </option>
+                ))}
+              </select>
+            )}
             {hasMultipleShops && user?.shops && (
               <select
                 value={user.currentShopId || ''}
