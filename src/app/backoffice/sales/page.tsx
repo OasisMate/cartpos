@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface SaleLine {
   id: string
@@ -31,6 +32,7 @@ interface SalesResponse {
 
 export default function BackofficeSalesPage() {
   const { user } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirm()
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -79,9 +81,8 @@ export default function BackofficeSalesPage() {
   }, [fetchSales])
 
   async function voidSale(id: string) {
-    if (!confirm('Are you sure you want to VOID this sale? This will reverse stock and ledger entries.')) {
-      return
-    }
+    const agreed = await confirm('Are you sure you want to VOID this sale? This will reverse stock and ledger entries.')
+    if (!agreed) return
     try {
       setError('')
       const resp = await fetch(`/api/sales/${id}/void`, { method: 'POST' })
@@ -106,6 +107,7 @@ export default function BackofficeSalesPage() {
 
   return (
     <div className="p-6">
+      <ConfirmDialog />
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Sales</h1>
         <div className="flex items-center gap-2">
