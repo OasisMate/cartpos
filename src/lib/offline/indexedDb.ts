@@ -71,6 +71,7 @@ class CartPOSDatabase extends Dexie {
   customers!: Table<CachedCustomer, string>
   suppliers!: Table<CachedSupplier, string>
   sales!: Table<CachedSale, string>
+  // purchases and udhaarPayments are added in later versions via dynamic any-access
 
   constructor() {
     super('CartPOS_DB')
@@ -94,6 +95,7 @@ class CartPOSDatabase extends Dexie {
       suppliers: 'id, shopId, name, syncStatus, updatedAt',
       sales: 'id, shopId, syncStatus, createdAt',
       purchases: 'id, shopId, syncStatus, createdAt', // new purchases store
+      udhaarPayments: 'id, shopId, customerId, syncStatus, createdAt', // new payments store
     })
   }
 }
@@ -281,4 +283,61 @@ export async function markPurchaseAsSynced(id: string): Promise<void> {
 
 export async function markPurchaseSyncError(id: string, error: string): Promise<void> {
   await (db as any).purchases.update(id, { syncError: error })
+}
+
+// Customers pending helpers (reuse existing customers store)
+export async function getPendingCustomers(shopId: string): Promise<CachedCustomer[]> {
+  return await db.customers
+    .where('[shopId+syncStatus]')
+    .equals([shopId, 'PENDING'])
+    .toArray()
+}
+
+export async function markCustomerAsSynced(id: string): Promise<void> {
+  await db.customers.update(id, { syncStatus: 'SYNCED', isLocalOnly: false, updatedAt: Date.now(), })
+}
+
+export async function markCustomerSyncError(id: string, error: string): Promise<void> {
+  await db.customers.update(id, { syncStatus: 'PENDING', updatedAt: Date.now() })
+  // keep error tracking minimal; customers store has no dedicated error field
+}
+
+// Udhaar payments store
+export interface CachedUdhaarPayment {
+  id: string
+  shopId: string
+  customerId: string
+  amount: number
+  method: 'CASH' | 'CARD' | 'OTHER'
+  note?: string
+  createdAt: number
+  syncStatus: 'PENDING' | 'SYNCED'
+  syncError?: string
+}
+
+declare module 'dexie' {
+  interface Dexie {
+    udhaarPayments: Table<CachedUdhaarPayment, string>
+  }
+}
+
+export async function addUdhaarPaymentLocal(payment: Omit<CachedUdhaarPayment, 'createdAt' | 'syncStatus'>) {
+  const record: CachedUdhaarPayment = {
+    ...payment,
+    createdAt: Date.now(),
+    syncStatus: 'PENDING',
+  }
+  await (db as any).udhaarPayments.add(record)
+}
+
+export async function getPendingUdhaarPayments(shopId: string): Promise<CachedUdhaarPayment[]> {
+  return await (db as any).udhaarPayments.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
+}
+
+export async function markUdhaarPaymentAsSynced(id: string): Promise<void> {
+  await (db as any).udhaarPayments.update(id, { syncStatus: 'SYNCED', syncError: undefined })
+}
+
+export async function markUdhaarPaymentSyncError(id: string, error: string): Promise<void> {
+  await (db as any).udhaarPayments.update(id, { syncError: error })
 }
