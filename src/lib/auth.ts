@@ -77,6 +77,11 @@ export async function getCurrentUser() {
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
     include: {
+      organizations: {
+        include: {
+          organization: true,
+        },
+      },
       shops: {
         include: {
           shop: true,
@@ -89,6 +94,12 @@ export async function getCurrentUser() {
     return null
   }
 
+  const organizations = user.organizations.map((ou) => ({
+    orgId: ou.orgId,
+    orgRole: ou.orgRole,
+    organization: ou.organization,
+  }))
+
   const shops = user.shops.map((us) => ({
     shopId: us.shopId,
     shopRole: us.shopRole,
@@ -97,6 +108,8 @@ export async function getCurrentUser() {
 
   // Get current shop from cookie (or default to first shop)
   const cookieStore = await cookies()
+  const currentOrgId =
+    cookieStore.get('currentOrgId')?.value || organizations[0]?.orgId || null
   const currentShopId = cookieStore.get('currentShopId')?.value || shops[0]?.shopId || null
 
   return {
@@ -104,6 +117,8 @@ export async function getCurrentUser() {
     name: user.name,
     email: user.email,
     role: user.role,
+    organizations,
+    currentOrgId,
     shops,
     currentShopId,
   }
