@@ -37,46 +37,7 @@ export default function Navbar() {
                 CartPOS
               </Link>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-4">
-              {(user?.role === 'ADMIN' || user?.shops && user.shops.length > 0) && (
-                <Link
-                  href="/pos"
-                  className={`inline-flex items-center px-2 pt-1 text-sm font-medium ${
-                    pathname?.startsWith('/pos')
-                      ? 'text-[hsl(var(--foreground))]'
-                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-                  }`}
-                >
-                  POS
-                </Link>
-              )}
-              {(user?.role === 'ADMIN' || user?.shops?.some((s) => s.shopRole === 'OWNER')) && (
-                <>
-                  <Link
-                    href="/backoffice"
-                    className={`inline-flex items-center px-2 pt-1 text-sm font-medium ${
-                      pathname?.startsWith('/backoffice')
-                        ? 'text-[hsl(var(--foreground))]'
-                        : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-                    }`}
-                  >
-                    Backoffice
-                  </Link>
-                </>
-              )}
-              {user?.role === 'ADMIN' && (
-                <Link
-                  href="/admin"
-                  className={`inline-flex items-center px-2 pt-1 text-sm font-medium ${
-                    pathname?.startsWith('/admin')
-                      ? 'text-[hsl(var(--foreground))]'
-                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-                  }`}
-                >
-                  Admin
-                </Link>
-              )}
-            </div>
+            {/* Primary navigation moved to Sidebar/MobileSidebar to reduce redundancy */}
           </div>
           <div className="flex items-center space-x-4">
             {hasMultipleShops && user?.shops && (
