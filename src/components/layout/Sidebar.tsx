@@ -25,15 +25,15 @@ export default function Sidebar() {
   }
 
   // Define all navigation items with roles that can access them
-  const posNav = [{ name: 'POS', href: '/pos', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER', 'CASHIER'] }]
+  const posNav = [{ name: 'POS', href: '/pos', roles: ['SHOP_OWNER', 'CASHIER'] }]
   const backofficeNav = [
-    { name: 'Dashboard', href: '/backoffice', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
-    { name: 'Products', href: '/backoffice/products', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
-    { name: 'Purchases', href: '/backoffice/purchases', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
-    { name: 'Sales', href: '/backoffice/sales', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
-    { name: 'Customers', href: '/backoffice/customers', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
-    { name: 'Udhaar', href: '/backoffice/udhaar', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
-    { name: 'Reports', href: '/backoffice/reports', roles: ['PLATFORM_ADMIN', 'SHOP_OWNER'] },
+    { name: 'Dashboard', href: '/backoffice', roles: ['SHOP_OWNER'] },
+    { name: 'Products', href: '/backoffice/products', roles: ['SHOP_OWNER'] },
+    { name: 'Purchases', href: '/backoffice/purchases', roles: ['SHOP_OWNER'] },
+    { name: 'Sales', href: '/backoffice/sales', roles: ['SHOP_OWNER'] },
+    { name: 'Customers', href: '/backoffice/customers', roles: ['SHOP_OWNER'] },
+    { name: 'Udhaar', href: '/backoffice/udhaar', roles: ['SHOP_OWNER'] },
+    { name: 'Reports', href: '/backoffice/reports', roles: ['SHOP_OWNER'] },
   ]
   const adminNav = [
     { name: 'Admin', href: '/admin', roles: ['PLATFORM_ADMIN'] },
@@ -44,8 +44,8 @@ export default function Sidebar() {
   const canSee = (item: { roles: string[] }) => {
     if (!user) return false
 
-    // PLATFORM_ADMIN can see everything
-    if (user.role === 'PLATFORM_ADMIN') return true
+    // PLATFORM_ADMIN: show only admin section
+    if (user.role === 'PLATFORM_ADMIN') return false
 
     // For NORMAL users, check shop roles
     if (user.role === 'NORMAL' && user.shops && user.shops.length > 0) {

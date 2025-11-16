@@ -41,7 +41,7 @@ export default function Navbar() {
             {/* Primary navigation moved to Sidebar/MobileSidebar to reduce redundancy */}
           </div>
           <div className="flex items-center space-x-4">
-            {user?.organizations && user.organizations.length > 0 && (
+            {user?.role !== 'PLATFORM_ADMIN' && user?.organizations && user.organizations.length > 0 && (
               <select
                 value={user.currentOrgId || ''}
                 onChange={(e) => selectOrg(e.target.value)}
@@ -55,7 +55,7 @@ export default function Navbar() {
                 ))}
               </select>
             )}
-            {hasMultipleShops && user?.shops && (
+            {user?.role !== 'PLATFORM_ADMIN' && hasMultipleShops && user?.shops && (
               <select
                 value={user.currentShopId || ''}
                 onChange={(e) => selectShop(e.target.value)}
