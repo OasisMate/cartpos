@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Button from '@/components/ui/Button'
+import Input from '@/components/ui/Input'
+import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface Supplier {
@@ -162,37 +165,26 @@ export default function SuppliersPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Suppliers</h1>
-        <button
-          onClick={openCreateForm}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Add Supplier
-        </button>
+        <Button onClick={openCreateForm}>Add Supplier</Button>
       </div>
 
       {/* Search */}
       <form onSubmit={handleSearch} className="mb-4">
         <div className="flex gap-2">
-          <input
-            type="text"
+          <Input
             placeholder="Search suppliers (name, phone)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1"
           />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-          >
-            Search
-          </button>
+          <Button type="submit" variant="outline">Search</Button>
         </div>
       </form>
 
       {/* Supplier Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto border border-[hsl(var(--border))]">
             <h2 className="text-xl font-bold mb-4">
               {editingSupplier ? 'Edit Supplier' : 'Add Supplier'}
             </h2>
@@ -209,23 +201,19 @@ export default function SuppliersPage() {
                   <label className="block text-sm font-medium mb-1">
                     Name <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <Input
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Supplier name"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Phone</label>
-                  <input
-                    type="text"
+                  <Input
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Phone number"
                   />
                 </div>
@@ -235,7 +223,7 @@ export default function SuppliersPage() {
                   <textarea
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full input min-h-[96px]"
                     rows={3}
                     placeholder="Additional notes"
                   />
@@ -243,24 +231,20 @@ export default function SuppliersPage() {
               </div>
 
               <div className="mt-6 flex justify-end gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => {
                     setShowForm(false)
                     setEditingSupplier(null)
                     setError('')
                   }}
-                  className="px-4 py-2 border rounded hover:bg-gray-50"
                 >
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                >
+                </Button>
+                <Button type="submit" disabled={submitting}>
                   {submitting ? 'Saving...' : editingSupplier ? 'Update' : 'Create'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -271,43 +255,42 @@ export default function SuppliersPage() {
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : suppliers.length === 0 ? (
-        <div className="text-center py-8 text-gray-600">
+        <div className="text-center py-8 text-[hsl(var(--muted-foreground))]">
           {searchTerm ? 'No suppliers found' : 'No suppliers yet. Create your first supplier!'}
         </div>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border p-2 text-left">Name</th>
-                  <th className="border p-2 text-left">Phone</th>
-                  <th className="border p-2 text-left">Notes</th>
-                  <th className="border p-2 text-center">Purchases</th>
-                  <th className="border p-2 text-center">Actions</th>
-                </tr>
-              </thead>
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Name</TH>
+                  <TH>Phone</TH>
+                  <TH>Notes</TH>
+                  <TH className="text-center">Purchases</TH>
+                  <TH className="text-center">Actions</TH>
+                </TR>
+              </THead>
               <tbody>
-                {suppliers.map((supplier) => (
-                  <tr key={supplier.id} className="hover:bg-gray-50">
-                    <td className="border p-2 font-medium">{supplier.name}</td>
-                    <td className="border p-2">{supplier.phone || '-'}</td>
-                    <td className="border p-2">{supplier.notes || '-'}</td>
-                    <td className="border p-2 text-center">
-                      {supplier._count.purchases}
-                    </td>
-                    <td className="border p-2 text-center">
-                      <button
-                        onClick={() => openEditForm(supplier)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {suppliers.length === 0 ? (
+                  <EmptyRow colSpan={5} message="No suppliers" />
+                ) : (
+                  suppliers.map((supplier) => (
+                    <TR key={supplier.id}>
+                      <TD className="font-medium">{supplier.name}</TD>
+                      <TD>{supplier.phone || '-'}</TD>
+                      <TD>{supplier.notes || '-'}</TD>
+                      <TD className="text-center">{supplier._count.purchases}</TD>
+                      <TD className="text-center">
+                        <Button variant="outline" size="sm" onClick={() => openEditForm(supplier)}>
+                          Edit
+                        </Button>
+                      </TD>
+                    </TR>
+                  ))
+                )}
               </tbody>
-            </table>
+            </Table>
           </div>
 
           {/* Pagination */}
