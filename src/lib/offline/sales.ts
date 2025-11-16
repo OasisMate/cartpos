@@ -1,4 +1,6 @@
 import { addSale, getPendingSales, markSaleAsSynced, markSaleSyncError, CachedSale } from './indexedDb'
+import { fetchJSON } from '@/lib/utils/http'
+import { syncPendingBatch } from './sync'
 
 // Sale input type
 export interface SaleInput {
@@ -31,9 +33,8 @@ export async function saveSaleLocally(sale: SaleInput): Promise<void> {
  */
 export async function syncSaleToServer(sale: CachedSale): Promise<boolean> {
   try {
-    const response = await fetch('/api/sales', {
+    await fetchJSON('/api/sales', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerId: sale.customerId || undefined,
         items: sale.items,
@@ -45,11 +46,6 @@ export async function syncSaleToServer(sale: CachedSale): Promise<boolean> {
         amountReceived: sale.amountReceived,
       }),
     })
-
-    if (!response.ok) {
-      const data = await response.json()
-      throw new Error(data.error || 'Failed to sync sale')
-    }
 
     await markSaleAsSynced(sale.id)
     return true
@@ -84,56 +80,24 @@ export async function syncPendingSales(shopId: string): Promise<{ synced: number
  * Batch sync pending sales to server
  */
 export async function syncPendingSalesBatch(shopId: string): Promise<{ synced: number; failed: number }> {
-  const pendingSales = await getPendingSales(shopId)
-  
-  if (pendingSales.length === 0) {
-    return { synced: 0, failed: 0 }
-  }
-
-  try {
-    const response = await fetch('/api/sales/sync-batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sales: pendingSales.map((sale) => ({
-          id: sale.id,
-          customerId: sale.customerId || undefined,
-          items: sale.items,
-          subtotal: sale.subtotal,
-          discount: sale.discount,
-          total: sale.total,
-          paymentStatus: sale.paymentStatus,
-          paymentMethod: sale.paymentMethod,
-          amountReceived: sale.amountReceived,
-        })),
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to sync sales batch')
-    }
-
-    const data = await response.json()
-    
-    // Mark successfully synced sales
-    for (const sale of pendingSales) {
-      const error = data.errors?.find((e: any) => e.id === sale.id)
-      if (!error) {
-        // No error means it was synced (or skipped if duplicate)
-        await markSaleAsSynced(sale.id)
-      } else {
-        await markSaleSyncError(sale.id, error.error)
-      }
-    }
-
-    return {
-      synced: data.synced || 0,
-      failed: data.errors?.length || 0,
-    }
-  } catch (error: any) {
-    console.error('Error syncing sales batch:', error)
-    return { synced: 0, failed: pendingSales.length }
-  }
+  return await syncPendingBatch({
+    shopId,
+    getPending: getPendingSales,
+    markSynced: markSaleAsSynced,
+    markError: markSaleSyncError,
+    toPayload: (sale) => ({
+      id: (sale as CachedSale).id,
+      customerId: (sale as CachedSale).customerId || undefined,
+      items: (sale as CachedSale).items,
+      subtotal: (sale as CachedSale).subtotal,
+      discount: (sale as CachedSale).discount,
+      total: (sale as CachedSale).total,
+      paymentStatus: (sale as CachedSale).paymentStatus,
+      paymentMethod: (sale as CachedSale).paymentMethod,
+      amountReceived: (sale as CachedSale).amountReceived,
+    }),
+    endpoint: '/api/sales/sync-batch',
+  })
 }
 
 /**

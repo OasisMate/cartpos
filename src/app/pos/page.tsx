@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { useOnlineSync } from '@/hooks/useOnlineSync'
 import { getProductsWithCache, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 import { saveSale, syncPendingSalesBatch } from '@/lib/offline/sales'
 import { cuid } from '@/lib/utils/cuid'
+import { sumCartLines, calculateTotals } from '@/lib/utils/money'
 
 // Product interface is imported from lib/offline/products
 
@@ -66,6 +68,9 @@ export default function POSPage() {
       fetchCustomers()
     }
   }, [user?.currentShopId, fetchProducts])
+
+  // Background sync for pending sales when online
+  useOnlineSync(user?.currentShopId || undefined, syncPendingSalesBatch)
 
   // Sync pending sales when coming online
   useEffect(() => {
@@ -228,8 +233,8 @@ export default function POSPage() {
         return
       }
 
-      const subtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0)
-      const total = subtotal - discount
+      const subtotal = sumCartLines(cart)
+      const { total } = calculateTotals(subtotal, discount)
 
       // Generate client-side ID for offline-first
       const saleId = cuid()
