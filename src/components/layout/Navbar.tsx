@@ -4,10 +4,13 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePathname } from 'next/navigation'
 import Button from '@/components/ui/Button'
+import { useState } from 'react'
+import MobileSidebar from '@/components/layout/MobileSidebar'
 
 export default function Navbar() {
   const { user, logout, selectShop } = useAuth()
   const pathname = usePathname()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   // Don't show navbar on login page
   if (pathname === '/login') {
@@ -23,6 +26,13 @@ export default function Navbar() {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
+              <button
+                className="mr-3 md:hidden text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                onClick={() => setMobileOpen(true)}
+                aria-label="Open menu"
+              >
+                ☰
+              </button>
               <Link href="/" className="text-xl font-bold">
                 CartPOS
               </Link>
@@ -102,6 +112,7 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+      <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} />
     </nav>
   )
 }
