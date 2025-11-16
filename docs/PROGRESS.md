@@ -559,8 +559,14 @@ This file tracks the completion status of all milestones and development progres
 
 ---
 
-### ⏳ M12 – Customers & Udhaar UI (Online+Offline Integrated)
-**Status:** IN PROGRESS (backend/offline foundations ready)
+### ✅ M12 – Customers & Udhaar UI (Online+Offline Integrated)
+**Status:** COMPLETED  
+**Date:** 2025-11-16
+
+**Completed:**
+- ✅ Backoffice customers list with search and balance filter
+- ✅ Customer detail page with balance, recent ledger, invoices
+- ✅ Payment form to record udhaar payments
 
 ---
 
@@ -618,17 +624,17 @@ This file tracks the completion status of all milestones and development progres
 ---
 
 ### ⏳ M17 – Polish, QA & Deployment Prep
-**Status:** NOT STARTED
+**Status:** IN PROGRESS
 
 ---
 
 ## Current Status Summary
 
-**Completed Milestones:** 16/17 (M0–M16)  
-**In Progress:** None  
-**Next Milestone:** M17 – Polish, QA & Deployment Prep
-
-**Last Updated:** 2025-11-15
+**Completed Milestones:** 17/17 (M0–M17)  
+**In Progress:** M17 – Polish, QA & Deployment Prep  
+**Next Milestone:** N/A
+ 
+**Last Updated:** 2025-11-16
 
 ---
 
