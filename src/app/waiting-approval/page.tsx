@@ -17,7 +17,7 @@ interface OrganizationStatus {
 
 export default function WaitingApprovalPage() {
   const router = useRouter()
-  const { user, refreshUser } = useAuth()
+  const { user, refreshUser, logout } = useAuth()
   const [orgStatus, setOrgStatus] = useState<OrganizationStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -257,12 +257,14 @@ export default function WaitingApprovalPage() {
               >
                 {loading ? 'Checking...' : 'Refresh Status'}
               </button>
-              <Link
-                href="/login"
+              <button
+                onClick={async () => {
+                  await logout()
+                }}
                 className="block w-full text-center text-blue-600 hover:text-blue-700 font-semibold py-2"
               >
                 Back to Login
-              </Link>
+              </button>
             </div>
 
             <p className="mt-6 text-xs text-gray-500 text-center">

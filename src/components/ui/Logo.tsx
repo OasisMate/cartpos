@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 interface LogoProps {
@@ -18,13 +17,9 @@ export function Logo({ showText = true, className, href = '/' }: LogoProps) {
         </div>
       </div>
       {showText && (
-        <motion.span
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="font-bold text-lg bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent whitespace-pre"
-        >
+        <span className="font-bold text-lg bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent whitespace-pre transition-opacity duration-200">
           CartPOS
-        </motion.span>
+        </span>
       )}
     </>
   )
@@ -33,8 +28,8 @@ export function Logo({ showText = true, className, href = '/' }: LogoProps) {
     <Link
       href={href}
       className={cn(
-        'font-normal flex space-x-2 items-center text-sm text-gray-900 py-1 relative z-20',
-        !showText && 'justify-center',
+        'font-normal flex items-center text-sm text-gray-900 py-1 relative z-20 transition-all duration-200',
+        showText ? 'space-x-2' : 'justify-center',
         className
       )}
     >

@@ -3,7 +3,6 @@
 import { cn } from "@/lib/utils";
 import Link, { LinkProps } from "next/link";
 import React, { useState, createContext, useContext } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 
 interface Links {
@@ -71,11 +70,11 @@ export const Sidebar = ({
   );
 };
 
-export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
+export const SidebarBody = (props: React.ComponentProps<"div">) => {
   return (
     <>
       <DesktopSidebar {...props} />
-      <MobileSidebar {...(props as React.ComponentProps<"div">)} />
+      <MobileSidebar {...props} />
     </>
   );
 };
@@ -84,23 +83,22 @@ export const DesktopSidebar = ({
   className,
   children,
   ...props
-}: React.ComponentProps<typeof motion.div>) => {
+}: React.ComponentProps<"div">) => {
   const { open, setOpen, animate } = useSidebar();
   return (
-    <motion.div
+    <div
       className={cn(
-        "h-full px-4 py-4 hidden md:flex md:flex-col bg-white w-[300px] flex-shrink-0 border-r border-gray-200",
+        "h-full py-4 hidden md:flex md:flex-col bg-white flex-shrink-0 border-r border-gray-200 transition-all duration-300 ease-in-out",
+        open ? "w-[300px] px-4" : "w-[60px] px-2",
+        !animate && "w-[300px]",
         className
       )}
-      animate={{
-        width: animate ? (open ? "300px" : "60px") : "300px",
-      }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={() => animate && setOpen(true)}
+      onMouseLeave={() => animate && setOpen(false)}
       {...props}
     >
       {children}
-    </motion.div>
+    </div>
   );
 };
 
@@ -125,32 +123,23 @@ export const MobileSidebar = ({
             aria-label="Toggle menu"
           />
         </div>
-        <AnimatePresence>
-          {open && (
-            <motion.div
-              initial={{ x: "-100%", opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: "-100%", opacity: 0 }}
-              transition={{
-                duration: 0.3,
-                ease: "easeInOut",
-              }}
-              className={cn(
-                "fixed h-full w-full inset-0 bg-white p-10 z-[100] flex flex-col justify-between",
-                className
-              )}
+        {open && (
+          <div
+            className={cn(
+              "fixed h-full w-full inset-0 bg-white p-10 z-[100] flex flex-col justify-between transition-all duration-300 ease-in-out",
+              className
+            )}
+          >
+            <div
+              className="absolute right-10 top-10 z-50 text-gray-700 cursor-pointer"
+              onClick={() => setOpen(!open)}
+              aria-label="Close menu"
             >
-              <div
-                className="absolute right-10 top-10 z-50 text-gray-700 cursor-pointer"
-                onClick={() => setOpen(!open)}
-                aria-label="Close menu"
-              >
-                <X />
-              </div>
-              {children}
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <X />
+            </div>
+            {children}
+          </div>
+        )}
       </div>
     </>
   );
@@ -170,22 +159,28 @@ export const SidebarLink = ({
     <Link
       href={link.href}
       className={cn(
-        "flex items-center justify-start gap-2 group/sidebar py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-lg",
+        "flex items-center group/sidebar py-2.5 focus:outline-none rounded-lg transition-all duration-200",
+        "border-0 outline-0 ring-0",
+        open ? "justify-start gap-2 px-3" : "justify-center px-0",
         className
       )}
       aria-label={link.label}
+      title={!open ? link.label : undefined}
       {...props}
     >
-      {link.icon}
-      <motion.span
-        animate={{
-          display: animate ? (open ? "inline-block" : "none") : "inline-block",
-          opacity: animate ? (open ? 1 : 0) : 1,
-        }}
-        className="text-gray-700 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
+      <div className={cn("flex-shrink-0", open ? "" : "w-full flex justify-center")}>
+        <div className={cn("transition-all duration-200", open ? "" : "scale-125")}>
+          {link.icon}
+        </div>
+      </div>
+      <span
+        className={cn(
+          "text-gray-700 text-base font-medium group-hover/sidebar:translate-x-1 transition-all duration-300 ease-in-out whitespace-pre inline-block overflow-hidden",
+          animate && !open ? "w-0 opacity-0 max-w-0" : "w-auto opacity-100 max-w-[200px]"
+        )}
       >
         {link.label}
-      </motion.span>
+      </span>
     </Link>
   );
 };
