@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { Building2, Users, Store } from 'lucide-react'
 
 export default async function AdminPage() {
   const user = await getCurrentUser()
@@ -25,60 +26,86 @@ export default async function AdminPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">Platform Admin</h1>
-      <p className="text-[hsl(var(--muted-foreground))] mb-6">Overview and quick actions</p>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent">
+          Platform Admin Dashboard
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">Overview and quick actions</p>
+      </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Organizations</div>
-            <div className="text-2xl font-semibold">{organizationsCount}</div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white transform transition-transform hover:scale-105">
+          <div className="text-sm font-medium text-blue-100 mb-2">Organizations</div>
+          <div className="text-4xl font-bold">{organizationsCount}</div>
+          <div className="text-xs text-blue-100 mt-2">Total registered</div>
         </div>
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Shops</div>
-            <div className="text-2xl font-semibold">{shopsCount}</div>
-          </div>
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white transform transition-transform hover:scale-105">
+          <div className="text-sm font-medium text-orange-100 mb-2">Shops</div>
+          <div className="text-4xl font-bold">{shopsCount}</div>
+          <div className="text-xs text-orange-100 mt-2">Active shops</div>
         </div>
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Users</div>
-            <div className="text-2xl font-semibold">{usersCount}</div>
-          </div>
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white transform transition-transform hover:scale-105">
+          <div className="text-sm font-medium text-purple-100 mb-2">Users</div>
+          <div className="text-4xl font-bold">{usersCount}</div>
+          <div className="text-xs text-purple-100 mt-2">Total users</div>
         </div>
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Invoices Today</div>
-            <div className="text-2xl font-semibold">{invoicesToday}</div>
-          </div>
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white transform transition-transform hover:scale-105">
+          <div className="text-sm font-medium text-green-100 mb-2">Invoices Today</div>
+          <div className="text-4xl font-bold">{invoicesToday}</div>
+          <div className="text-xs text-green-100 mt-2">Completed today</div>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Link
-          href="/admin/shops"
-          className="card hover:bg-[hsl(var(--muted))] transition-colors"
-        >
-          <div className="card-body">
-            <h2 className="font-semibold text-lg mb-1">Manage Shops</h2>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Create and manage shops, view owners and statistics.
-            </p>
-          </div>
-        </Link>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Link
           href="/admin/organizations"
-          className="card hover:bg-[hsl(var(--muted))] transition-colors"
+          className="group bg-white dark:bg-neutral-800 rounded-xl shadow-md hover:shadow-xl border border-gray-200 dark:border-neutral-700 p-6 transition-all hover:border-blue-300 dark:hover:border-blue-600"
         >
-          <div className="card-body">
-            <h2 className="font-semibold text-lg mb-1">Organizations</h2>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Review organization requests, approve or suspend.
-            </p>
+          <div className="flex items-center gap-4 mb-3">
+            <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+              <Building2 className="h-6 w-6 text-white" />
+            </div>
+            <h2 className="font-semibold text-lg text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              Organizations
+            </h2>
           </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Review organization requests, approve or suspend organizations.
+          </p>
+        </Link>
+        <Link
+          href="/admin/users"
+          className="group bg-white dark:bg-neutral-800 rounded-xl shadow-md hover:shadow-xl border border-gray-200 dark:border-neutral-700 p-6 transition-all hover:border-purple-300 dark:hover:border-purple-600"
+        >
+          <div className="flex items-center gap-4 mb-3">
+            <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+              <Users className="h-6 w-6 text-white" />
+            </div>
+            <h2 className="font-semibold text-lg text-gray-900 dark:text-gray-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+              Users
+            </h2>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Manage user accounts, roles, and permissions.
+          </p>
+        </Link>
+        <Link
+          href="/admin/shops"
+          className="group bg-white dark:bg-neutral-800 rounded-xl shadow-md hover:shadow-xl border border-gray-200 dark:border-neutral-700 p-6 transition-all hover:border-orange-300 dark:hover:border-orange-600"
+        >
+          <div className="flex items-center gap-4 mb-3">
+            <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+              <Store className="h-6 w-6 text-white" />
+            </div>
+            <h2 className="font-semibold text-lg text-gray-900 dark:text-gray-100 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+              Shops
+            </h2>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Create and manage shops, view owners and statistics.
+          </p>
         </Link>
       </div>
     </div>

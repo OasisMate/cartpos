@@ -28,12 +28,16 @@ async function createAdminUser() {
     const hashedPassword = await bcrypt.hash(password, 10)
 
     // Create user
+    // Note: phone and cnic are required for regular users but can be null for admin accounts created via script
     const user = await prisma.user.create({
       data: {
         email,
         name,
         password: hashedPassword,
-        role: 'ADMIN',
+        role: 'PLATFORM_ADMIN',
+        phone: null, // Admin users created via script don't need phone/cnic
+        cnic: null,
+        isWhatsApp: false,
       },
     })
 

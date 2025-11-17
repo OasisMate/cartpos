@@ -33,12 +33,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, city, ownerName, ownerEmail, ownerPassword } = body
+    const { name, city, orgId, ownerName, ownerEmail, ownerPassword } = body
 
     // Validate required fields
-    if (!name || !ownerName || !ownerEmail || !ownerPassword) {
+    if (!name || !orgId || !ownerName || !ownerEmail || !ownerPassword) {
       return NextResponse.json(
-        { error: 'Missing required fields: name, ownerName, ownerEmail, ownerPassword' },
+        { error: 'Missing required fields: name, orgId, ownerName, ownerEmail, ownerPassword' },
         { status: 400 }
       )
     }
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       {
         name,
         city,
+        orgId,
         ownerName,
         ownerEmail,
         ownerPassword,

@@ -4,6 +4,7 @@ import { hashPassword } from '@/lib/auth'
 export interface CreateShopInput {
   name: string
   city?: string
+  orgId: string
   ownerName: string
   ownerEmail: string
   ownerPassword: string
@@ -38,16 +39,22 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
       data: {
         name: input.name,
         city: input.city || null,
+        orgId: input.orgId,
       },
     })
 
     // Create owner user
+    // Note: phone and cnic are required for regular users but can be null for admin-created users
+    // Admin should provide these when creating shops via UI
     const owner = await tx.user.create({
       data: {
         name: input.ownerName,
         email: input.ownerEmail,
         password: hashedPassword,
         role: 'NORMAL',
+        phone: null, // Admin should provide via UI
+        cnic: null, // Admin should provide via UI
+        isWhatsApp: false,
       },
     })
 

@@ -20,6 +20,23 @@ export default async function ShopDashboardPage() {
     redirect('/')
   }
 
+  // Check organization status - must be ACTIVE (unless platform admin)
+  if (!isPlatform) {
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { orgId: true },
+    })
+    if (shop?.orgId) {
+      const org = await prisma.organization.findUnique({
+        where: { id: shop.orgId },
+        select: { status: true },
+      })
+      if (org?.status !== 'ACTIVE') {
+        redirect('/waiting-approval')
+      }
+    }
+  }
+
   const today = new Date(new Date().toDateString())
 
   const [shop, invoicesToday, paymentsToday, udhaarCreatedToday, lowStockCount] = await Promise.all([

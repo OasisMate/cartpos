@@ -1,37 +1,83 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
+import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
     const {
-      organizationName,
-      contactName,
+      // User fields
+      firstName,
+      lastName,
       email,
       phone,
+      cnic,
+      isWhatsApp,
       password,
+      // Organization fields
+      organizationName,
+      legalName,
       city,
-      notes,
+      addressLine1,
+      addressLine2,
+      ntn,
+      strn,
+      orgPhone,
     } = body || {}
 
-    if (!organizationName || !contactName || !email || !password) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    // Validate required fields
+    if (!firstName || !lastName || !email || !phone || !cnic || !password || !organizationName || !city) {
+      return NextResponse.json(
+        { error: 'Missing required fields. Please fill all required fields.' },
+        { status: 400 }
+      )
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } })
-    if (existing) {
+    // Validate and normalize phone
+    const normalizedPhone = normalizePhone(phone, 'PK')
+    if (!normalizedPhone || !validatePhone(phone, 'PK')) {
+      return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 })
+    }
+
+    // Validate and normalize CNIC
+    const normalizedCNIC = normalizeCNIC(cnic)
+    if (!normalizedCNIC || !validateCNIC(cnic)) {
+      return NextResponse.json({ error: 'Invalid CNIC format. CNIC must be 13 digits.' }, { status: 400 })
+    }
+
+    // Check for existing user by email, phone, or CNIC
+    const [existingEmail, existingPhone, existingCNIC] = await Promise.all([
+      prisma.user.findUnique({ where: { email: email.toLowerCase() } }),
+      prisma.user.findUnique({ where: { phone: normalizedPhone } }),
+      prisma.user.findUnique({ where: { cnic: normalizedCNIC } }),
+    ])
+
+    if (existingEmail) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 })
+    }
+    if (existingPhone) {
+      return NextResponse.json({ error: 'User with this phone number already exists' }, { status: 409 })
+    }
+    if (existingCNIC) {
+      return NextResponse.json({ error: 'User with this CNIC already exists' }, { status: 409 })
     }
 
     const hashed = await hashPassword(password)
+    const contactName = `${firstName} ${lastName}`.trim()
 
-    // Create user and organization (PENDING) and link as ORG_ADMIN
+    // Normalize org phone if provided, otherwise use contact phone
+    const normalizedOrgPhone = orgPhone ? normalizePhone(orgPhone, 'PK') : normalizedPhone
+
+    // Create user, organization, default shop, and link as ORG_ADMIN
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           name: contactName,
-          email,
+          email: email.toLowerCase(),
+          phone: normalizedPhone,
+          cnic: normalizedCNIC,
+          isWhatsApp: Boolean(isWhatsApp),
           password: hashed,
           role: 'NORMAL',
         },
@@ -40,6 +86,13 @@ export async function POST(request: Request) {
       const org = await tx.organization.create({
         data: {
           name: organizationName,
+          legalName: legalName || organizationName,
+          phone: normalizedOrgPhone,
+          city,
+          addressLine1: addressLine1 || null,
+          addressLine2: addressLine2 || null,
+          ntn: ntn || null,
+          strn: strn || null,
           status: 'PENDING',
           requestedBy: user.id,
         },
@@ -53,15 +106,47 @@ export async function POST(request: Request) {
         },
       })
 
-      // Optional: store a "profile" style info in notes via a simple log table in future
-      // For now, ignore phone/city/notes or extend schema later
+      // Create default shop with organization details
+      const shop = await tx.shop.create({
+        data: {
+          orgId: org.id,
+          name: organizationName,
+          city,
+          phone: normalizedOrgPhone,
+          addressLine1: addressLine1 || null,
+          addressLine2: addressLine2 || null,
+        },
+      })
 
-      return { userId: user.id, orgId: org.id }
+      // Link user as shop owner
+      await tx.userShop.create({
+        data: {
+          userId: user.id,
+          shopId: shop.id,
+          shopRole: 'SHOP_OWNER',
+        },
+      })
+
+      return { userId: user.id, orgId: org.id, shopId: shop.id }
     })
 
     return NextResponse.json({ ok: true, ...result })
   } catch (e: any) {
-    return NextResponse.json({ error: 'Signup failed' }, { status: 500 })
+    console.error('Signup error:', e)
+    // Handle unique constraint violations
+    if (e.code === 'P2002') {
+      const field = e.meta?.target?.[0]
+      if (field === 'email') {
+        return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 })
+      }
+      if (field === 'phone') {
+        return NextResponse.json({ error: 'User with this phone number already exists' }, { status: 409 })
+      }
+      if (field === 'cnic') {
+        return NextResponse.json({ error: 'User with this CNIC already exists' }, { status: 409 })
+      }
+    }
+    return NextResponse.json({ error: 'Signup failed. Please try again.' }, { status: 500 })
   }
 }
 

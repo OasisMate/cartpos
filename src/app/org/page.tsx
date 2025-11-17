@@ -20,6 +20,15 @@ export default async function OrgDashboardPage() {
     redirect('/')
   }
 
+  // Check organization status - must be ACTIVE
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { status: true },
+  })
+  if (org?.status !== 'ACTIVE') {
+    redirect('/waiting-approval')
+  }
+
   // Aggregate across all shops in this org
   const [shops, usersInOrg] = await Promise.all([
     prisma.shop.findMany({

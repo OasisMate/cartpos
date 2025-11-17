@@ -12,20 +12,30 @@ generator client {
 // -----------------------------------------------------
 
 model Organization {
-  id          String      @id @default(cuid())
-  name        String
-  status      OrgStatus   @default(PENDING)
-  requestedBy String?
-  approvedBy  String?
-  approvedAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id               String      @id @default(cuid())
+  name             String
+  legalName        String?
+  phone            String?
+  city             String?
+  addressLine1     String?
+  addressLine2     String?
+  ntn              String?
+  strn             String?
+  status           OrgStatus   @default(PENDING)
+  requestedBy      String?
+  approvedBy       String?
+  approvedAt       DateTime?
+  rejectionReason  String?
+  suspensionReason String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   shops       Shop[]
   users       OrganizationUser[]
 
   @@index([name])
   @@index([status])
+  @@index([city])
 }
 
 enum OrgStatus {
@@ -40,6 +50,9 @@ model Shop {
   orgId       String
   name        String
   city        String?
+  phone       String?
+  addressLine1 String?
+  addressLine2 String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   organization Organization  @relation(fields: [orgId], references: [id])
@@ -61,6 +74,9 @@ model User {
   id        String      @id @default(cuid())
   name      String
   email     String      @unique
+  phone     String?     @unique
+  cnic      String?     @unique
+  isWhatsApp Boolean   @default(false)
   password  String      // hashed password
   role      UserRole    @default(NORMAL)
   createdAt DateTime    @default(now())
@@ -69,6 +85,25 @@ model User {
   organizations    OrganizationUser[]
   createdInvoices  Invoice[]   @relation("InvoiceCreatedBy")
   createdPurchases Purchase[]  @relation("PurchaseCreatedBy")
+  passwordResets   PasswordResetToken[]
+
+  @@index([phone])
+  @@index([cnic])
+  @@index([email])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserShop {

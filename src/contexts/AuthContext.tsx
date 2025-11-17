@@ -143,8 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Protect routes - redirect to login if not authenticated
   // Note: Middleware handles most redirects, but this is a fallback for client-side navigation
   useEffect(() => {
-    if (!loading && !user && pathname !== '/login' && pathname !== '/') {
-      // Don't redirect if already on login page or home
+    if (!loading && !user && pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
+      // Don't redirect if already on login page, signup page, or home
       router.push('/login')
     }
   }, [user, loading, pathname, router])
