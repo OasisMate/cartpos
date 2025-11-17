@@ -7,8 +7,6 @@ Built as a modern web app (PWA) with support for basic stock, udhaar, and daily 
 
 > 📋 **Product Requirements:** See [`docs/PRD.md`](./docs/PRD.md) for the complete Product Requirements Document (single source of truth for all project requirements).
 
-> 📊 **Development Progress:** See [`docs/PROGRESS.md`](./docs/PROGRESS.md) for current milestone completion status and what's been done.
-
 ---
 
 ## 🎯 Project Goals
@@ -38,22 +36,103 @@ CartPOS is designed to:
 
 ---
 
-## 📂 Project Structure (planned)
+## 🚀 Getting Started
 
-```txt
-/
-  docs/
-    PRD.md              # Full product requirements document
-  prisma/
-    schema.prisma       # Database schema
-  src/                  # Next.js App Router (if using /src)
-    app/
-      (pos)/            # POS UI
-      (backoffice)/     # Owner views (products, purchases, customers, reports)
-      (admin)/          # Platform admin (shops, users)
-      api/              # Route handlers (backend endpoints)
-  lib/
-    db/
-      prisma.ts         # Prisma client singleton
-    domain/             # Business logic (sales, products, purchases, udhaar, etc.)
-    offline/            # IndexedDB + sync logic (PWA)
+### Prerequisites
+
+- Node.js 18+ installed
+- PostgreSQL database (Supabase recommended)
+
+### Setup Steps
+
+#### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+#### 2. Set Up Database
+
+1. Create a PostgreSQL database (via Supabase or your preferred provider)
+2. Get your database connection string
+3. Create a `.env` file in the root directory:
+
+```env
+DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
+JWT_SECRET="your-secret-key-change-in-production-min-32-characters"
+```
+
+**⚠️ Important:** 
+- Replace the connection string with your actual database credentials
+- Generate a secure random string for JWT_SECRET (at least 32 characters)
+
+#### 3. Run Prisma Migrations
+
+Once you have the DATABASE_URL set up:
+
+```bash
+# Generate Prisma Client
+npx prisma generate
+
+# Create initial migration
+npx prisma migrate dev --name init_schema
+
+# (Optional) Open Prisma Studio to view your database
+npx prisma studio
+```
+
+#### 4. Create Admin User
+
+After running migrations, create your first admin user:
+
+```bash
+npm run create-admin
+```
+
+This will create an admin user with:
+- Email: `admin@cartpos.com` (or set `ADMIN_EMAIL` env var)
+- Password: `admin123` (or set `ADMIN_PASSWORD` env var)
+- Name: `Admin User` (or set `ADMIN_NAME` env var)
+- Role: `PLATFORM_ADMIN`
+
+**⚠️ Important:** Change the default password after first login!
+
+#### 5. Start Development Server
+
+```bash
+npm run dev
+```
+
+Visit `http://localhost:3000` to see the app running. You'll be redirected to `/login` if not authenticated.
+
+**Login Credentials:**
+- Email: `admin@cartpos.com` (or your custom `ADMIN_EMAIL`)
+- Password: `admin123` (or your custom `ADMIN_PASSWORD`)
+
+---
+
+## 📂 Project Structure
+
+```
+cartpos/
+├── docs/
+│   └── PRD.md              # Product Requirements Document
+├── prisma/
+│   └── schema.prisma        # Database schema
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── (admin)/         # Platform admin routes
+│   │   ├── (backoffice)/    # Backoffice routes
+│   │   ├── (pos)/           # POS routes
+│   │   ├── api/             # API route handlers
+│   │   └── ...
+│   ├── components/         # React components
+│   ├── lib/                 # Utilities and business logic
+│   │   ├── db/              # Database (Prisma)
+│   │   ├── domain/          # Business logic
+│   │   └── offline/         # Offline & sync logic
+│   └── ...
+├── package.json
+├── tsconfig.json
+└── next.config.js
+```

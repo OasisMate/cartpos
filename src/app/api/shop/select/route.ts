@@ -20,12 +20,42 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user has access to this shop
-    const userShops = await getUserShops(session.userId)
-    const hasAccess = userShops.some((us) => us.shopId === shopId)
+    // For Org Admins, check if shop belongs to their organization
+    // For others, check if they have direct shop access
+    const { prisma } = await import('@/lib/db/prisma')
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      include: {
+        organizations: {
+          where: {
+            orgRole: 'ORG_ADMIN',
+          },
+        },
+      },
+    })
+
+    let hasAccess = false
+
+    if (user?.role === 'PLATFORM_ADMIN') {
+      // Platform admin can access any shop
+      hasAccess = true
+    } else if (user?.organizations && user.organizations.length > 0) {
+      // Check if shop belongs to user's organization
+      const shop = await prisma.shop.findUnique({
+        where: { id: shopId },
+        select: { orgId: true },
+      })
+      const userOrgIds = user.organizations.map((o: any) => o.orgId)
+      hasAccess = shop ? userOrgIds.includes(shop.orgId) : false
+    } else {
+      // Check direct shop access
+      const userShops = await getUserShops(session.userId)
+      hasAccess = userShops.some((us) => us.shopId === shopId)
+    }
 
     if (!hasAccess) {
       return NextResponse.json(
-        { error: 'You do not have access to this shop' },
+        { error: 'You do not have access to this store' },
         { status: 403 }
       )
     }

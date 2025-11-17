@@ -7,6 +7,9 @@ interface User {
   id: string
   name: string
   email: string
+  phone?: string | null
+  cnic?: string | null
+  isWhatsApp?: boolean
   role: string
   organizations?: Array<{
     orgId: string

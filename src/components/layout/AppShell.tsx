@@ -24,16 +24,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const getNavLinks = () => {
     const links = []
 
-    // Dashboard - available to all authenticated users
+    // Determine if user is Org Admin
+    const isOrgAdmin = user?.organizations?.some(
+      (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
+    )
+
+    // Dashboard - point to org dashboard if Org Admin, otherwise home
+    const dashboardHref = isOrgAdmin && user?.currentOrgId ? '/org' : '/'
     links.push({
       label: 'Dashboard',
-      href: '/',
+      href: dashboardHref,
       icon: (
         <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />
       ),
     })
 
-    // Admin-only links
+    // Platform Admin-only links
     if (user?.role === 'PLATFORM_ADMIN') {
       links.push({
         label: 'Organizations',
@@ -58,6 +64,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       })
     }
 
+    // Org Admin links - show when user is Org Admin and has currentOrgId
+    if (isOrgAdmin && user?.currentOrgId) {
+      links.push({
+        label: 'Stores',
+        href: '/org/shops',
+        icon: (
+          <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />
+        ),
+      })
+      links.push({
+        label: 'Users',
+        href: '/org/users',
+        icon: (
+          <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />
+        ),
+      })
+    }
+
     // Settings - available to all authenticated users
     links.push({
       label: 'Settings',
@@ -76,9 +100,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isActive = (href: string) => {
     if (!pathname) return false
     
-    if (href === '/') {
-      // Dashboard is active only on exact home or admin dashboard
-      return pathname === '/' || pathname === '/admin'
+    if (href === '/' || href === '/org') {
+      // Dashboard is active on exact home, admin dashboard, or org dashboard
+      return pathname === '/' || pathname === '/admin' || pathname === '/org'
     }
     
     // For other links, check exact match or if pathname starts with href followed by / or end of string

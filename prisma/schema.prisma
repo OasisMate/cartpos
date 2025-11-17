@@ -33,6 +33,7 @@ model Organization {
 
   shops       Shop[]
   users       OrganizationUser[]
+  activityLogs ActivityLog[]
 
   @@index([name])
   @@index([status])
@@ -80,6 +81,7 @@ model Shop {
   stockLedger StockLedger[]
   payments    Payment[]
   customerLedger CustomerLedger[]
+  activityLogs ActivityLog[]
 
   @@index([orgId, name])
 }
@@ -100,6 +102,7 @@ model User {
   createdInvoices  Invoice[]   @relation("InvoiceCreatedBy")
   createdPurchases Purchase[]  @relation("PurchaseCreatedBy")
   passwordResets   PasswordResetToken[]
+  activityLogs     ActivityLog[]
 
   @@index([phone])
   @@index([cnic])
@@ -390,5 +393,32 @@ model Payment {
   customer    Customer?       @relation(fields: [customerId], references: [id])
 
   @@index([shopId, createdAt])
+}
+
+// -----------------------------------------------------
+// Activity Log (Audit Trail)
+// -----------------------------------------------------
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  orgId       String
+  shopId      String?
+  action      String   // CREATE_STORE, UPDATE_USER, etc.
+  entityType  String   // STORE, USER, PRODUCT, SALE, etc.
+  entityId    String?
+  details     Json?    // Additional context (old values, new values, etc.)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now()) @db.Timestamptz // Stored in UTC/GMT
+  
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id])
+  shop         Shop?        @relation(fields: [shopId], references: [id])
+  
+  @@index([orgId, createdAt])
+  @@index([shopId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action])
 }
 

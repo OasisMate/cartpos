@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser, hashPassword } from '@/lib/auth'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 
 function ensureOrgAdmin(user: any) {
   const isOrgAdmin = user?.organizations?.some(
@@ -66,27 +68,67 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
   const name = body?.name as string | undefined
   const email = body?.email as string | undefined
+  const phone = body?.phone as string | undefined
+  const cnic = body?.cnic as string | undefined
   const password = body?.password as string | undefined
   const orgRole = (body?.orgRole as 'ORG_ADMIN' | undefined) || undefined
   const assignments = (body?.assignments as Array<{ shopId: string; shopRole: 'SHOP_OWNER' | 'CASHIER' }> | undefined) || []
 
   if (!name || !email || !password) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json({ error: 'Missing required fields: name, email, password' }, { status: 400 })
   }
   if (!user.currentOrgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
   }
 
-  const exists = await prisma.user.findUnique({ where: { email } })
-  if (exists) {
+  // Validate phone if provided
+  let normalizedPhone: string | null = null
+  if (phone) {
+    normalizedPhone = normalizePhone(phone, 'PK')
+    if (!normalizedPhone || !validatePhone(phone, 'PK')) {
+      return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 })
+    }
+  }
+
+  // Validate CNIC if provided
+  let normalizedCNIC: string | null = null
+  if (cnic) {
+    normalizedCNIC = normalizeCNIC(cnic)
+    if (!normalizedCNIC || !validateCNIC(cnic)) {
+      return NextResponse.json({ error: 'Invalid CNIC format. CNIC must be 13 digits.' }, { status: 400 })
+    }
+  }
+
+  // Check for existing user
+  const [existingEmail, existingPhone, existingCNIC] = await Promise.all([
+    prisma.user.findUnique({ where: { email: email.toLowerCase() } }),
+    normalizedPhone ? prisma.user.findUnique({ where: { phone: normalizedPhone } }) : null,
+    normalizedCNIC ? prisma.user.findUnique({ where: { cnic: normalizedCNIC } }) : null,
+  ])
+
+  if (existingEmail) {
     return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 })
+  }
+  if (existingPhone) {
+    return NextResponse.json({ error: 'User with this phone number already exists' }, { status: 409 })
+  }
+  if (existingCNIC) {
+    return NextResponse.json({ error: 'User with this CNIC already exists' }, { status: 409 })
   }
 
   const hashed = await hashPassword(password)
 
   const result = await prisma.$transaction(async (tx) => {
     const newUser = await tx.user.create({
-      data: { name, email, password: hashed, role: 'NORMAL' },
+      data: {
+        name,
+        email: email.toLowerCase(),
+        phone: normalizedPhone,
+        cnic: normalizedCNIC,
+        password: hashed,
+        role: 'NORMAL',
+        isWhatsApp: false,
+      },
     })
 
     await tx.organizationUser.create({
@@ -106,6 +148,22 @@ export async function POST(request: Request) {
     }
 
     return newUser
+  })
+
+  // Log activity
+  await logActivity({
+    userId: user.id,
+    orgId: user.currentOrgId,
+    shopId: null,
+    action: ActivityActions.CREATE_USER,
+    entityType: EntityTypes.USER,
+    entityId: result.id,
+    details: {
+      name: result.name,
+      email: result.email,
+      orgRole: orgRole || 'ORG_ADMIN',
+      assignments: assignments.map((a) => ({ shopId: a.shopId, shopRole: a.shopRole })),
+    },
   })
 
   return NextResponse.json({ user: { id: result.id } })

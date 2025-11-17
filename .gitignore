@@ -37,4 +37,8 @@ next-env.d.ts
 
 # prisma
 # Note: migrations should be committed, but .env files should not
+# SSL certificates should not be committed
+prisma/prod-ca-2021.crt
 
+# generated files
+public/sw.js

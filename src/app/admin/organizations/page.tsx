@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCNIC } from '@/lib/validation'
 
@@ -44,7 +45,8 @@ interface Organization {
 }
 
 export default function OrganizationsPage() {
-  const { user } = useAuth()
+  const router = useRouter()
+  const { user, refreshUser } = useAuth()
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -55,6 +57,7 @@ export default function OrganizationsPage() {
   const [rejectReason, setRejectReason] = useState('')
   const [suspendReason, setSuspendReason] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE'>('ALL')
+  const [enteringOrgId, setEnteringOrgId] = useState<string | null>(null)
 
   useEffect(() => {
     if (user?.role === 'PLATFORM_ADMIN') {
@@ -151,6 +154,35 @@ export default function OrganizationsPage() {
     }
   }
 
+  async function enterOrg(orgId: string) {
+    try {
+      setEnteringOrgId(orgId)
+      setError('')
+      
+      // Call org select API
+      const res = await fetch('/api/org/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to enter organization')
+      }
+
+      // Refresh user context
+      await refreshUser()
+      
+      // Redirect to org dashboard
+      router.push('/org')
+      router.refresh()
+    } catch (e: any) {
+      setError(e.message || 'Failed to enter organization')
+      setEnteringOrgId(null)
+    }
+  }
+
   const filteredOrgs = orgs.filter((org) => statusFilter === 'ALL' || org.status === statusFilter)
 
   if (user?.role !== 'PLATFORM_ADMIN') {
@@ -222,6 +254,15 @@ export default function OrganizationsPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  {org.status === 'ACTIVE' && (
+                    <button
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+                      disabled={enteringOrgId === org.id || actioningId === org.id}
+                      onClick={() => enterOrg(org.id)}
+                    >
+                      {enteringOrgId === org.id ? 'Entering...' : 'Enter Org'}
+                    </button>
+                  )}
                   {org.status === 'PENDING' && (
                     <>
                       <button
@@ -246,7 +287,7 @@ export default function OrganizationsPage() {
                   {org.status === 'ACTIVE' && (
                     <button
                       className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 disabled:opacity-50"
-                      disabled={actioningId === org.id}
+                      disabled={actioningId === org.id || enteringOrgId === org.id}
                       onClick={() => {
                         setSelectedOrg(org)
                         setShowSuspendModal(true)

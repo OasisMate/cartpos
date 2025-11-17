@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 function ensureOrgAdmin(user: any) {
   const isOrgAdmin = user?.organizations?.some(
@@ -65,6 +66,20 @@ export async function POST(request: Request) {
       requireBarcodeForProducts: false,
       allowCustomUnits: true,
       languageMode: 'EN_BILINGUAL',
+    },
+  })
+
+  // Log activity
+  await logActivity({
+    userId: user.id,
+    orgId: user.currentOrgId,
+    shopId: shop.id,
+    action: ActivityActions.CREATE_STORE,
+    entityType: EntityTypes.STORE,
+    entityId: shop.id,
+    details: {
+      name: shop.name,
+      city: shop.city,
     },
   })
 
