@@ -33,7 +33,7 @@ export function Logo({ showText = true, className, href = '/' }: LogoProps) {
     <Link
       href={href}
       className={cn(
-        'font-normal flex space-x-2 items-center text-sm text-black dark:text-white py-1 relative z-20',
+        'font-normal flex space-x-2 items-center text-sm text-gray-900 py-1 relative z-20',
         !showText && 'justify-center',
         className
       )}

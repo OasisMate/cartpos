@@ -66,7 +66,7 @@ export default function UsersPage() {
     return (
       <div>
         <h1 className="text-2xl font-bold mb-2">Users</h1>
-        <p className="text-gray-600 dark:text-gray-400">Access denied.</p>
+        <p className="text-gray-600">Access denied.</p>
       </div>
     )
   }
@@ -86,7 +86,7 @@ export default function UsersPage() {
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent">
             Users Management
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage user accounts and permissions</p>
+          <p className="text-gray-600">Manage user accounts and permissions</p>
         </div>
       </div>
 
@@ -97,50 +97,50 @@ export default function UsersPage() {
           placeholder="Search by name, email, phone, or CNIC..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg">
+        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+        <div className="text-gray-600">Loading...</div>
       ) : filteredUsers.length === 0 ? (
-        <div className="text-gray-600 dark:text-gray-400">No users found.</div>
+        <div className="text-gray-600">No users found.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-            <thead className="bg-gradient-to-r from-blue-50 to-orange-50 dark:from-neutral-800 dark:to-neutral-800">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gradient-to-r from-blue-50 to-orange-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Contact
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Organizations
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Shops
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Created
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-200 dark:divide-neutral-700">
+            <tbody className="bg-white divide-y divide-gray-200">
               {filteredUsers.map((u) => (
                 <tr
                   key={u.id}
-                  className="hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+                  className="hover:bg-gray-50 transition-colors"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -150,8 +150,8 @@ export default function UsersPage() {
                         </span>
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-gray-100">{u.name}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                        <div className="font-medium text-gray-900">{u.name}</div>
+                        <div className="text-sm text-gray-500 flex items-center gap-1">
                           <Mail className="h-3 w-3" />
                           {u.email}
                         </div>
@@ -160,13 +160,13 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {u.phone && (
-                      <div className="text-gray-700 dark:text-gray-300 flex items-center gap-1 mb-1">
+                      <div className="text-gray-700 flex items-center gap-1 mb-1">
                         <Phone className="h-3 w-3" />
                         {u.phone} {u.isWhatsApp && <span className="text-green-600">(WA)</span>}
                       </div>
                     )}
                     {u.cnic && (
-                      <div className="text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                      <div className="text-gray-700 flex items-center gap-1">
                         <CreditCard className="h-3 w-3" />
                         {u.cnic}
                       </div>
@@ -176,8 +176,8 @@ export default function UsersPage() {
                     <span
                       className={`px-2 py-1 rounded text-xs font-semibold ${
                         u.role === 'PLATFORM_ADMIN'
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-gray-100 text-gray-800'
                       }`}
                     >
                       {u.role === 'PLATFORM_ADMIN' ? (
@@ -196,7 +196,7 @@ export default function UsersPage() {
                         {u.organizations.map((org) => (
                           <div
                             key={org.orgId}
-                            className="flex items-center gap-1 text-gray-700 dark:text-gray-300"
+                            className="flex items-center gap-1 text-gray-700"
                           >
                             <Building2 className="h-3 w-3" />
                             <span>{org.organization.name}</span>
@@ -214,7 +214,7 @@ export default function UsersPage() {
                         {u.shops.map((shop) => (
                           <div
                             key={shop.shopId}
-                            className="flex items-center gap-1 text-gray-700 dark:text-gray-300"
+                            className="flex items-center gap-1 text-gray-700"
                           >
                             <Store className="h-3 w-3" />
                             <span>{shop.shop.name}</span>
@@ -226,7 +226,7 @@ export default function UsersPage() {
                       <span className="text-gray-400">-</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                  <td className="px-4 py-3 text-sm text-gray-500">
                     {format(new Date(u.createdAt), 'MMM d, yyyy')}
                   </td>
                 </tr>

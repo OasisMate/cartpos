@@ -22,6 +22,7 @@ export default function Signup() {
     confirmPassword: '',
     // Organization fields
     organizationName: '',
+    organizationType: '',
     legalName: '',
     city: '',
     addressLine1: '',
@@ -54,7 +55,7 @@ export default function Signup() {
     }
   }, [formData.organizationName])
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     const checked = (e.target as HTMLInputElement).checked
 
@@ -94,6 +95,7 @@ export default function Signup() {
       !formData.cnic ||
       !formData.password ||
       !formData.organizationName ||
+      !formData.organizationType ||
       !formData.city
     ) {
       setError('Please fill all required fields')
@@ -125,6 +127,7 @@ export default function Signup() {
           isWhatsApp: formData.isWhatsApp,
           password: formData.password,
           organizationName: formData.organizationName,
+          organizationType: formData.organizationType,
           legalName: formData.legalName || formData.organizationName,
           city: formData.city,
           addressLine1: formData.addressLine1 || undefined,
@@ -388,6 +391,31 @@ export default function Signup() {
                     required
                     disabled={loading}
                   />
+                </div>
+                <div>
+                  <label htmlFor="organizationType" className="block text-sm font-medium text-gray-700 mb-1">
+                    Business Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="organizationType"
+                    name="organizationType"
+                    value={formData.organizationType}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white"
+                    required
+                    disabled={loading}
+                  >
+                    <option value="">Select business type</option>
+                    <option value="RETAIL_STORE">Retail Store</option>
+                    <option value="WHOLESALE">Wholesale</option>
+                    <option value="SUPERMARKET">Supermarket</option>
+                    <option value="GENERAL_STORE">General Store</option>
+                    <option value="CONVENIENCE_STORE">Convenience Store</option>
+                    <option value="PHARMACY">Pharmacy</option>
+                    <option value="ELECTRONICS_STORE">Electronics Store</option>
+                    <option value="CLOTHING_STORE">Clothing Store</option>
+                    <option value="OTHER">Other</option>
+                  </select>
                 </div>
                 <div>
                   <label htmlFor="legalName" className="block text-sm font-medium text-gray-700 mb-1">

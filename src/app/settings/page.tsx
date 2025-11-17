@@ -15,47 +15,47 @@ export default async function SettingsPage() {
           <SettingsIcon className="h-8 w-8 text-blue-600" />
           Settings
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">Manage your account and preferences</p>
+        <p className="text-gray-600">Manage your account and preferences</p>
       </div>
 
-      <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-md border border-gray-200 dark:border-neutral-700 p-6">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Account Settings</h2>
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900">Account Settings</h2>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Name
             </label>
             <input
               type="text"
               value={user.name}
               disabled
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-gray-50 dark:bg-neutral-900 text-gray-500 dark:text-gray-400"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Email
             </label>
             <input
               type="email"
               value={user.email}
               disabled
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-gray-50 dark:bg-neutral-900 text-gray-500 dark:text-gray-400"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Role
             </label>
             <input
               type="text"
               value={user.role}
               disabled
-              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-gray-50 dark:bg-neutral-900 text-gray-500 dark:text-gray-400"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
             />
           </div>
         </div>
-        <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-6 text-sm text-gray-500">
           More settings coming soon...
         </p>
       </div>

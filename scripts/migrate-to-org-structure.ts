@@ -11,6 +11,7 @@ async function main() {
     legacyOrg = await prisma.organization.create({
       data: {
         name: 'Legacy',
+        type: 'OTHER',
         status: OrgStatus.ACTIVE,
       },
     })

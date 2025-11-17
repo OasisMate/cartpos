@@ -4,6 +4,13 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCNIC } from '@/lib/validation'
 
+function formatOrganizationType(type: string): string {
+  return type
+    .split('_')
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 interface RequestedByUser {
   id: string
   name: string
@@ -17,6 +24,7 @@ interface Organization {
   id: string
   name: string
   legalName: string | null
+  type: string
   phone: string | null
   city: string | null
   addressLine1: string | null
@@ -161,7 +169,7 @@ export default function OrganizationsPage() {
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent">
             Organizations Management
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage organizations and approvals</p>
+          <p className="text-gray-600">Manage organizations and approvals</p>
         </div>
         <div className="flex items-center gap-4">
           <select
@@ -209,6 +217,9 @@ export default function OrganizationsPage() {
                   {org.legalName && org.legalName !== org.name && (
                     <p className="text-sm text-gray-600">Legal Name: {org.legalName}</p>
                   )}
+                  <p className="text-sm text-gray-600">
+                    Type: <span className="font-medium">{formatOrganizationType(org.type)}</span>
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   {org.status === 'PENDING' && (

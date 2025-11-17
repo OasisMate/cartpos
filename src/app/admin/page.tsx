@@ -30,7 +30,7 @@ export default async function AdminPage() {
         <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent">
           Platform Admin Dashboard
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">Overview and quick actions</p>
+        <p className="text-gray-600">Overview and quick actions</p>
       </div>
 
       {/* Stats */}
@@ -61,49 +61,49 @@ export default async function AdminPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Link
           href="/admin/organizations"
-          className="group bg-white dark:bg-neutral-800 rounded-xl shadow-md hover:shadow-xl border border-gray-200 dark:border-neutral-700 p-6 transition-all hover:border-blue-300 dark:hover:border-blue-600"
+          className="group bg-white rounded-xl shadow-md hover:shadow-xl border border-gray-200 p-6 transition-all hover:border-blue-300"
         >
           <div className="flex items-center gap-4 mb-3">
             <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
               <Building2 className="h-6 w-6 text-white" />
             </div>
-            <h2 className="font-semibold text-lg text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+            <h2 className="font-semibold text-lg text-gray-900 group-hover:text-blue-600 transition-colors">
               Organizations
             </h2>
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-gray-600">
             Review organization requests, approve or suspend organizations.
           </p>
         </Link>
         <Link
           href="/admin/users"
-          className="group bg-white dark:bg-neutral-800 rounded-xl shadow-md hover:shadow-xl border border-gray-200 dark:border-neutral-700 p-6 transition-all hover:border-purple-300 dark:hover:border-purple-600"
+          className="group bg-white rounded-xl shadow-md hover:shadow-xl border border-gray-200 p-6 transition-all hover:border-purple-300"
         >
           <div className="flex items-center gap-4 mb-3">
             <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
               <Users className="h-6 w-6 text-white" />
             </div>
-            <h2 className="font-semibold text-lg text-gray-900 dark:text-gray-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+            <h2 className="font-semibold text-lg text-gray-900 group-hover:text-purple-600 transition-colors">
               Users
             </h2>
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-gray-600">
             Manage user accounts, roles, and permissions.
           </p>
         </Link>
         <Link
           href="/admin/shops"
-          className="group bg-white dark:bg-neutral-800 rounded-xl shadow-md hover:shadow-xl border border-gray-200 dark:border-neutral-700 p-6 transition-all hover:border-orange-300 dark:hover:border-orange-600"
+          className="group bg-white rounded-xl shadow-md hover:shadow-xl border border-gray-200 p-6 transition-all hover:border-orange-300"
         >
           <div className="flex items-center gap-4 mb-3">
             <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
               <Store className="h-6 w-6 text-white" />
             </div>
-            <h2 className="font-semibold text-lg text-gray-900 dark:text-gray-100 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+            <h2 className="font-semibold text-lg text-gray-900 group-hover:text-orange-600 transition-colors">
               Shops
             </h2>
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-gray-600">
             Create and manage shops, view owners and statistics.
           </p>
         </Link>

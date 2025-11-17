@@ -17,6 +17,7 @@ export async function POST(request: Request) {
       password,
       // Organization fields
       organizationName,
+      organizationType,
       legalName,
       city,
       addressLine1,
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     } = body || {}
 
     // Validate required fields
-    if (!firstName || !lastName || !email || !phone || !cnic || !password || !organizationName || !city) {
+    if (!firstName || !lastName || !email || !phone || !cnic || !password || !organizationName || !organizationType || !city) {
       return NextResponse.json(
         { error: 'Missing required fields. Please fill all required fields.' },
         { status: 400 }
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
         data: {
           name: organizationName,
           legalName: legalName || organizationName,
+          type: organizationType,
           phone: normalizedOrgPhone,
           city,
           addressLine1: addressLine1 || null,

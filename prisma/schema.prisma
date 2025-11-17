@@ -12,23 +12,24 @@ generator client {
 // -----------------------------------------------------
 
 model Organization {
-  id               String      @id @default(cuid())
+  id               String          @id @default(cuid())
   name             String
   legalName        String?
+  type             OrganizationType
   phone            String?
   city             String?
   addressLine1     String?
   addressLine2     String?
   ntn              String?
   strn             String?
-  status           OrgStatus   @default(PENDING)
+  status           OrgStatus       @default(PENDING)
   requestedBy      String?
   approvedBy       String?
   approvedAt       DateTime?
   rejectionReason  String?
   suspensionReason String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   shops       Shop[]
   users       OrganizationUser[]
@@ -36,6 +37,7 @@ model Organization {
   @@index([name])
   @@index([status])
   @@index([city])
+  @@index([type])
 }
 
 enum OrgStatus {
@@ -43,6 +45,18 @@ enum OrgStatus {
   ACTIVE
   SUSPENDED
   INACTIVE
+}
+
+enum OrganizationType {
+  RETAIL_STORE
+  WHOLESALE
+  SUPERMARKET
+  GENERAL_STORE
+  CONVENIENCE_STORE
+  PHARMACY
+  ELECTRONICS_STORE
+  CLOTHING_STORE
+  OTHER
 }
 
 model Shop {

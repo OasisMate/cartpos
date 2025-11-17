@@ -36,7 +36,10 @@
 - Application: Next.js full-stack app (App Router + Route Handlers).
 - Hosting: Vercel (or similar).
 - Database: Postgres (e.g., Supabase).
-- Authentication: email + password + session (exact mechanism is an implementation detail).
+- Authentication: 
+  - Login supports multiple identifiers: email, phone number (E.164 format), or CNIC (13 digits).
+  - Password-based authentication with session management.
+  - Organization-based multi-tenant structure with approval workflow.
 
 ## 2. Goals & Non-Goals (v1)
 
@@ -70,6 +73,7 @@
 - No item-level discounts (only bill-level discount).
 - No manual invoice-level allocation UI for Udhaar payments (system auto-allocates).
 - No label/sticker design and printing.
+- No top bar/header in authenticated layout (sidebar-only design for cleaner UI).
 
 ## 3. Personas
 
@@ -98,12 +102,15 @@
 
 ### 3.3 Platform Admin – Hamza (You/Team)
 
-- Manages client shops and platform health.
+- Manages organizations, shops, and platform health.
 - Needs to:
+  - Review and approve organization registration requests.
+  - Approve, reject, suspend, or reactivate organizations.
   - Create and manage shop accounts (tenants).
-  - See which shops are active and when.
+  - See which organizations and shops are active and when.
+  - Manage user accounts and roles.
   - Reset logins / lock accounts.
-  - Impersonate shops to debug issues.
+  - Impersonate shops to debug issues (future).
 
 ## 4. v1 Scope – Feature Summary
 
@@ -628,14 +635,22 @@ For a given date (default: today), show:
 ### 6.4 Security
 
 **Multi-tenant isolation:**
-- All server-side queries are scoped by shopId.
+- All server-side queries are scoped by organizationId and shopId.
+- Organizations must be approved by platform admin before becoming active.
 
 **Roles:**
-- Platform: ADMIN, NORMAL.
-- Shop: OWNER, CASHIER.
+- Platform: PLATFORM_ADMIN, NORMAL.
+- Organization: ORG_ADMIN (manages organization and its shops).
+- Shop: SHOP_OWNER, CASHIER.
+
+**Organization Registration & Approval:**
+- New organizations register via signup form with required business type.
+- Organizations start in PENDING status awaiting admin approval.
+- Platform admin can approve, reject (with reason), suspend (with reason), or reactivate organizations.
+- Only ACTIVE organizations can access the system.
 
 **Cashiers:**
-- Limited to POS and basic screens; cannot access platform admin features.
+- Limited to POS and basic screens; cannot access platform admin or organization admin features.
 
 ### 6.5 Reliability
 
@@ -645,17 +660,24 @@ For a given date (default: today), show:
 
 ## 7. Data Model – High-Level Entities (Conceptual)
 
+**Organization**
+- id, name, legalName, type (OrganizationType enum), phone, city, addressLine1, addressLine2, ntn, strn, status (PENDING/ACTIVE/SUSPENDED/INACTIVE), requestedBy, approvedBy, approvedAt, rejectionReason, suspensionReason, timestamps.
+- Organization types: RETAIL_STORE, WHOLESALE, SUPERMARKET, GENERAL_STORE, CONVENIENCE_STORE, PHARMACY, ELECTRONICS_STORE, CLOTHING_STORE, OTHER.
+
 **Shop**
-- id, name, city, createdAt, updatedAt.
+- id, orgId, name, city, phone, addressLine1, addressLine2, createdAt, updatedAt.
 
 **ShopSettings**
 - shopId, requireCostPriceForStockItems (bool), requireBarcodeForProducts (bool), allowCustomUnits (bool), languageMode.
 
 **User**
-- id, name, email, hashed password, role (ADMIN/NORMAL), timestamps.
+- id, name, email (unique), phone (unique, E.164 format), cnic (unique, 13 digits), isWhatsApp (bool), hashed password, role (PLATFORM_ADMIN/NORMAL), timestamps.
+
+**OrganizationUser**
+- userId, orgId, orgRole (ORG_ADMIN).
 
 **UserShop**
-- userId, shopId, shopRole (OWNER/CASHIER).
+- userId, shopId, shopRole (SHOP_OWNER/CASHIER).
 
 **Product**
 - id, shopId, name, sku, barcode, unit, price, costPrice, category, trackStock, reorderLevel, timestamps.
@@ -702,12 +724,19 @@ For a given date (default: today), show:
   - Prisma client and repository functions.
 - `/lib/offline/...`
   - IndexedDB access + sync logic.
+- `/lib/validation/...`
+  - Phone number and CNIC validation/normalization utilities.
+- `/components/layout/...`
+  - AppShell with sidebar-only layout (no top bar).
+  - ConditionalLayout for auth pages vs authenticated pages.
 - `/app/(pos)`
   - POS UI.
 - `/app/(backoffice)`
   - Owner views (products, purchases, customers, udhaar, summary).
 - `/app/(admin)`
-  - Platform admin (shops, users).
+  - Platform admin (organizations, shops, users).
+- `/app/(org)`
+  - Organization admin views (shops, users within organization).
 
 **Database:** Postgres (Supabase) accessed via Prisma.
 
@@ -828,19 +857,46 @@ Single IndexedDB per browser origin, e.g. `kiryana_pos_db`.
 
 (Actual URL paths/methods can vary; this is the logical contract.)
 
-### 11.1 Auth & Shops
+### 11.1 Auth & Organizations
 
 - `POST /api/auth/login`
-  - Input: email, password.
-  - Output: session + user + shops.
+  - Input: identifier (email, phone, or CNIC), password.
+  - Output: session + user + organizations + shops.
+  - Supports login via email, phone number (E.164), or CNIC (13 digits).
+- `POST /api/signup`
+  - Input: firstName, lastName, email, phone, cnic, isWhatsApp, password, organizationName, organizationType (required), legalName, city, addressLine1, addressLine2, ntn, strn, orgPhone.
+  - Creates user, organization (PENDING status), default shop, and links user as ORG_ADMIN.
+  - Returns success; user redirected to waiting-approval page.
 - `GET /api/me`
-  - Returns current user + current shop context.
+  - Returns current user + current organization + current shop context.
+- `GET /api/org/status`
+  - Returns organization status (PENDING/ACTIVE/SUSPENDED/INACTIVE) and rejection/suspension reasons.
+- `POST /api/org/select`
+  - Select current organization context.
+- `POST /api/shop/select`
+  - Select current shop context.
+
+### 11.1.1 Organization Management (Platform Admin)
+
+- `GET /api/admin/organizations`
+  - List all organizations with status, contact person details, counts.
+- `POST /api/admin/organizations/:id/approve`
+  - Approve organization (set status to ACTIVE).
+- `POST /api/admin/organizations/:id/reject`
+  - Reject organization (set status to INACTIVE) with optional reason.
+- `POST /api/admin/organizations/:id/suspend`
+  - Suspend organization (set status to SUSPENDED) with optional reason.
+- `POST /api/admin/organizations/:id/reactivate`
+  - Reactivate suspended organization (set status to ACTIVE).
+
+### 11.1.2 Shop Management
+
 - `POST /api/admin/shops` (admin only)
-  - Create new shop + owner.
+  - Create new shop + owner (requires orgId).
 - `GET /api/admin/shops` (admin only)
-  - List shops with status, plan, lastActiveAt.
+  - List shops with organization, status, counts.
 - `PATCH /api/admin/shops/:id` (admin only)
-  - Activate/deactivate shop, change plan.
+  - Activate/deactivate shop, change plan (future).
 - (Admin) Impersonation endpoint or mechanism (implementation detail).
 
 ### 11.2 Products
@@ -947,24 +1003,34 @@ This roadmap breaks down v1 development into 16+ milestones (M0–M16) with clea
     - `(backoffice)/` – owner back-office shell.
     - `(admin)/` – platform admin shell.
 - **Layout:**
-  - Implement a simple layout:
-    - Top bar (app name, user avatar placeholder).
-    - Sidebar or top navigation with:
-      - POS
-      - Products
-      - Purchases
-      - Customers
-      - Udhaar
-      - Reports
-      - Admin (if admin role).
+  - Implement AppShell with sidebar-only layout (no top bar):
+    - Animated sidebar (framer-motion) with collapsible behavior.
+    - Logo at top of sidebar.
+    - Role-based navigation links:
+      - Dashboard (all authenticated users)
+      - Organizations (PLATFORM_ADMIN only)
+      - Users (PLATFORM_ADMIN only)
+      - Shops (PLATFORM_ADMIN only)
+      - Settings (all authenticated users)
+    - User profile section at bottom with:
+      - User avatar, name, email
+      - Organization/Shop selectors (if multiple)
+      - Logout button
+    - Main content area (full-height, no header spacing).
+  - ConditionalLayout component:
+    - Auth pages (login, signup, waiting-approval) render without AppShell.
+    - Authenticated pages wrap with AppShell.
 - **Routing:**
   - `/pos` → "POS coming soon" screen.
   - `/backoffice` → "Backoffice coming soon".
   - `/admin` → "Admin coming soon".
+  - `/signup` → Organization registration form.
+  - `/waiting-approval` → Status page for pending organizations.
 
 **Done when:**
 - You can navigate between POS / Backoffice / Admin placeholder pages.
-- Layout is consistent and not ugly enough to distract you.
+- Sidebar-only layout is consistent and responsive.
+- Auth pages render without sidebar.
 
 ### 🔹 M2 – Auth & User Sessions (Basic)
 
@@ -974,57 +1040,95 @@ This roadmap breaks down v1 development into 16+ milestones (M0–M16) with clea
 
 **Tasks:**
 - **Backend:**
-  - Add User seed manually (admin) via Prisma Studio: email + hashed password.
+  - Add User seed manually (admin) via Prisma Studio: email + phone + CNIC + hashed password.
   - Implement `/app/api/auth/login`:
-    - Validate email/password.
-    - Compare with hashed password (e.g. bcrypt).
+    - Accept identifier (email, phone, or CNIC) + password.
+    - Normalize phone to E.164 format, CNIC to 13 digits.
+    - Find user by email (lowercase), phone (E.164), or CNIC (digits).
+    - Compare with hashed password (bcrypt).
     - Set HTTP-only session cookie or JWT.
   - Implement `/app/api/auth/logout`.
   - Implement `/app/api/me`:
-    - Returns: user info, roles, accessible shops.
+    - Returns: user info, roles, accessible organizations, accessible shops, currentOrgId, currentShopId.
 - **Frontend:**
   - Create `/login` page:
-    - Email + password form.
+    - Identifier (email/phone/CNIC) + password form.
     - Call `/api/auth/login`.
-  - Add simple auth hook / context:
+    - Redirect based on user role and organization status.
+  - Create `/signup` page:
+    - Contact Information: firstName, lastName, email, phone, CNIC, isWhatsApp.
+    - Organization Information: organizationName, organizationType (required dropdown), legalName, city, addressLine1, addressLine2, ntn, strn, orgPhone.
+    - Account Security: password, confirmPassword.
+    - Call `/api/signup`, redirect to `/waiting-approval`.
+  - Create `/waiting-approval` page:
+    - Shows organization status (PENDING/ACTIVE/SUSPENDED/INACTIVE).
+    - Polls `/api/org/status` every 30 seconds.
+    - Redirects to dashboard when ACTIVE.
+  - Add auth hook / context:
     - Fetch `/api/me` to know who is logged in.
+    - Handle organization/shop selection.
   - Protect routes:
     - If not logged in → redirect to `/login`.
+    - If organization PENDING/SUSPENDED/INACTIVE → redirect to `/waiting-approval`.
 
 **Done when:**
 - You can:
   - Create a user in Prisma Studio.
-  - Log in via `/login`.
-  - See basic dashboard instead of login once authenticated.
-  - Unauthenticated access to `/pos`, `/backoffice`, `/admin` redirects to `/login`.
+  - Log in via `/login` using email, phone, or CNIC.
+  - Register new organization via `/signup` with business type.
+  - See waiting-approval page for pending organizations.
+  - See basic dashboard instead of login once authenticated and approved.
+  - Unauthenticated access to protected routes redirects to `/login`.
 
-### 🔹 M3 – Shops & User–Shop Roles
+### 🔹 M3 – Organizations & Multi-Tenant Structure
 
-**Goal:** Multi-tenant structure ready: shops, user-to-shop link, shop-level role.
+**Goal:** Organization-based multi-tenant structure ready: organizations, shops, user-to-organization and user-to-shop links, roles.
 
 **Tasks:**
 - **Backend:**
+  - Implement organization registration workflow:
+    - `/app/api/signup`: Creates user + organization (PENDING status) + default shop + links user as ORG_ADMIN.
+    - `/app/api/org/status`: Returns organization status for waiting-approval page.
+  - Implement organization management (platform admin):
+    - `/app/api/admin/organizations`: List organizations with contact person details.
+    - `/app/api/admin/organizations/:id/approve`: Approve organization.
+    - `/app/api/admin/organizations/:id/reject`: Reject with reason.
+    - `/app/api/admin/organizations/:id/suspend`: Suspend with reason.
+    - `/app/api/admin/organizations/:id/reactivate`: Reactivate suspended org.
   - Implement `/app/api/admin/shops`:
-    - POST: create new shop + owner user.
-    - GET: list shops (admin only).
+    - POST: create new shop + owner (requires orgId).
+    - GET: list shops (admin only) with organization info.
+  - Implement OrganizationUser logic:
+    - A user can belong to one or more organizations with orgRole (ORG_ADMIN).
   - Implement UserShop logic:
-    - A user can belong to one or more shops with shopRole (OWNER/CASHIER).
+    - A user can belong to one or more shops with shopRole (SHOP_OWNER/CASHIER).
   - Update `/api/me` to return:
     - user
+    - list of organizations (with status)
     - list of shops
-    - current selected shop.
+    - currentOrgId, currentShopId.
 - **Frontend:**
+  - `/admin/organizations`:
+    - List all organizations with status, type, contact person details, counts.
+    - Filter by status (ALL/PENDING/ACTIVE/SUSPENDED/INACTIVE).
+    - Actions: Approve, Reject (with reason modal), Suspend (with reason modal), Reactivate.
+    - Display organization type, legal name, address, NTN, STRN.
   - `/admin/shops`:
-    - List all shops (name, city, createdAt, status).
-    - Form to create shop + owner user.
-  - Shop selector:
-    - If user has multiple shops, show selector in header.
-    - When selected, store currentShopId in session/localStorage.
+    - List all shops with organization, name, city, createdAt, status.
+    - Form to create shop + owner user (requires orgId selection).
+  - Organization/Shop selectors:
+    - In sidebar user section (when expanded).
+    - If user has multiple organizations, show organization selector.
+    - If user has multiple shops, show shop selector.
+    - When selected, call `/api/org/select` or `/api/shop/select`.
 
 **Done when:**
-- As admin, you can create a shop + owner user.
-- As owner, you can log in and see you're attached to that shop.
-- POS & backoffice screens know currentShopId.
+- New users can register organizations via signup with business type.
+- Platform admin can review and approve/reject/suspend organizations.
+- As admin, you can create shops within organizations.
+- As org admin, you can log in and see you're attached to organization and shops.
+- POS & backoffice screens know currentOrgId and currentShopId.
+- Organization status checks prevent access until approved.
 
 ### 🔹 M4 – Products Module
 
@@ -1401,19 +1505,31 @@ This roadmap breaks down v1 development into 16+ milestones (M0–M16) with clea
 **Goal:** Make admin tools actually useful to you as the platform owner.
 
 **Tasks:**
+- Enhance `/admin/organizations`:
+  - Display full organization details: type, legal name, address, NTN, STRN, contact person (name, email, phone, CNIC, WhatsApp status).
+  - Status filter dropdown (ALL/PENDING/ACTIVE/SUSPENDED/INACTIVE).
+  - Approve/Reject/Suspend/Reactivate actions with reason capture (modals).
+  - Show organization creation date, approval date, shop/user counts.
 - Enhance `/admin/shops`:
   - Show `lastActiveAt` (from a Shop field updated on activity).
-  - Filters: active/inactive.
+  - Show organization name for each shop.
+  - Filters: active/inactive, by organization.
   - Add actions:
     - Activate/Deactivate shop (affects login).
     - Reset owner password (manual field for now).
-- Implement impersonation:
+- Enhance `/admin/users`:
+  - List all users with platform role, organization roles, shop roles.
+  - Display contact info: email, phone, CNIC, WhatsApp status.
+  - Show associations: which organizations and shops user belongs to.
+  - Search by name, email, phone, CNIC.
+- Implement impersonation (future):
   - Simple approach:
     - As admin, click "Login as owner".
     - Backend sets a special admin-impersonation session for that user.
 
 **Done when:**
-- You can manage shops completely from UI (no more manual Prisma Studio for basic ops).
+- You can manage organizations, shops, and users completely from UI (no more manual Prisma Studio for basic ops).
+- Organization approval workflow is fully functional with reason tracking.
 
 ### 🔹 M16 – Receipt Printing (Thermal Printer)
 
