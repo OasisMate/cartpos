@@ -50,6 +50,7 @@ export default function UserDetailPage() {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    cnic: '',
     isWhatsApp: false,
     orgRole: 'ORG_ADMIN',
   })
@@ -71,6 +72,7 @@ export default function UserDetailPage() {
       setFormData({
         name: data.user.name || '',
         phone: data.user.phone || '',
+        cnic: data.user.cnic || '',
         isWhatsApp: data.user.isWhatsApp || false,
         orgRole: data.user.orgRole || 'ORG_ADMIN',
       })
@@ -107,10 +109,18 @@ export default function UserDetailPage() {
     setSuccess('')
 
     try {
+      const payload = {
+        name: formData.name,
+        phone: formData.phone?.trim() || '',
+        cnic: formData.cnic?.trim() || '',
+        isWhatsApp: formData.isWhatsApp,
+        orgRole: formData.orgRole,
+      }
+
       const res = await fetch(`/api/org/users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       })
 
       const data = await res.json()
@@ -314,12 +324,15 @@ export default function UserDetailPage() {
                   </label>
                   <input
                     type="text"
-                    value={userData.cnic ? formatCNIC(userData.cnic) : ''}
-                    disabled
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                    value={formData.cnic}
+                    onChange={(e) => setFormData({ ...formData, cnic: e.target.value })}
+                    placeholder="13-digit CNIC"
+                    disabled={saving}
+                    maxLength={15}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    CNIC cannot be changed
+                    Enter 13 digits (with or without dashes). Leave blank to remove.
                   </p>
                 </div>
 
@@ -385,31 +398,29 @@ export default function UserDetailPage() {
                   </span>
                   <p className="text-gray-900">{userData.email}</p>
                 </div>
-                {userData.phone && (
-                  <div>
-                    <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      Phone:
-                    </span>
-                    <p className="text-gray-900">
-                      {userData.phone}
-                      {userData.isWhatsApp && (
-                        <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
-                          WhatsApp
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                )}
-                {userData.cnic && (
-                  <div>
-                    <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                      <CreditCard className="h-4 w-4" />
-                      CNIC:
-                    </span>
-                    <p className="text-gray-900">{formatCNIC(userData.cnic)}</p>
-                  </div>
-                )}
+                <div>
+                  <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <Phone className="h-4 w-4" />
+                    Phone:
+                  </span>
+                  <p className={userData.phone ? 'text-gray-900' : 'text-gray-400'}>
+                    {userData.phone || 'Not provided'}
+                    {userData.phone && userData.isWhatsApp && (
+                      <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                        WhatsApp
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <CreditCard className="h-4 w-4" />
+                    CNIC:
+                  </span>
+                  <p className={userData.cnic ? 'text-gray-900' : 'text-gray-400'}>
+                    {userData.cnic ? formatCNIC(userData.cnic) : 'Not provided'}
+                  </p>
+                </div>
                 <div>
                   <span className="text-sm font-medium text-gray-700">Organization Role:</span>
                   <p className="text-gray-900">

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { normalizePhone, validatePhone } from '@/lib/validation'
+import { normalizePhone, validatePhone, normalizeCNIC, validateCNIC } from '@/lib/validation'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 function ensureOrgAdmin(user: any) {
@@ -128,7 +128,7 @@ export async function PUT(
 
   try {
     const body = await request.json()
-    const { name, phone, isWhatsApp, orgRole } = body
+    const { name, phone, cnic, isWhatsApp, orgRole } = body
 
     // Verify user belongs to organization
     const orgUser = await prisma.organizationUser.findFirst({
@@ -149,6 +149,7 @@ export async function PUT(
     const oldUser = {
       name: orgUser.user.name,
       phone: orgUser.user.phone,
+      cnic: orgUser.user.cnic,
       isWhatsApp: orgUser.user.isWhatsApp,
       orgRole: orgUser.orgRole,
     }
@@ -180,6 +181,26 @@ export async function PUT(
         updateData.phone = normalizedPhone
       } else {
         updateData.phone = null
+      }
+    }
+
+    if (cnic !== undefined) {
+      if (cnic) {
+        const normalizedCnic = normalizeCNIC(cnic)
+        if (!normalizedCnic || !validateCNIC(cnic)) {
+          return NextResponse.json({ error: 'Invalid CNIC format. CNIC must be 13 digits.' }, { status: 400 })
+        }
+
+        const existingCnicUser = await prisma.user.findUnique({
+          where: { cnic: normalizedCnic },
+        })
+        if (existingCnicUser && existingCnicUser.id !== userId) {
+          return NextResponse.json({ error: 'CNIC already in use' }, { status: 409 })
+        }
+
+        updateData.cnic = normalizedCnic
+      } else {
+        updateData.cnic = null
       }
     }
 
@@ -219,6 +240,7 @@ export async function PUT(
         new: {
           name: updatedUser.name,
           phone: updatedUser.phone,
+          cnic: updateData.cnic !== undefined ? updateData.cnic : oldUser.cnic,
           isWhatsApp: updatedUser.isWhatsApp,
           orgRole: orgRole !== undefined ? orgRole : oldUser.orgRole,
         },
