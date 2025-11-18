@@ -44,9 +44,9 @@ export async function POST(
       )
     }
 
-    if (!['SHOP_OWNER', 'CASHIER'].includes(shopRole)) {
+    if (!['STORE_MANAGER', 'CASHIER'].includes(shopRole)) {
       return NextResponse.json(
-        { error: 'Invalid shopRole. Must be SHOP_OWNER or CASHIER' },
+        { error: 'Invalid shopRole. Must be STORE_MANAGER or CASHIER' },
         { status: 400 }
       )
     }

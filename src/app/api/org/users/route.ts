@@ -1,28 +1,22 @@
 import { NextResponse } from 'next/server'
+import type { ShopRole } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser, hashPassword } from '@/lib/auth'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
-
-function ensureOrgAdmin(user: any) {
-  const isOrgAdmin = user?.organizations?.some(
-    (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
-  )
-  if (!isOrgAdmin && user?.role !== 'PLATFORM_ADMIN') {
-    throw new Error('FORBIDDEN')
-  }
-}
+import { canManageOrgUsers, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
 
 export async function GET() {
   const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  try {
-    ensureOrgAdmin(user)
-  } catch {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!user) return UnauthorizedResponse()
+  
   const orgId = user.currentOrgId
   if (!orgId) return NextResponse.json({ users: [] })
+
+  // Check permission
+  if (!canManageOrgUsers(user, orgId)) {
+    return ForbiddenResponse('Only Org Admins can manage organization users')
+  }
 
   const orgUsers = await prisma.organizationUser.findMany({
     where: { orgId },
@@ -59,10 +53,14 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  try {
-    ensureOrgAdmin(user)
-  } catch {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const orgId = user.currentOrgId
+  if (!orgId) {
+    return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
+  }
+
+  // Check permission
+  if (!canManageOrgUsers(user, orgId)) {
+    return ForbiddenResponse('Only Org Admins can create organization users')
   }
 
   const body = await request.json().catch(() => null)
@@ -72,13 +70,11 @@ export async function POST(request: Request) {
   const cnic = body?.cnic as string | undefined
   const password = body?.password as string | undefined
   const orgRole = (body?.orgRole as 'ORG_ADMIN' | undefined) || undefined
-  const assignments = (body?.assignments as Array<{ shopId: string; shopRole: 'SHOP_OWNER' | 'CASHIER' }> | undefined) || []
+  const assignments =
+    (body?.assignments as Array<{ shopId: string; shopRole: ShopRole }> | undefined) || []
 
   if (!name || !email || !password) {
     return NextResponse.json({ error: 'Missing required fields: name, email, password' }, { status: 400 })
-  }
-  if (!user.currentOrgId) {
-    return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
   }
 
   // Validate phone if provided
@@ -153,7 +149,7 @@ export async function POST(request: Request) {
   // Log activity
   await logActivity({
     userId: user.id,
-    orgId: user.currentOrgId,
+    orgId,
     shopId: null,
     action: ActivityActions.CREATE_USER,
     entityType: EntityTypes.USER,

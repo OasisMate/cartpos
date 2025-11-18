@@ -12,7 +12,7 @@ export default async function ShopDashboardPage() {
     redirect('/')
   }
 
-  // Allow SHOP_OWNER, CASHIER (read-only), ORG_ADMIN, PLATFORM_ADMIN
+  // Allow STORE_MANAGER, CASHIER (read-only), ORG_ADMIN, PLATFORM_ADMIN
   const isPlatform = user.role === 'PLATFORM_ADMIN'
   const isOrgAdmin = user.organizations?.some((o: any) => o.orgRole === 'ORG_ADMIN')
   const shopRole = user.shops?.find((s: any) => s.shopId === shopId)?.shopRole
@@ -99,19 +99,19 @@ export default async function ShopDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/pos">
+        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/store/pos">
           <div className="card-body">
             <div className="text-sm text-[hsl(var(--muted-foreground))]">Quick Action</div>
             <div className="text-lg font-semibold">Open POS</div>
           </div>
         </a>
-        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/backoffice/products">
+        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/store/products">
           <div className="card-body">
             <div className="text-sm text-[hsl(var(--muted-foreground))]">Quick Action</div>
             <div className="text-lg font-semibold">Add Product</div>
           </div>
         </a>
-        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/backoffice/customers">
+        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/store/customers">
           <div className="card-body">
             <div className="text-sm text-[hsl(var(--muted-foreground))]">Quick Action</div>
             <div className="text-lg font-semibold">Record Udhaar Payment</div>

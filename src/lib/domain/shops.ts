@@ -58,12 +58,12 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
       },
     })
 
-    // Link user to shop as SHOP_OWNER
+    // Link user to shop as STORE_MANAGER
     await tx.userShop.create({
       data: {
         userId: owner.id,
         shopId: shop.id,
-        shopRole: 'SHOP_OWNER',
+        shopRole: 'STORE_MANAGER',
       },
     })
 
@@ -109,7 +109,7 @@ export async function listShops(adminUserId: string) {
           },
         },
         where: {
-          shopRole: 'SHOP_OWNER',
+          shopRole: 'STORE_MANAGER',
         },
       },
       _count: {

@@ -30,9 +30,9 @@ async function checkSupplierPermission(userId: string, shopId: string): Promise<
   // PLATFORM_ADMIN can access any shop
   if (user.role === 'PLATFORM_ADMIN') return true
 
-  // SHOP_OWNER can manage suppliers in their shop
+  // STORE_MANAGER can manage suppliers in their shop
   const userShop = user.shops.find((us) => us.shopId === shopId)
-  return userShop?.shopRole === 'SHOP_OWNER'
+  return userShop?.shopRole === 'STORE_MANAGER'
 }
 
 export async function createSupplier(

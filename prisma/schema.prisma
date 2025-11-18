@@ -8,9 +8,12 @@ generator client {
 }
 
 // -----------------------------------------------------
-// Core: Shops, Users, Settings
+// Core: Organizations, Shops, Users, Settings
+// Multi-tenant architecture with role-based access control
 // -----------------------------------------------------
 
+// Organization: Top-level entity that owns multiple stores
+// Managed by Platform Admins and Org Admins
 model Organization {
   id               String          @id @default(cuid())
   name             String
@@ -135,16 +138,22 @@ model UserShop {
   @@unique([userId, shopId])
 }
 
+// User role at platform level
 enum UserRole {
-  PLATFORM_ADMIN
-  NORMAL
+  PLATFORM_ADMIN  // Full system access, manages all organizations
+  NORMAL          // Regular user (role defined at org/shop level)
 }
 
+// User role at store level
+// STORE_MANAGER: Full store operations (POS, inventory, reports, purchases)
+// CASHIER: Limited to POS and personal dashboard
 enum ShopRole {
-  SHOP_OWNER
+  STORE_MANAGER  // Renamed from SHOP_OWNER (v1.1.0)
   CASHIER
 }
 
+// User role at organization level
+// Links users to organizations with specific permissions
 model OrganizationUser {
   id        String   @id @default(cuid())
   userId    String

@@ -119,6 +119,9 @@ export async function deleteMeta(key: string): Promise<void> {
 
 // Helper functions for products store
 export async function saveProducts(shopId: string, products: Omit<CachedProduct, 'shopId' | 'updatedAt'>[]): Promise<void> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return
+
   const now = Date.now()
   const productsWithMetadata = products.map((product) => ({
     ...product,
@@ -134,14 +137,23 @@ export async function saveProducts(shopId: string, products: Omit<CachedProduct,
 }
 
 export async function getProducts(shopId: string): Promise<CachedProduct[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   return await db.products.where('shopId').equals(shopId).toArray()
 }
 
 export async function getProductByBarcode(shopId: string, barcode: string): Promise<CachedProduct | undefined> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return undefined
+  
   return await db.products.where('[shopId+barcode]').equals([shopId, barcode]).first()
 }
 
 export async function searchProducts(shopId: string, searchTerm: string): Promise<CachedProduct[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   const term = searchTerm.toLowerCase()
   const products = await db.products.where('shopId').equals(shopId).toArray()
 
@@ -154,6 +166,9 @@ export async function searchProducts(shopId: string, searchTerm: string): Promis
 
 // Helper functions for customers store
 export async function saveCustomers(shopId: string, customers: Omit<CachedCustomer, 'shopId' | 'updatedAt'>[]): Promise<void> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return
+
   const now = Date.now()
   const customersWithMetadata = customers.map((customer) => ({
     ...customer,
@@ -169,6 +184,9 @@ export async function saveCustomers(shopId: string, customers: Omit<CachedCustom
 }
 
 export async function getCustomers(shopId: string): Promise<CachedCustomer[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   return await db.customers.where('shopId').equals(shopId).toArray()
 }
 
@@ -185,6 +203,9 @@ export async function addCustomer(customer: Omit<CachedCustomer, 'updatedAt'>): 
 
 // Helper functions for suppliers store
 export async function saveSuppliers(shopId: string, suppliers: Omit<CachedSupplier, 'shopId' | 'updatedAt'>[]): Promise<void> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return
+
   const now = Date.now()
   const suppliersWithMetadata = suppliers.map((supplier) => ({
     ...supplier,
@@ -200,6 +221,9 @@ export async function saveSuppliers(shopId: string, suppliers: Omit<CachedSuppli
 }
 
 export async function getSuppliers(shopId: string): Promise<CachedSupplier[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   return await db.suppliers.where('shopId').equals(shopId).toArray()
 }
 
@@ -215,6 +239,9 @@ export async function addSale(sale: Omit<CachedSale, 'createdAt' | 'syncStatus'>
 }
 
 export async function getPendingSales(shopId: string): Promise<CachedSale[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   return await db.sales
     .where('[shopId+syncStatus]')
     .equals([shopId, 'PENDING'])
@@ -222,6 +249,9 @@ export async function getPendingSales(shopId: string): Promise<CachedSale[]> {
 }
 
 export async function getSales(shopId: string): Promise<CachedSale[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   return await db.sales.where('shopId').equals(shopId).toArray()
 }
 
@@ -274,6 +304,9 @@ export async function addPurchaseLocal(purchase: Omit<CachedPurchase, 'createdAt
 }
 
 export async function getPendingPurchases(shopId: string): Promise<CachedPurchase[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   return await (db as any).purchases.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
 }
 
@@ -287,6 +320,9 @@ export async function markPurchaseSyncError(id: string, error: string): Promise<
 
 // Customers pending helpers (reuse existing customers store)
 export async function getPendingCustomers(shopId: string): Promise<CachedCustomer[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   return await db.customers
     .where('[shopId+syncStatus]')
     .equals([shopId, 'PENDING'])
@@ -331,6 +367,9 @@ export async function addUdhaarPaymentLocal(payment: Omit<CachedUdhaarPayment, '
 }
 
 export async function getPendingUdhaarPayments(shopId: string): Promise<CachedUdhaarPayment[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+  
   return await (db as any).udhaarPayments.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
 }
 

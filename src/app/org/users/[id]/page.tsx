@@ -36,7 +36,7 @@ export default function UserDetailPage() {
   const router = useRouter()
   const params = useParams()
   const { user } = useAuth()
-  const userId = params.id as string
+  const userId = ((params as any).id as string) || ((params as any).userId as string)
 
   const [userData, setUserData] = useState<UserData | null>(null)
   const [shops, setShops] = useState<Shop[]>([])
@@ -56,7 +56,7 @@ export default function UserDetailPage() {
 
   const [assignData, setAssignData] = useState({
     shopId: '',
-    shopRole: 'SHOP_OWNER',
+    shopRole: 'STORE_MANAGER',
   })
 
   const loadUser = useCallback(async () => {
@@ -146,7 +146,7 @@ export default function UserDetailPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to assign store')
 
       setSuccess('Store assigned successfully')
-      setAssignData({ shopId: '', shopRole: 'SHOP_OWNER' })
+      setAssignData({ shopId: '', shopRole: 'STORE_MANAGER' })
       setShowAssignForm(false)
       await loadUser()
       setTimeout(() => setSuccess(''), 3000)
@@ -184,6 +184,14 @@ export default function UserDetailPage() {
 
   if (!user) {
     return null
+  }
+
+  if (!userId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-red-600">Invalid user context</div>
+      </div>
+    )
   }
 
   if (loading) {
@@ -458,7 +466,7 @@ export default function UserDetailPage() {
                     disabled={saving || !assignData.shopId}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
                   >
-                    <option value="SHOP_OWNER">Store Manager</option>
+                    <option value="STORE_MANAGER">Store Manager</option>
                     <option value="CASHIER">Cashier</option>
                   </select>
                   <div className="flex gap-2">
@@ -472,7 +480,7 @@ export default function UserDetailPage() {
                     <button
                       onClick={() => {
                         setShowAssignForm(false)
-                        setAssignData({ shopId: '', shopRole: 'SHOP_OWNER' })
+                        setAssignData({ shopId: '', shopRole: 'STORE_MANAGER' })
                       }}
                       disabled={saving}
                       className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -496,7 +504,7 @@ export default function UserDetailPage() {
                     <div>
                       <p className="font-medium text-gray-900">{assignment.shop.name}</p>
                       <p className="text-sm text-gray-600">
-                        {assignment.shopRole === 'SHOP_OWNER' ? 'Store Manager' : assignment.shopRole}
+                        {assignment.shopRole === 'STORE_MANAGER' ? 'Store Manager' : assignment.shopRole}
                       </p>
                     </div>
                     <button

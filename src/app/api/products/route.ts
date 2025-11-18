@@ -6,13 +6,19 @@ import {
   CreateProductInput,
   ProductFilters,
 } from '@/lib/domain/products'
+import { 
+  canManageProducts, 
+  hasShopAccess, 
+  UnauthorizedResponse, 
+  ForbiddenResponse 
+} from '@/lib/permissions'
 
 // GET: List products
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      return UnauthorizedResponse()
     }
 
     if (!user.currentShopId) {
@@ -20,6 +26,11 @@ export async function GET(request: NextRequest) {
         { error: 'No shop selected' },
         { status: 400 }
       )
+    }
+
+    // Check permission
+    if (!hasShopAccess(user, user.currentShopId)) {
+      return ForbiddenResponse('You do not have access to this shop')
     }
 
     // Parse query parameters
@@ -54,7 +65,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      return UnauthorizedResponse()
     }
 
     if (!user.currentShopId) {
@@ -62,6 +73,11 @@ export async function POST(request: NextRequest) {
         { error: 'No shop selected' },
         { status: 400 }
       )
+    }
+
+    // Check permission - only Store Managers can create products
+    if (!canManageProducts(user, user.currentShopId)) {
+      return ForbiddenResponse('Only Store Managers can create products')
     }
 
     const body = await request.json()

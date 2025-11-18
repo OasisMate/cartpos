@@ -11,84 +11,267 @@ import {
   Store,
   Settings,
   LogOut,
+  ShoppingCart,
+  Package,
+  TrendingUp,
+  Receipt,
+  DollarSign,
+  Truck,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
+
+interface NavLink {
+  label: string
+  href: string
+  icon: React.ReactNode
+}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, logout, selectOrg, selectShop } = useAuth()
   const [open, setOpen] = useState(false)
 
-  // Navigation links - show based on user role
-  const getNavLinks = () => {
-    const links = []
+  // Extract context from URL if Platform Admin viewing org/store
+  const orgIdMatch = pathname?.match(/\/org\/([^\/]+)/)
+  const storeIdMatch = pathname?.match(/\/stores\/([^\/]+)/)
+  const contextOrgId = orgIdMatch ? orgIdMatch[1] : null
+  const contextStoreId = storeIdMatch ? storeIdMatch[1] : null
 
-    // Determine if user is Org Admin
+  // Navigation links - show based on user role and context
+  const getNavLinks = (): NavLink[] => {
+    const links: NavLink[] = []
+
     const isOrgAdmin = user?.organizations?.some(
       (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
     )
 
-    // Dashboard - point to org dashboard if Org Admin, otherwise home
-    const dashboardHref = isOrgAdmin && user?.currentOrgId ? '/org' : '/'
-    links.push({
-      label: 'Dashboard',
-      href: dashboardHref,
-      icon: (
-        <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />
-      ),
-    })
+    const isStoreManager = user?.shops?.some(
+      (s: any) => s.shopId === user.currentShopId && s.shopRole === 'STORE_MANAGER'
+    )
 
-    // Platform Admin-only links
-    if (user?.role === 'PLATFORM_ADMIN') {
+    const isCashier = user?.shops?.some(
+      (s: any) => s.shopId === user.currentShopId && s.shopRole === 'CASHIER'
+    )
+
+    // CASHIER: Limited navigation
+    if (isCashier && user?.role !== 'PLATFORM_ADMIN' && !isOrgAdmin && !isStoreManager) {
       links.push({
-        label: 'Organizations',
-        href: '/admin/organizations',
-        icon: (
-          <Building2 className="h-5 w-5 flex-shrink-0 text-gray-700" />
-        ),
+        label: 'My Dashboard',
+        href: '/cashier/dashboard',
+        icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
       })
       links.push({
-        label: 'Users',
-        href: '/admin/users',
-        icon: (
-          <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />
-        ),
+        label: 'POS',
+        href: '/pos',
+        icon: <ShoppingCart className="h-5 w-5 flex-shrink-0 text-gray-700" />,
       })
-      links.push({
-        label: 'Shops',
-        href: '/admin/shops',
-        icon: (
-          <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />
-        ),
-      })
+      return links
     }
 
-    // Org Admin links - show when user is Org Admin and has currentOrgId
+    // PLATFORM ADMIN: Context-aware navigation
+    if (user?.role === 'PLATFORM_ADMIN') {
+      links.push({
+        label: 'Dashboard',
+        href: '/admin',
+        icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+
+      // Platform admin viewing a specific store
+      if (contextOrgId && contextStoreId) {
+        links.push({
+          label: '← Back to Org',
+          href: `/org/${contextOrgId}`,
+          icon: <Building2 className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        
+        // Store-level navigation
+        links.push({
+          label: 'Store Dashboard',
+          href: `/org/${contextOrgId}/stores/${contextStoreId}`,
+          icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'POS',
+          href: `/org/${contextOrgId}/stores/${contextStoreId}/pos`,
+          icon: <ShoppingCart className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Products',
+          href: `/org/${contextOrgId}/stores/${contextStoreId}/products`,
+          icon: <Package className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Sales',
+          href: `/org/${contextOrgId}/stores/${contextStoreId}/sales`,
+          icon: <TrendingUp className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Purchases',
+          href: `/org/${contextOrgId}/stores/${contextStoreId}/purchases`,
+          icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Customers',
+          href: `/org/${contextOrgId}/stores/${contextStoreId}/customers`,
+          icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Suppliers',
+          href: `/org/${contextOrgId}/stores/${contextStoreId}/suppliers`,
+          icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Reports',
+          href: `/org/${contextOrgId}/stores/${contextStoreId}/reports`,
+          icon: <FileText className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+      }
+      // Platform admin viewing a specific org (but not store)
+      else if (contextOrgId && !contextStoreId) {
+        links.push({
+          label: '← Back to Admin',
+          href: '/admin',
+          icon: <Building2 className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+
+        links.push({
+          label: 'Org Dashboard',
+          href: `/org/${contextOrgId}`,
+          icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Stores',
+          href: `/org/${contextOrgId}/stores`,
+          icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Users',
+          href: `/org/${contextOrgId}/users`,
+          icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+      }
+      // Platform admin on main admin pages
+      else {
+        links.push({
+          label: 'Organizations',
+          href: '/admin/organizations',
+          icon: <Building2 className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Users',
+          href: '/admin/users',
+          icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+        links.push({
+          label: 'Shops',
+          href: '/admin/shops',
+          icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        })
+      }
+
+      links.push({
+        label: 'Settings',
+        href: '/settings',
+        icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+
+      return links
+    }
+
+    // ORG ADMIN: Organization-level navigation
     if (isOrgAdmin && user?.currentOrgId) {
+      links.push({
+        label: 'Dashboard',
+        href: '/org',
+        icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
       links.push({
         label: 'Stores',
         href: '/org/shops',
-        icon: (
-          <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />
-        ),
+        icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
       })
       links.push({
         label: 'Users',
         href: '/org/users',
-        icon: (
-          <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />
-        ),
+        icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
       })
+      links.push({
+        label: 'Settings',
+        href: '/settings',
+        icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+
+      return links
     }
 
-    // Settings - available to all authenticated users
+    // STORE MANAGER: Store-level navigation
+    if (isStoreManager && user?.currentShopId) {
+      links.push({
+        label: 'Dashboard',
+        href: '/store',
+        icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'POS',
+        href: '/store/pos',
+        icon: <ShoppingCart className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'Products',
+        href: '/store/products',
+        icon: <Package className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'Sales',
+        href: '/store/sales',
+        icon: <TrendingUp className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'Purchases',
+        href: '/store/purchases',
+        icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'Customers',
+        href: '/store/customers',
+        icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'Suppliers',
+        href: '/store/suppliers',
+        icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'Udhaar',
+        href: '/store/udhaar',
+        icon: <Receipt className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'Reports',
+        href: '/store/reports',
+        icon: <FileText className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+      links.push({
+        label: 'Settings',
+        href: '/settings',
+        icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      })
+
+      return links
+    }
+
+    // DEFAULT: Basic navigation
+    links.push({
+      label: 'Dashboard',
+      href: '/',
+      icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+    })
     links.push({
       label: 'Settings',
       href: '/settings',
-      icon: (
-        <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />
-      ),
+      icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
     })
 
     return links
@@ -99,17 +282,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Check if a link is active
   const isActive = (href: string) => {
     if (!pathname) return false
-    
-    if (href === '/' || href === '/org') {
-      // Dashboard is active on exact home, admin dashboard, or org dashboard
-      return pathname === '/' || pathname === '/admin' || pathname === '/org'
-    }
-    
-    // For other links, check exact match or if pathname starts with href followed by / or end of string
-    // This prevents /admin/users from matching /admin/organizations
+
+    // Exact match
     if (pathname === href) return true
+
+    // For dashboard routes
+    if (href === '/' || href === '/org' || href === '/store' || href === '/admin' || href === '/cashier/dashboard') {
+      return pathname === href
+    }
+
+    // Starts with + slash (prevents /admin from matching /admin-something)
     if (pathname.startsWith(href + '/')) return true
-    
+
     return false
   }
 
@@ -143,10 +327,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="border-t border-blue-200 pt-4 space-y-2">
             {user && (
               <>
-                <div className={cn(
-                  "flex items-center py-2 rounded-lg hover:bg-blue-100 transition-colors",
-                  open ? "gap-3 px-3" : "justify-center px-0"
-                )}>
+                <div
+                  className={cn(
+                    'flex items-center py-2 rounded-lg hover:bg-blue-100 transition-colors',
+                    open ? 'gap-3 px-3' : 'justify-center px-0'
+                  )}
+                >
                   <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
                     <span className="text-white text-sm font-semibold">
                       {user.name?.[0]?.toUpperCase() || 'U'}
@@ -157,14 +343,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       <div className="text-sm font-medium text-gray-900 truncate">
                         {user.name}
                       </div>
-                      <div className="text-xs text-gray-500 truncate">
-                        {user.email}
-                      </div>
+                      <div className="text-xs text-gray-500 truncate">{user.email}</div>
                     </div>
                   )}
                 </div>
 
-                {/* Organization/Shop Selectors */}
+                {/* Organization/Shop Selectors - hide for Platform Admin */}
                 {open && user.role !== 'PLATFORM_ADMIN' && (
                   <div className="space-y-2 px-3 transition-opacity duration-200">
                     {user.organizations && user.organizations.length > 1 && (
@@ -207,11 +391,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               title={!open ? 'Logout' : undefined}
             >
               <LogOut className="h-5 w-5 flex-shrink-0" />
-              {open && (
-                <span className="text-sm font-medium transition-opacity duration-200">
-                  Logout
-                </span>
-              )}
+              {open && <span className="text-sm font-medium transition-opacity duration-200">Logout</span>}
             </button>
           </div>
         </SidebarBody>
@@ -227,5 +407,3 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   )
 }
-
-

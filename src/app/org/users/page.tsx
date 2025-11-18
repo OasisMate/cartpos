@@ -24,7 +24,7 @@ export default function OrgUsersPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [userRole, setUserRole] = useState<'ORG_ADMIN' | 'SHOP_OWNER' | 'CASHIER' | ''>('')
+  const [userRole, setUserRole] = useState<'ORG_ADMIN' | 'STORE_MANAGER' | 'CASHIER' | ''>('')
   const [assignShopId, setAssignShopId] = useState('')
   const [shops, setShops] = useState<Array<{ id: string; name: string }>>([])
   const [submitting, setSubmitting] = useState(false)
@@ -70,7 +70,7 @@ export default function OrgUsersPage() {
     }
     
     // If Store Manager or Cashier, store is required
-    if ((userRole === 'SHOP_OWNER' || userRole === 'CASHIER') && !assignShopId) {
+    if ((userRole === 'STORE_MANAGER' || userRole === 'CASHIER') && !assignShopId) {
       setError('Store selection is required for Store Manager and Cashier roles')
       return
     }
@@ -81,7 +81,7 @@ export default function OrgUsersPage() {
       
       if (userRole === 'ORG_ADMIN') {
         payload.orgRole = 'ORG_ADMIN'
-      } else if (userRole === 'SHOP_OWNER' || userRole === 'CASHIER') {
+      } else if (userRole === 'STORE_MANAGER' || userRole === 'CASHIER') {
         // For store roles, assign to the selected store
         payload.assignments = [{ shopId: assignShopId, shopRole: userRole }]
       }
@@ -256,7 +256,7 @@ export default function OrgUsersPage() {
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
                 value={userRole}
                 onChange={(e) => {
-                  const role = e.target.value as 'ORG_ADMIN' | 'SHOP_OWNER' | 'CASHIER' | ''
+                  const role = e.target.value as 'ORG_ADMIN' | 'STORE_MANAGER' | 'CASHIER' | ''
                   setUserRole(role)
                   if (role === 'ORG_ADMIN') {
                     setAssignShopId('')
@@ -266,12 +266,12 @@ export default function OrgUsersPage() {
               >
                 <option value="">Select role</option>
                 <option value="ORG_ADMIN">Organization Admin</option>
-                <option value="SHOP_OWNER">Store Manager</option>
+                <option value="STORE_MANAGER">Store Manager</option>
                 <option value="CASHIER">Cashier</option>
               </select>
             </div>
 
-            {(userRole === 'SHOP_OWNER' || userRole === 'CASHIER') && (
+            {(userRole === 'STORE_MANAGER' || userRole === 'CASHIER') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Store <span className="text-red-500">*</span>
@@ -389,7 +389,7 @@ export default function OrgUsersPage() {
                             <div key={s.shopId} className="text-gray-700">
                               <span className="font-medium">{s.shop.name}</span>
                               <span className="text-sm text-gray-500 ml-2">
-                                ({s.shopRole === 'SHOP_OWNER' ? 'Store Manager' : s.shopRole === 'CASHIER' ? 'Cashier' : s.shopRole})
+                                ({s.shopRole === 'STORE_MANAGER' ? 'Store Manager' : s.shopRole === 'CASHIER' ? 'Cashier' : s.shopRole})
                               </span>
                             </div>
                           ))}

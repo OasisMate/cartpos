@@ -5,7 +5,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getProductsWithCache, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
-import { saveSale, syncPendingSalesBatch } from '@/lib/offline/sales'
+import { saveSale } from '@/lib/offline/sales'
+import { getCustomers, saveCustomers } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
 import { sumCartLines, calculateTotals } from '@/lib/utils/money'
 import Button from '@/components/ui/Button'
@@ -50,39 +51,52 @@ export default function POSPage() {
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const fetchProducts = useCallback(async () => {
-    try {
-      setLoading(true)
+  // Load products once on mount from cache
+  useEffect(() => {
+    async function loadProducts() {
       if (!user?.currentShopId) return
+      try {
+        setLoading(true)
+        // Always load from cache first for speed
+        const productsList = await getProductsWithCache(user.currentShopId, isOnline)
+        setProducts(productsList)
+      } catch (err) {
+        console.error('Failed to load products:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
 
-      // Use cache-aware product fetching
-      const productsList = await getProductsWithCache(user.currentShopId, isOnline)
-      setProducts(productsList)
-    } catch (err) {
-      console.error('Failed to fetch products:', err)
-    } finally {
-      setLoading(false)
+    async function loadCustomers() {
+      if (!user?.currentShopId) return
+      try {
+        // Try to load from cache first
+        const cached = await getCustomers(user.currentShopId)
+        if (cached.length > 0) {
+          setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
+        } else if (isOnline) {
+          // Fallback to API if cache is empty
+          const response = await fetch('/api/customers?limit=1000')
+          if (response.ok) {
+            const data = await response.json()
+            const customers = data.customers || []
+            setCustomers(customers)
+            // Cache for next time
+            await saveCustomers(user.currentShopId, customers)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load customers:', err)
+      }
+    }
+
+    if (user?.currentShopId) {
+      loadProducts()
+      loadCustomers()
     }
   }, [user?.currentShopId, isOnline])
 
-  useEffect(() => {
-    if (user?.currentShopId) {
-      fetchProducts()
-      fetchCustomers()
-    }
-  }, [user?.currentShopId, fetchProducts])
-
   // Per-page sync removed; handled by global background sync orchestrator
-
-  // Sync pending sales when coming online
-  useEffect(() => {
-    if (isOnline && user?.currentShopId) {
-      // Sync pending sales when going online
-      syncPendingSalesBatch(user.currentShopId).catch((err) => {
-        console.error('Error syncing pending sales:', err)
-      })
-    }
-  }, [isOnline, user?.currentShopId])
 
   useEffect(() => {
     // Focus barcode input on mount
@@ -90,18 +104,6 @@ export default function POSPage() {
       barcodeInputRef.current.focus()
     }
   }, [])
-
-  async function fetchCustomers() {
-    try {
-      const response = await fetch('/api/customers?limit=1000')
-      if (response.ok) {
-        const data = await response.json()
-        setCustomers(data.customers || [])
-      }
-    } catch (err) {
-      console.error('Failed to fetch customers:', err)
-    }
-  }
 
   function addToCart(product: Product, quantity: number = 1) {
     const existingItem = cart.find((item) => item.product.id === product.id)

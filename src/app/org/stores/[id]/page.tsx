@@ -26,7 +26,7 @@ export default function StoreDetailPage() {
   const router = useRouter()
   const params = useParams()
   const { user } = useAuth()
-  const storeId = params.id as string
+  const storeId = ((params as any).id as string) || ((params as any).storeId as string)
 
   const [store, setStore] = useState<StoreData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -124,6 +124,14 @@ export default function StoreDetailPage() {
 
   if (!user) {
     return null
+  }
+
+  if (!storeId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-red-600">Invalid store context</div>
+      </div>
+    )
   }
 
   if (loading) {

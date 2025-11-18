@@ -162,7 +162,7 @@ export default function BackofficeSalesPage() {
                     <td className="border p-2 text-center">
                       <div className="flex justify-center gap-2">
                         <a
-                          href={`/backoffice/sales/${s.id}/receipt`}
+                          href={`/store/sales/${s.id}/receipt`}
                           target="_blank"
                           className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
                           title="Print receipt"

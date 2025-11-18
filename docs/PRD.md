@@ -66,7 +66,6 @@
 ### 2.2 Explicit non-goals (v1)
 
 - No FBR integration.
-- No multi-branch / multi-outlet management (one shop per account).
 - No Android / mobile app (PC browser only).
 - No advanced analytics or custom reporting (only simple summaries and lists).
 - No split payments (only one payment method per sale).
@@ -75,11 +74,57 @@
 - No label/sticker design and printing.
 - No top bar/header in authenticated layout (sidebar-only design for cleaner UI).
 
-## 3. Personas
+### 2.3 Implemented features (v1.1)
 
-### 3.1 Shop Owner – Imran
+**Multi-tenant organization structure:**
+- Organizations can have multiple stores/outlets.
+- Platform Admins can manage all organizations and stores.
+- Org Admins can manage their organization's stores and users.
+- Store Managers have full access to their store's operations.
+- Cashiers have limited access (POS only).
 
-- Runs a small kiryana / retail shop.
+**Role-based access control (RBAC):**
+- Four user roles: Platform Admin, Org Admin, Store Manager, Cashier.
+- Context-aware navigation based on role and current view.
+- Comprehensive permission system at API and UI levels.
+
+**Offline-first architecture:**
+- IndexedDB caching for products, customers, suppliers, and sales.
+- Background sync orchestrator for automatic data synchronization.
+- Scoped offline data (only relevant store data cached).
+- Platform Admins always operate online (no offline caching).
+
+## 3. User Roles & Personas
+
+### 3.1 Platform Admin (System Administrator)
+
+- Manages the entire CartPOS platform.
+- Can access all organizations and stores.
+- Context-aware navigation: sees org/store-specific controls when drilling down.
+- Always operates online (no offline caching).
+
+**Responsibilities:**
+- Review and approve organization registration requests.
+- Approve, reject, suspend, or reactivate organizations.
+- Create and manage store accounts (tenants).
+- Monitor which organizations and stores are active.
+- Manage user accounts and roles across the system.
+- View activity logs and audit trails.
+- Access any organization or store for support/debugging.
+
+### 3.2 Org Admin (Organization Owner)
+
+- Manages a single organization and its stores.
+- Can create and manage stores within their organization.
+- Can create Store Managers and Cashiers.
+- Assigns users to specific stores with appropriate roles.
+- Full visibility of all stores in their organization.
+
+### 3.3 Store Manager (formerly Shop Owner) – Imran
+
+- Manages a single store's operations.
+- Full access to POS, inventory, purchases, sales, customers, suppliers, and reports.
+- Can work the floor when needed (runs POS).
 - Tech: uses WhatsApp/YouTube; basic PC comfort.
 - Cares about:
   - Daily sales totals.
@@ -90,27 +135,18 @@
   - Complicated, English-heavy systems.
   - System breaking or being slow during rush hours.
 
-### 3.2 Cashier – Bilal
+### 3.4 Cashier – Bilal
 
 - Full-time at the counter.
+- Limited access: POS and personal dashboard only.
+- Can view low stock alerts (informational).
+- Optional: Can record purchases if enabled by Store Manager (future).
 - Tech: comfortable with Android; OK with mouse/keyboard but types slowly.
 - Cares about:
   - Fast billing.
   - Minimal clicks.
   - Clear, simple screen with no confusing options.
 - Lives on the POS sale screen.
-
-### 3.3 Platform Admin – Hamza (You/Team)
-
-- Manages organizations, shops, and platform health.
-- Needs to:
-  - Review and approve organization registration requests.
-  - Approve, reject, suspend, or reactivate organizations.
-  - Create and manage shop accounts (tenants).
-  - See which organizations and shops are active and when.
-  - Manage user accounts and roles.
-  - Reset logins / lock accounts.
-  - Impersonate shops to debug issues (future).
 
 ## 4. v1 Scope – Feature Summary
 
@@ -641,7 +677,7 @@ For a given date (default: today), show:
 **Roles:**
 - Platform: PLATFORM_ADMIN, NORMAL.
 - Organization: ORG_ADMIN (manages organization and its shops).
-- Shop: SHOP_OWNER, CASHIER.
+- Shop: STORE_MANAGER, CASHIER.
 
 **Organization Registration & Approval:**
 - New organizations register via signup form with required business type.
@@ -677,7 +713,7 @@ For a given date (default: today), show:
 - userId, orgId, orgRole (ORG_ADMIN).
 
 **UserShop**
-- userId, shopId, shopRole (SHOP_OWNER/CASHIER).
+- userId, shopId, shopRole (STORE_MANAGER/CASHIER).
 
 **Product**
 - id, shopId, name, sku, barcode, unit, price, costPrice, category, trackStock, reorderLevel, timestamps.
@@ -1101,7 +1137,7 @@ This roadmap breaks down v1 development into 16+ milestones (M0–M16) with clea
   - Implement OrganizationUser logic:
     - A user can belong to one or more organizations with orgRole (ORG_ADMIN).
   - Implement UserShop logic:
-    - A user can belong to one or more shops with shopRole (SHOP_OWNER/CASHIER).
+    - A user can belong to one or more shops with shopRole (STORE_MANAGER/CASHIER).
   - Update `/api/me` to return:
     - user
     - list of organizations (with status)

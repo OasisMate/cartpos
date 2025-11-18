@@ -117,7 +117,7 @@ export default function CustomersPage() {
                   <td className="px-4 py-2 text-sm">{c.phone || '—'}</td>
                   <td className="px-4 py-2 text-sm text-right">{(c.balance ?? 0).toFixed(2)}</td>
                   <td className="px-4 py-2 text-sm text-right">
-                    <Link href={`/backoffice/customers/${c.id}`} className="btn btn-outline h-8 px-3">
+                    <Link href={`/store/customers/${c.id}`} className="btn btn-outline h-8 px-3">
                       View
                     </Link>
                   </td>

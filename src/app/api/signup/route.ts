@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type { ShopRole } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
         data: {
           userId: user.id,
           shopId: shop.id,
-          shopRole: 'SHOP_OWNER',
+          shopRole: 'STORE_MANAGER' as ShopRole,
         },
       })
 

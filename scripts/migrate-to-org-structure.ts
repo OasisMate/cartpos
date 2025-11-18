@@ -39,13 +39,13 @@ async function main() {
     console.log(`Updated ${updatedAdmins.count} users to PLATFORM_ADMIN`)
   }
 
-  // Migrate shop roles: OWNER -> SHOP_OWNER
+  // Migrate shop roles: OWNER -> STORE_MANAGER
   const updatedOwners = await prisma.userShop.updateMany({
-    data: { shopRole: ShopRole.SHOP_OWNER },
-    where: { shopRole: 'OWNER' as unknown as ShopRole },
+    data: { shopRole: 'STORE_MANAGER' as ShopRole },
+    where: { shopRole: 'SHOP_OWNER' as ShopRole },
   })
   if (updatedOwners.count > 0) {
-    console.log(`Updated ${updatedOwners.count} user-shop roles to SHOP_OWNER`)
+    console.log(`Updated ${updatedOwners.count} user-shop roles to STORE_MANAGER`)
   }
 
   // Optionally, attach PLATFORM_ADMINs as ORG_ADMIN to Legacy org for convenience (view data)
