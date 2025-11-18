@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { UserPlus, Edit, Trash2, Mail, Eye, EyeOff } from 'lucide-react'
+import { UserPlus, Edit, Trash2, Mail, Eye, EyeOff, Phone, Fingerprint } from 'lucide-react'
 
 interface OrgUser {
   id: string
   name: string
   email: string
+  phone?: string | null
+  cnic?: string | null
   orgRole: string
   shops: Array<{ shopId: string; shopRole: string; shop: { id: string; name: string } }>
 }
@@ -23,6 +25,8 @@ export default function OrgUsersPage() {
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [cnic, setCnic] = useState('')
   const [password, setPassword] = useState('')
   const [userRole, setUserRole] = useState<'ORG_ADMIN' | 'STORE_MANAGER' | 'CASHIER' | ''>('')
   const [assignShopId, setAssignShopId] = useState('')
@@ -78,6 +82,15 @@ export default function OrgUsersPage() {
     setSubmitting(true)
     try {
       const payload: any = { name, email, password }
+      const trimmedPhone = phone.trim()
+      const trimmedCnic = cnic.trim()
+      
+      if (trimmedPhone) {
+        payload.phone = trimmedPhone
+      }
+      if (trimmedCnic) {
+        payload.cnic = trimmedCnic
+      }
       
       if (userRole === 'ORG_ADMIN') {
         payload.orgRole = 'ORG_ADMIN'
@@ -95,6 +108,8 @@ export default function OrgUsersPage() {
       setName('')
       setEmail('')
       setPassword('')
+      setPhone('')
+      setCnic('')
       setUserRole('')
       setAssignShopId('')
       setShowForm(false)
@@ -185,6 +200,8 @@ export default function OrgUsersPage() {
                   // Clear form state
                   setName('')
                   setEmail('')
+                  setPhone('')
+                  setCnic('')
                   setPassword('')
                   setUserRole('')
                   setAssignShopId('')
@@ -221,6 +238,32 @@ export default function OrgUsersPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Phone Number
+              </label>
+              <input
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                placeholder="03xx-xxxxxxx"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+              <p className="text-xs text-gray-500 mt-1">Optional but recommended. Used for login & recovery.</p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                CNIC
+              </label>
+              <input
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                placeholder="13-digit CNIC (with or without dashes)"
+                value={cnic}
+                onChange={(e) => setCnic(e.target.value)}
+                maxLength={15}
               />
             </div>
             
@@ -374,6 +417,28 @@ export default function OrgUsersPage() {
                         <Mail className="h-4 w-4" />
                         <span className="text-base">{u.email}</span>
                       </div>
+                      {u.phone ? (
+                        <div className="text-gray-600 flex items-center gap-1.5 text-sm">
+                          <Phone className="h-4 w-4" />
+                          <span>{u.phone}</span>
+                        </div>
+                      ) : (
+                        <div className="text-gray-400 text-sm flex items-center gap-1.5">
+                          <Phone className="h-4 w-4" />
+                          <span>No phone</span>
+                        </div>
+                      )}
+                      {u.cnic ? (
+                        <div className="text-gray-600 flex items-center gap-1.5 text-sm">
+                          <Fingerprint className="h-4 w-4" />
+                          <span>{u.cnic}</span>
+                        </div>
+                      ) : (
+                        <div className="text-gray-400 text-sm flex items-center gap-1.5">
+                          <Fingerprint className="h-4 w-4" />
+                          <span>No CNIC</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-4">
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium">

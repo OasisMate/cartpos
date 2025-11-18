@@ -22,7 +22,7 @@ export async function GET() {
     where: { orgId },
     include: {
       user: {
-        select: { id: true, name: true, email: true, role: true },
+        select: { id: true, name: true, email: true, phone: true, cnic: true, role: true },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -40,6 +40,8 @@ export async function GET() {
     id: ou.user.id,
     name: ou.user.name,
     email: ou.user.email,
+    phone: ou.user.phone,
+    cnic: ou.user.cnic,
     platformRole: ou.user.role,
     orgRole: ou.orgRole,
     shops: userShops
