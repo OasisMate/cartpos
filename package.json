@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "create-admin": "tsx scripts/create-admin-user.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "cross-env PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
@@ -33,6 +33,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.0",
+    "cross-env": "^10.1.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.0",
     "next-pwa": "^5.6.0",
