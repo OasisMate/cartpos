@@ -35,7 +35,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Extract context from URL if Platform Admin viewing org/store
   const orgIdMatch = pathname?.match(/\/org\/([^\/]+)/)
-  const storeIdMatch = pathname?.match(/\/stores\/([^\/]+)/)
+  // Match store ID in pattern: /org/[orgId]/stores/[storeId]
+  const storeIdMatch = pathname?.match(/\/org\/[^\/]+\/stores\/([^\/]+)/)
   const contextOrgId = orgIdMatch ? orgIdMatch[1] : null
   const contextStoreId = storeIdMatch ? storeIdMatch[1] : null
 

@@ -174,8 +174,8 @@ export default function OrganizationsPage() {
       // Refresh user context
       await refreshUser()
       
-      // Redirect to org dashboard
-      router.push('/org')
+      // Redirect to org dashboard with explicit orgId
+      router.push(`/org/${orgId}`)
       router.refresh()
     } catch (e: any) {
       setError(e.message || 'Failed to enter organization')
