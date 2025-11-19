@@ -1,6 +1,9 @@
 -- Rename SHOP_OWNER enum value to STORE_MANAGER
+-- This migration safely renames the enum value if it exists
+
 DO $$
 BEGIN
+  -- Check if SHOP_OWNER exists and rename it
   IF EXISTS (
     SELECT 1
     FROM pg_enum e
@@ -11,17 +14,3 @@ BEGIN
     ALTER TYPE "ShopRole" RENAME VALUE 'SHOP_OWNER' TO 'STORE_MANAGER';
   END IF;
 END $$;
-
--- Rename SHOP_OWNER enum value to STORE_MANAGER
--- This migration creates a new enum with the desired values, migrates the data, then swaps it in.
-
-CREATE TYPE "ShopRole_new" AS ENUM ('STORE_MANAGER', 'CASHIER');
-
-ALTER TABLE "UserShop"
-  ALTER COLUMN "shopRole" TYPE "ShopRole_new"
-  USING ("shopRole"::text::"ShopRole_new");
-
-ALTER TYPE "ShopRole" RENAME TO "ShopRole_old";
-ALTER TYPE "ShopRole_new" RENAME TO "ShopRole";
-DROP TYPE "ShopRole_old";
-

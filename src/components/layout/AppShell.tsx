@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sidebar, SidebarBody, SidebarLink } from '@/components/ui/sidebar'
@@ -15,7 +15,6 @@ import {
   Package,
   TrendingUp,
   Receipt,
-  DollarSign,
   Truck,
   FileText,
 } from 'lucide-react'
@@ -26,12 +25,20 @@ interface NavLink {
   label: string
   href: string
   icon: React.ReactNode
+  indent?: number
+}
+
+interface NavGroup {
+  title?: string
+  links: NavLink[]
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, logout, selectOrg, selectShop } = useAuth()
   const [open, setOpen] = useState(false)
+  const [orgMeta, setOrgMeta] = useState<{ id: string; name: string } | null>(null)
+  const [storeMeta, setStoreMeta] = useState<{ id: string; name: string } | null>(null)
 
   // Extract context from URL if Platform Admin viewing org/store
   const orgIdMatch = pathname?.match(/\/org\/([^\/]+)/)
@@ -41,8 +48,46 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const contextStoreId = storeIdMatch ? storeIdMatch[1] : null
 
   // Navigation links - show based on user role and context
-  const getNavLinks = (): NavLink[] => {
-    const links: NavLink[] = []
+  useEffect(() => {
+    async function fetchOrgMeta(orgId: string) {
+      try {
+        const res = await fetch(`/api/admin/organizations/${orgId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        setOrgMeta({ id: data.organization.id, name: data.organization.name })
+      } catch (error) {
+        console.error('Failed to load org metadata', error)
+      }
+    }
+
+    if (user?.role === 'PLATFORM_ADMIN' && contextOrgId) {
+      fetchOrgMeta(contextOrgId)
+    } else {
+      setOrgMeta(null)
+    }
+  }, [contextOrgId, user?.role])
+
+  useEffect(() => {
+    async function fetchStoreMeta(storeId: string) {
+      try {
+        const res = await fetch(`/api/admin/shops/${storeId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        setStoreMeta({ id: data.shop.id, name: data.shop.name })
+      } catch (error) {
+        console.error('Failed to load store metadata', error)
+      }
+    }
+
+    if (user?.role === 'PLATFORM_ADMIN' && contextStoreId) {
+      fetchStoreMeta(contextStoreId)
+    } else if (!contextStoreId) {
+      setStoreMeta(null)
+    }
+  }, [contextStoreId, user?.role])
+
+  const getNavGroups = (): NavGroup[] => {
+    const groups: NavGroup[] = []
 
     const isOrgAdmin = user?.organizations?.some(
       (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
@@ -58,227 +103,252 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     // CASHIER: Limited navigation
     if (isCashier && user?.role !== 'PLATFORM_ADMIN' && !isOrgAdmin && !isStoreManager) {
-      links.push({
+      groups.push({
+        links: [
+          {
         label: 'My Dashboard',
         href: '/cashier/dashboard',
         icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
+          },
+          {
         label: 'POS',
         href: '/pos',
         icon: <ShoppingCart className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+        ],
       })
-      return links
+      return groups
     }
 
     // PLATFORM ADMIN: Context-aware navigation
     if (user?.role === 'PLATFORM_ADMIN') {
-      links.push({
-        label: 'Dashboard',
-        href: '/admin',
-        icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-
-      // Platform admin viewing a specific store
-      if (contextOrgId && contextStoreId) {
-        links.push({
-          label: '← Back to Org',
-          href: `/org/${contextOrgId}`,
-          icon: <Building2 className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        
-        // Store-level navigation
-        links.push({
-          label: 'Store Dashboard',
-          href: `/org/${contextOrgId}/stores/${contextStoreId}`,
-          icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'POS',
-          href: `/org/${contextOrgId}/stores/${contextStoreId}/pos`,
-          icon: <ShoppingCart className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Products',
-          href: `/org/${contextOrgId}/stores/${contextStoreId}/products`,
-          icon: <Package className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Sales',
-          href: `/org/${contextOrgId}/stores/${contextStoreId}/sales`,
-          icon: <TrendingUp className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Purchases',
-          href: `/org/${contextOrgId}/stores/${contextStoreId}/purchases`,
-          icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Customers',
-          href: `/org/${contextOrgId}/stores/${contextStoreId}/customers`,
-          icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Suppliers',
-          href: `/org/${contextOrgId}/stores/${contextStoreId}/suppliers`,
-          icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Reports',
-          href: `/org/${contextOrgId}/stores/${contextStoreId}/reports`,
-          icon: <FileText className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-      }
-      // Platform admin viewing a specific org (but not store)
-      else if (contextOrgId && !contextStoreId) {
-        links.push({
-          label: '← Back to Admin',
+      const adminLinks: NavLink[] = [
+        {
+          label: 'Dashboard',
           href: '/admin',
-          icon: <Building2 className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-
-        links.push({
-          label: 'Org Dashboard',
-          href: `/org/${contextOrgId}`,
           icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Stores',
-          href: `/org/${contextOrgId}/stores`,
-          icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Users',
-          href: `/org/${contextOrgId}/users`,
-          icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-      }
-      // Platform admin on main admin pages
-      else {
-        links.push({
+        },
+        {
           label: 'Organizations',
           href: '/admin/organizations',
           icon: <Building2 className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
+        },
+        {
           label: 'Users',
           href: '/admin/users',
           icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
-        links.push({
-          label: 'Shops',
-          href: '/admin/shops',
-          icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-        })
+        },
+        {
+          label: 'Settings',
+          href: '/settings',
+          icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        },
+      ]
+
+      if (contextOrgId) {
+        const orgName = orgMeta?.name || 'Organization'
+        const orgChildren: NavLink[] = [
+          {
+            label: `${orgName} · Org Dashboard`,
+            href: `/org/${contextOrgId}`,
+            icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+            indent: 1,
+          },
+          {
+            label: `${orgName} · Stores`,
+            href: `/org/${contextOrgId}/stores`,
+            icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+            indent: 1,
+          },
+          {
+            label: `${orgName} · Users`,
+            href: `/org/${contextOrgId}/users`,
+            icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+            indent: 1,
+          },
+        ]
+
+        const orgIndex = adminLinks.findIndex((link) => link.href === '/admin/organizations')
+        adminLinks.splice(orgIndex + 1, 0, ...orgChildren)
+
+        if (contextStoreId) {
+          const storeName = storeMeta?.name || 'Store'
+          const storeChildren: NavLink[] = [
+            {
+              label: `${storeName} · Store Dashboard`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}`,
+              icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+            {
+              label: `${storeName} · POS`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}/pos`,
+              icon: <ShoppingCart className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+            {
+              label: `${storeName} · Products`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}/products`,
+              icon: <Package className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+            {
+              label: `${storeName} · Sales`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}/sales`,
+              icon: <TrendingUp className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+            {
+              label: `${storeName} · Purchases`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}/purchases`,
+              icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+            {
+              label: `${storeName} · Customers`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}/customers`,
+              icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+            {
+              label: `${storeName} · Suppliers`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}/suppliers`,
+              icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+            {
+              label: `${storeName} · Udhaar`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}/udhaar`,
+              icon: <Receipt className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+            {
+              label: `${storeName} · Reports`,
+              href: `/org/${contextOrgId}/stores/${contextStoreId}/reports`,
+              icon: <FileText className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+              indent: 2,
+            },
+          ]
+
+          const insertIndex = orgIndex + 1 + orgChildren.length
+          adminLinks.splice(insertIndex, 0, ...storeChildren)
+        }
       }
 
-      links.push({
-        label: 'Settings',
-        href: '/settings',
-        icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-
-      return links
+      groups.push({ links: adminLinks })
+      return groups
     }
 
     // ORG ADMIN: Organization-level navigation
     if (isOrgAdmin && user?.currentOrgId) {
-      links.push({
-        label: 'Dashboard',
-        href: '/org',
-        icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Stores',
-        href: '/org/shops',
-        icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Users',
-        href: '/org/users',
-        icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Settings',
-        href: '/settings',
-        icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      groups.push({
+        links: [
+          {
+            label: 'Dashboard',
+            href: '/org',
+            icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Stores',
+            href: '/org/shops',
+            icon: <Store className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Users',
+            href: '/org/users',
+            icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Settings',
+            href: '/settings',
+            icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+        ],
       })
 
-      return links
+      return groups
     }
 
     // STORE MANAGER: Store-level navigation
     if (isStoreManager && user?.currentShopId) {
-      links.push({
-        label: 'Dashboard',
-        href: '/store',
-        icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'POS',
-        href: '/store/pos',
-        icon: <ShoppingCart className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Products',
-        href: '/store/products',
-        icon: <Package className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Sales',
-        href: '/store/sales',
-        icon: <TrendingUp className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Purchases',
-        href: '/store/purchases',
-        icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Customers',
-        href: '/store/customers',
-        icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Suppliers',
-        href: '/store/suppliers',
-        icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Udhaar',
-        href: '/store/udhaar',
-        icon: <Receipt className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Reports',
-        href: '/store/reports',
-        icon: <FileText className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-      })
-      links.push({
-        label: 'Settings',
-        href: '/settings',
-        icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+      groups.push({
+        links: [
+          {
+            label: 'Dashboard',
+            href: '/store',
+            icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'POS',
+            href: '/store/pos',
+            icon: <ShoppingCart className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Products',
+            href: '/store/products',
+            icon: <Package className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Sales',
+            href: '/store/sales',
+            icon: <TrendingUp className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Purchases',
+            href: '/store/purchases',
+            icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Customers',
+            href: '/store/customers',
+            icon: <Users className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Suppliers',
+            href: '/store/suppliers',
+            icon: <Truck className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Udhaar',
+            href: '/store/udhaar',
+            icon: <Receipt className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Reports',
+            href: '/store/reports',
+            icon: <FileText className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Settings',
+            href: '/settings',
+            icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+          },
+        ],
       })
 
-      return links
+      return groups
     }
 
     // DEFAULT: Basic navigation
-    links.push({
-      label: 'Dashboard',
-      href: '/',
-      icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-    })
-    links.push({
-      label: 'Settings',
-      href: '/settings',
-      icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+    groups.push({
+      links: [
+        {
+          label: 'Dashboard',
+          href: '/',
+          icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        },
+        {
+          label: 'Settings',
+          href: '/settings',
+          icon: <Settings className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        },
+      ],
     })
 
-    return links
+    return groups
   }
 
-  const navLinks = getNavLinks()
+  const navGroups = getNavGroups()
 
   // Check if a link is active
   const isActive = (href: string) => {
@@ -307,19 +377,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Logo showText={open} />
 
             {/* Navigation Links */}
-            <div className="mt-8 flex flex-col gap-2">
-              {navLinks.map((link) => (
-                <SidebarLink
-                  key={link.href}
-                  link={link}
-                  className={cn(
-                    'rounded-lg transition-all duration-200',
-                    'border-0 outline-0 ring-0 shadow-none before:hidden after:hidden',
-                    isActive(link.href)
-                      ? 'bg-orange-500 text-white [&_svg]:text-white'
-                      : 'text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+            <div className="mt-8 flex flex-col gap-5">
+              {navGroups.map((group, index) => (
+                <div key={group.title || `group-${index}`} className="flex flex-col gap-2">
+                  {group.title && open && (
+                    <div className="px-3 text-xs font-semibold uppercase tracking-wide text-blue-500">
+                      {group.title}
+                    </div>
                   )}
-                />
+                  {group.links.map((link) => (
+                    <SidebarLink
+                      key={link.href}
+                      link={link}
+                      className={cn(
+                        'rounded-lg transition-all duration-200',
+                        'border-0 outline-0 ring-0 shadow-none before:hidden after:hidden',
+                        isActive(link.href)
+                          ? 'bg-orange-500 text-white [&_svg]:text-white'
+                          : 'text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+                      )}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
           </div>

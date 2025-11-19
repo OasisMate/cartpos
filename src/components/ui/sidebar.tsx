@@ -9,6 +9,7 @@ interface Links {
   label: string;
   href: string;
   icon: React.JSX.Element | React.ReactNode;
+  indent?: number;
 }
 
 interface SidebarContextProps {
@@ -155,6 +156,8 @@ export const SidebarLink = ({
   props?: LinkProps;
 }) => {
   const { open, animate } = useSidebar();
+  const indentOffset = open ? (link.indent ?? 0) * 12 : 0;
+  const isSubLink = (link.indent ?? 0) > 0;
   return (
     <Link
       href={link.href}
@@ -166,16 +169,24 @@ export const SidebarLink = ({
       )}
       aria-label={link.label}
       title={!open ? link.label : undefined}
+      style={
+        open && indentOffset > 0
+          ? { paddingLeft: `${12 + indentOffset}px`, paddingRight: "12px" }
+          : undefined
+      }
       {...props}
     >
-      <div className={cn("flex-shrink-0", open ? "" : "w-full flex justify-center")}>
-        <div className={cn("transition-all duration-200", open ? "" : "scale-125")}>
-          {link.icon}
+      {!isSubLink && (
+        <div className={cn("flex-shrink-0", open ? "" : "w-full flex justify-center")}>
+          <div className={cn("transition-all duration-200", open ? "" : "scale-125")}>
+            {link.icon}
+          </div>
         </div>
-      </div>
+      )}
       <span
         className={cn(
-          "text-gray-700 text-base font-medium group-hover/sidebar:translate-x-1 transition-all duration-300 ease-in-out whitespace-pre inline-block overflow-hidden",
+          "text-gray-700 font-medium group-hover/sidebar:translate-x-1 transition-all duration-300 ease-in-out whitespace-pre inline-block overflow-hidden",
+          isSubLink ? "text-sm text-gray-600" : "text-base",
           animate && !open ? "w-0 opacity-0 max-w-0" : "w-auto opacity-100 max-w-[200px]"
         )}
       >

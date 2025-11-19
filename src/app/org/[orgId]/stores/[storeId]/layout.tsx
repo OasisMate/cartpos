@@ -1,8 +1,10 @@
 import { ReactNode } from 'react'
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
+import { Breadcrumb } from '@/components/layout/Breadcrumb'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 
 interface StoreLayoutProps {
   children: ReactNode
@@ -41,29 +43,28 @@ export default async function OrgStoreLayout({ children, params }: StoreLayoutPr
     redirect('/')
   }
 
-  const cookieStore = cookies()
-  cookieStore.set('currentOrgId', orgId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-  })
-  cookieStore.set('currentShopId', storeId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-  })
+  // Note: Cookies are set via API routes when users select org/shop
+  // Layouts cannot modify cookies - they can only read them
+  // For Platform Admin, orgId and storeId come from URL params, not cookies
 
   return (
-    <div>
-      <div className="mb-6 text-sm text-[hsl(var(--muted-foreground))]">
-        <a href={`/org/${orgId}`} className="hover:underline font-semibold text-[hsl(var(--foreground))]">
-          {org.name}
-        </a>
-        <span className="mx-2">›</span>
-        <span className="font-semibold text-[hsl(var(--foreground))]">{store.name}</span>
-      </div>
+    <div className="space-y-6">
+      <Breadcrumb
+        prefix={isPlatformAdmin ? 'Platform Admin · Store' : 'Store'}
+        items={[
+          { label: org.name, href: `/org/${orgId}` },
+          { label: store.name },
+        ]}
+        actions={
+          <Link
+            href={`/org/${orgId}`}
+            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm transition hover:bg-blue-50"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Org
+          </Link>
+        }
+      />
       {children}
     </div>
   )

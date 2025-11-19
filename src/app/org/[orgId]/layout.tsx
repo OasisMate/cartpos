@@ -1,8 +1,8 @@
 import { ReactNode } from 'react'
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
+import { Breadcrumb } from '@/components/layout/Breadcrumb'
 
 interface OrgLayoutProps {
   children: ReactNode
@@ -32,24 +32,16 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     redirect('/waiting-approval')
   }
 
-  const cookieStore = cookies()
-  cookieStore.set('currentOrgId', orgId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-  })
-
-  // Clear shop context when entering org scope; store layout will set it again when needed
-  if (cookieStore.get('currentShopId')) {
-    cookieStore.delete('currentShopId')
-  }
+  // Note: Cookies are set via API route (/api/org/select) when Platform Admin clicks "Enter Org"
+  // Layouts cannot modify cookies - they can only read them
+  // For Platform Admin, orgId comes from URL params, not cookies
 
   return (
-    <div>
-      <div className="mb-6 text-sm text-[hsl(var(--muted-foreground))]">
-        <span className="font-semibold text-[hsl(var(--foreground))]">{org.name}</span>
-      </div>
+    <div className="space-y-6">
+      <Breadcrumb
+        prefix={isPlatformAdmin ? 'Platform Admin · Organization' : 'Organization'}
+        items={[{ label: org.name }]}
+      />
       {children}
     </div>
   )

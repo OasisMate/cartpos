@@ -171,12 +171,11 @@ export default function OrganizationsPage() {
         throw new Error(data.error || 'Failed to enter organization')
       }
 
-      // Refresh user context
+      // Refresh user context to get updated cookie
       await refreshUser()
       
-      // Redirect to org dashboard with explicit orgId
+      // Navigate to org dashboard with explicit orgId (client-side navigation, no reload)
       router.push(`/org/${orgId}`)
-      router.refresh()
     } catch (e: any) {
       setError(e.message || 'Failed to enter organization')
       setEnteringOrgId(null)
