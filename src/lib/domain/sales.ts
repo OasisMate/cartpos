@@ -91,7 +91,16 @@ export async function createSale(
     throw new Error('One or more products not found or do not belong to this shop')
   }
 
+  // Get shop settings to check negative stock policy
+  const shopSettings = await prisma.shopSettings.findUnique({
+    where: { shopId },
+  })
+
+  const allowNegativeStock = shopSettings?.allowNegativeStock ?? true // Default: allow
+
   // Validate quantities and check stock for products that track stock
+  const stockWarnings: Array<{ productName: string; available: number; requested: number }> = []
+  
   for (const item of input.items) {
     if (!item.quantity || item.quantity <= 0) {
       throw new Error('All items must have a quantity greater than 0')
@@ -101,10 +110,24 @@ export async function createSale(
     if (product.trackStock) {
       const currentStock = await getProductStock(shopId, item.productId)
       if (currentStock < item.quantity) {
-        throw new Error(`Insufficient stock for ${product.name}. Available: ${currentStock}`)
+        // If negative stock not allowed, block the sale
+        if (!allowNegativeStock) {
+          throw new Error(
+            `Insufficient stock for ${product.name}. Available: ${currentStock.toFixed(2)} ${product.unit}, Requested: ${item.quantity} ${product.unit}. Negative stock is not allowed for this shop.`
+          )
+        }
+        // If allowed, collect warning but proceed
+        stockWarnings.push({
+          productName: product.name,
+          available: currentStock,
+          requested: item.quantity,
+        })
       }
     }
   }
+
+  // If there are stock warnings and negative stock is allowed, we'll include them in the response
+  // but still proceed with the sale
 
   // Validate totals (basic validation)
   const calculatedSubtotal = input.items.reduce(
@@ -195,7 +218,7 @@ export async function createSale(
     }
 
     // Return invoice with lines
-    return await tx.invoice.findUnique({
+    const invoiceWithDetails = await tx.invoice.findUnique({
       where: { id: invoice.id },
       include: {
         lines: {
@@ -213,9 +236,14 @@ export async function createSale(
         },
       },
     })
+
+    return {
+      invoice: invoiceWithDetails!,
+      stockWarnings: stockWarnings.length > 0 ? stockWarnings : undefined,
+    }
   })
 
-  return invoice!
+  return invoice
 }
 
 export async function listSales(shopId: string, filters: {

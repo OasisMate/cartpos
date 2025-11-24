@@ -24,9 +24,21 @@ export function isPlatformAdmin(user: UserContext): boolean {
  */
 export function isOrgAdmin(user: UserContext, orgId: string): boolean {
   if (isPlatformAdmin(user)) return true
-  return user.organizations?.some(
+  
+  // Check if user has ORG_ADMIN role for this organization
+  const hasOrgAdminRole = user.organizations?.some(
     (o) => o.orgId === orgId && o.orgRole === 'ORG_ADMIN'
   ) ?? false
+  
+  // Also check if currentOrgId matches and user has org admin role
+  if (user.currentOrgId === orgId) {
+    const currentOrg = user.organizations?.find((o) => o.orgId === orgId)
+    if (currentOrg?.orgRole === 'ORG_ADMIN') {
+      return true
+    }
+  }
+  
+  return hasOrgAdminRole
 }
 
 /**

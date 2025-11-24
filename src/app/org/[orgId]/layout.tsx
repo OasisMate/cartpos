@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { Breadcrumb } from '@/components/layout/Breadcrumb'
+import { canManageOrgUsers } from '@/lib/permissions'
 
 interface OrgLayoutProps {
   children: ReactNode
@@ -17,7 +18,27 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
   const orgId = params.orgId
   const isPlatformAdmin = user.role === 'PLATFORM_ADMIN'
-  const isOrgAdmin = user.organizations?.some((o: any) => o.orgId === orgId && o.orgRole === 'ORG_ADMIN')
+  
+  // CRITICAL: Store managers and cashiers should NOT access org routes
+  // Check if user has shop roles (store manager or cashier)
+  const hasShopRole = user.shops && user.shops.length > 0
+  const isStoreManager = user.shops?.some((s: any) => s.shopRole === 'STORE_MANAGER')
+  const isCashier = user.shops?.some((s: any) => s.shopRole === 'CASHIER')
+  
+  // If user is ONLY a store manager or cashier (no org admin role), block access
+  if ((isStoreManager || isCashier) && !isPlatformAdmin) {
+    const isOrgAdmin = canManageOrgUsers(user, orgId)
+    if (!isOrgAdmin) {
+      // Redirect to their shop dashboard
+      const firstShop = user.shops?.[0]
+      if (firstShop) {
+        redirect('/store')
+      }
+      redirect('/')
+    }
+  }
+  
+  const isOrgAdmin = canManageOrgUsers(user, orgId)
 
   if (!isPlatformAdmin && !isOrgAdmin) {
     redirect('/')

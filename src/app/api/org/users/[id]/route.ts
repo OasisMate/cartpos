@@ -3,15 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizePhone, validatePhone, normalizeCNIC, validateCNIC } from '@/lib/validation'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
-
-function ensureOrgAdmin(user: any) {
-  const isOrgAdmin = user?.organizations?.some(
-    (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
-  )
-  if (!isOrgAdmin && user?.role !== 'PLATFORM_ADMIN') {
-    throw new Error('FORBIDDEN')
-  }
-}
+import { canManageOrgUsers, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
 
 // GET: Get user details
 export async function GET(
@@ -19,13 +11,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  
-  try {
-    ensureOrgAdmin(user)
-  } catch {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!user) return UnauthorizedResponse()
 
   const userId = params.id
   const orgId = user.currentOrgId
@@ -34,8 +20,36 @@ export async function GET(
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
   }
 
+  // Check permission using the permissions utility
+  // Also verify directly from database as fallback
+  let hasPermission = canManageOrgUsers(user, orgId)
+  
+  if (!hasPermission) {
+    // Fallback: Check directly from database
+    const [orgUserCheck, orgCheck] = await Promise.all([
+      prisma.organizationUser.findFirst({
+        where: {
+          userId: user.id,
+          orgId: orgId,
+          orgRole: 'ORG_ADMIN',
+        },
+      }),
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { requestedBy: true },
+      }),
+    ])
+    
+    // User is org admin OR user created the organization OR platform admin
+    hasPermission = !!orgUserCheck || orgCheck?.requestedBy === user.id || user.role === 'PLATFORM_ADMIN'
+  }
+  
+  if (!hasPermission) {
+    return ForbiddenResponse('Only Org Admins can view user details')
+  }
+
   try {
-    // Verify user belongs to organization
+    // Check if user belongs to organization (either via OrganizationUser or via shops)
     const orgUser = await prisma.organizationUser.findFirst({
       where: {
         userId,
@@ -57,8 +71,23 @@ export async function GET(
       },
     })
 
-    if (!orgUser) {
-      return NextResponse.json({ error: 'User not found in organization' }, { status: 404 })
+    // Get user directly if not in organization table (might be shop-only user)
+    const userData = orgUser?.user || await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        cnic: true,
+        isWhatsApp: true,
+        role: true,
+        createdAt: true,
+      },
+    })
+
+    if (!userData) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Get shop assignments
@@ -78,16 +107,21 @@ export async function GET(
     // Filter shops that belong to this organization
     const orgShops = userShops.filter((us) => us.shop.orgId === orgId)
 
+    // Verify user has at least one shop in this org or is an org user
+    if (orgShops.length === 0 && !orgUser) {
+      return NextResponse.json({ error: 'User not found in organization' }, { status: 404 })
+    }
+
     return NextResponse.json({
       user: {
-        id: orgUser.user.id,
-        name: orgUser.user.name,
-        email: orgUser.user.email,
-        phone: orgUser.user.phone,
-        cnic: orgUser.user.cnic,
-        isWhatsApp: orgUser.user.isWhatsApp,
-        platformRole: orgUser.user.role,
-        orgRole: orgUser.orgRole,
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        cnic: userData.cnic,
+        isWhatsApp: userData.isWhatsApp,
+        platformRole: userData.role,
+        orgRole: orgUser?.orgRole || null,
         shops: orgShops.map((us) => ({
           shopId: us.shopId,
           shopRole: us.shopRole,
@@ -96,7 +130,7 @@ export async function GET(
             name: us.shop.name,
           },
         })),
-        createdAt: orgUser.user.createdAt,
+        createdAt: userData.createdAt,
       },
     })
   } catch (error) {
@@ -111,13 +145,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  
-  try {
-    ensureOrgAdmin(user)
-  } catch {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!user) return UnauthorizedResponse()
 
   const userId = params.id
   const orgId = user.currentOrgId
@@ -126,11 +154,39 @@ export async function PUT(
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
   }
 
+  // Check permission using the permissions utility
+  // Also verify directly from database as fallback
+  let hasPermission = canManageOrgUsers(user, orgId)
+  
+  if (!hasPermission) {
+    // Fallback: Check directly from database
+    const [orgUserCheck, orgCheck] = await Promise.all([
+      prisma.organizationUser.findFirst({
+        where: {
+          userId: user.id,
+          orgId: orgId,
+          orgRole: 'ORG_ADMIN',
+        },
+      }),
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { requestedBy: true },
+      }),
+    ])
+    
+    // User is org admin OR user created the organization OR platform admin
+    hasPermission = !!orgUserCheck || orgCheck?.requestedBy === user.id || user.role === 'PLATFORM_ADMIN'
+  }
+  
+  if (!hasPermission) {
+    return ForbiddenResponse('Only Org Admins can update users')
+  }
+
   try {
     const body = await request.json()
     const { name, phone, cnic, isWhatsApp, orgRole } = body
 
-    // Verify user belongs to organization
+    // Check if user belongs to organization (either via OrganizationUser or via shops)
     const orgUser = await prisma.organizationUser.findFirst({
       where: {
         userId,
@@ -141,17 +197,37 @@ export async function PUT(
       },
     })
 
-    if (!orgUser) {
+    // Get user directly
+    const userData = orgUser?.user || await prisma.user.findUnique({
+      where: { id: userId },
+    })
+
+    if (!userData) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    // Verify user has shops in this org or is an org user
+    const userShopsInOrg = await prisma.userShop.findMany({
+      where: { userId },
+      include: {
+        shop: {
+          select: { orgId: true },
+        },
+      },
+    })
+
+    const hasOrgShop = userShopsInOrg.some((us) => us.shop.orgId === orgId)
+    if (!orgUser && !hasOrgShop) {
       return NextResponse.json({ error: 'User not found in organization' }, { status: 404 })
     }
 
     // Get old values for activity log
     const oldUser = {
-      name: orgUser.user.name,
-      phone: orgUser.user.phone,
-      cnic: orgUser.user.cnic,
-      isWhatsApp: orgUser.user.isWhatsApp,
-      orgRole: orgUser.orgRole,
+      name: userData.name,
+      phone: userData.phone,
+      cnic: userData.cnic,
+      isWhatsApp: userData.isWhatsApp,
+      orgRole: orgUser?.orgRole || null,
     }
 
     const updateData: any = {}
@@ -163,8 +239,9 @@ export async function PUT(
       updateData.name = name.trim()
     }
 
+    // Allow updating phone - only validate format if provided, allow clearing
     if (phone !== undefined) {
-      if (phone) {
+      if (phone && phone.trim()) {
         const normalizedPhone = normalizePhone(phone, 'PK')
         if (!normalizedPhone || !validatePhone(phone, 'PK')) {
           return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 })
@@ -180,12 +257,14 @@ export async function PUT(
 
         updateData.phone = normalizedPhone
       } else {
+        // Allow clearing phone
         updateData.phone = null
       }
     }
 
+    // Allow updating CNIC - only validate format if provided, allow clearing
     if (cnic !== undefined) {
-      if (cnic) {
+      if (cnic && cnic.trim()) {
         const normalizedCnic = normalizeCNIC(cnic)
         if (!normalizedCnic || !validateCNIC(cnic)) {
           return NextResponse.json({ error: 'Invalid CNIC format. CNIC must be 13 digits.' }, { status: 400 })
@@ -200,6 +279,7 @@ export async function PUT(
 
         updateData.cnic = normalizedCnic
       } else {
+        // Allow clearing CNIC
         updateData.cnic = null
       }
     }
@@ -216,15 +296,33 @@ export async function PUT(
 
     // Update org role if provided
     if (orgRole !== undefined) {
-      await prisma.organizationUser.update({
-        where: {
-          userId_orgId: {
+      if (orgRole) {
+        // Create or update organization user
+        await prisma.organizationUser.upsert({
+          where: {
+            userId_orgId: {
+              userId,
+              orgId,
+            },
+          },
+          create: {
+            userId,
+            orgId,
+            orgRole,
+          },
+          update: {
+            orgRole,
+          },
+        })
+      } else {
+        // Remove org role if set to null/empty
+        await prisma.organizationUser.deleteMany({
+          where: {
             userId,
             orgId,
           },
-        },
-        data: { orgRole },
-      })
+        })
+      }
     }
 
     // Log activity
@@ -275,19 +373,41 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  
-  try {
-    ensureOrgAdmin(user)
-  } catch {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!user) return UnauthorizedResponse()
 
   const userId = params.id
   const orgId = user.currentOrgId
 
   if (!orgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
+  }
+
+  // Check permission using the permissions utility
+  // Also verify directly from database as fallback
+  let hasPermission = canManageOrgUsers(user, orgId)
+  
+  if (!hasPermission) {
+    // Fallback: Check directly from database
+    const [orgUserCheck, orgCheck] = await Promise.all([
+      prisma.organizationUser.findFirst({
+        where: {
+          userId: user.id,
+          orgId: orgId,
+          orgRole: 'ORG_ADMIN',
+        },
+      }),
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { requestedBy: true },
+      }),
+    ])
+    
+    // User is org admin OR user created the organization OR platform admin
+    hasPermission = !!orgUserCheck || orgCheck?.requestedBy === user.id || user.role === 'PLATFORM_ADMIN'
+  }
+  
+  if (!hasPermission) {
+    return ForbiddenResponse('Only Org Admins can remove users')
   }
 
   try {

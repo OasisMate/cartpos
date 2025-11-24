@@ -2,6 +2,8 @@ import { SignJWT, jwtVerify } from 'jose'
 import bcrypt from 'bcryptjs'
 import { prisma } from './db/prisma'
 import { cookies } from 'next/headers'
+import { isDatabaseConnectionError } from './db/db-utils'
+import { withRetry } from './db/connection-retry'
 
 const secretKey = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 const encodedKey = new TextEncoder().encode(secretKey)
@@ -69,61 +71,77 @@ export async function getSession(): Promise<{
 }
 
 export async function getCurrentUser() {
-  const session = await getSession()
-  if (!session) {
-    return null
-  }
+  try {
+    const session = await getSession()
+    if (!session) {
+      return null
+    }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    include: {
-      organizations: {
-        include: {
-          organization: true,
-        },
-      },
-      shops: {
-        include: {
-          shop: true,
-        },
-      },
-    },
-  })
+    // Use retry logic for database connection issues
+    const user = await withRetry(
+      () =>
+        prisma.user.findUnique({
+          where: { id: session.userId },
+          include: {
+            organizations: {
+              include: {
+                organization: true,
+              },
+            },
+            shops: {
+              include: {
+                shop: true,
+              },
+            },
+          },
+        }),
+      { maxRetries: 2, initialDelay: 200 }
+    )
 
-  if (!user) {
-    return null
-  }
+    if (!user) {
+      return null
+    }
 
-  const organizations = user.organizations.map((ou) => ({
-    orgId: ou.orgId,
-    orgRole: ou.orgRole,
-    organization: ou.organization,
-  }))
+    const organizations = user.organizations.map((ou) => ({
+      orgId: ou.orgId,
+      orgRole: ou.orgRole,
+      organization: ou.organization,
+    }))
 
-  const shops = user.shops.map((us) => ({
-    shopId: us.shopId,
-    shopRole: us.shopRole,
-    shop: us.shop,
-  }))
+    const shops = user.shops.map((us) => ({
+      shopId: us.shopId,
+      shopRole: us.shopRole,
+      shop: us.shop,
+    }))
 
-  // Get current shop from cookie (or default to first shop)
-  const cookieStore = await cookies()
-  const currentOrgId =
-    cookieStore.get('currentOrgId')?.value || organizations[0]?.orgId || null
-  const currentShopId = cookieStore.get('currentShopId')?.value || shops[0]?.shopId || null
+    // Get current shop from cookie (or default to first shop)
+    const cookieStore = await cookies()
+    const currentOrgId =
+      cookieStore.get('currentOrgId')?.value || organizations[0]?.orgId || null
+    const currentShopId = cookieStore.get('currentShopId')?.value || shops[0]?.shopId || null
 
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
-    cnic: user.cnic,
-    isWhatsApp: user.isWhatsApp,
-    role: user.role,
-    organizations,
-    currentOrgId,
-    shops,
-    currentShopId,
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      cnic: user.cnic,
+      isWhatsApp: user.isWhatsApp,
+      role: user.role,
+      organizations,
+      currentOrgId,
+      shops,
+      currentShopId,
+    }
+  } catch (error) {
+    // Log database connection errors but don't crash
+    if (isDatabaseConnectionError(error)) {
+      console.error('Database connection error in getCurrentUser:', error)
+      // Return null to trigger redirect to login
+      return null
+    }
+    // Re-throw other errors
+    throw error
   }
 }
 

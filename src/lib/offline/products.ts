@@ -9,6 +9,8 @@ export interface Product {
   unit: string
   price: number
   trackStock: boolean
+  cartonSize?: number | null
+  cartonBarcode?: string | null
 }
 
 /**
@@ -61,6 +63,8 @@ export async function getProductsWithCache(shopId: string, isOnline: boolean): P
         unit: p.unit,
         price: p.price,
         trackStock: p.trackStock,
+        cartonSize: p.cartonSize,
+        cartonBarcode: p.cartonBarcode,
       }))
     }
   } else {
@@ -73,6 +77,8 @@ export async function getProductsWithCache(shopId: string, isOnline: boolean): P
       unit: p.unit,
       price: p.price,
       trackStock: p.trackStock,
+      cartonSize: p.cartonSize,
+      cartonBarcode: p.cartonBarcode,
     }))
   }
 }

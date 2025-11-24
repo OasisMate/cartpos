@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
@@ -21,6 +22,7 @@ interface LoginFormData {
 export default function Login() {
   const router = useRouter()
   const { refreshUser } = useAuth()
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
   const { values, error, loading, handleChange, handleSubmit, setError } = useForm<LoginFormData>({
     initialValues: {
@@ -35,17 +37,28 @@ export default function Login() {
         })
 
         await refreshUser()
+        
+        // Set redirecting state to keep loader active
+        setIsRedirecting(true)
+        
+        // Navigate and wait for it to complete
         router.push('/')
         router.refresh()
+        
+        // Keep loading state active - it will be cleared when component unmounts on redirect
       } catch (err: any) {
+        setIsRedirecting(false)
         setError(err.message || 'Login failed. Please check your credentials.')
         throw err
       }
     },
   })
 
+  // Combined loading state - true if form is loading OR redirecting
+  const isLoading = loading || isRedirecting
+
   return (
-    <div className="w-full min-h-screen flex flex-col md:flex-row">
+    <div className="w-full min-h-screen flex flex-col md:flex-row" dir="ltr">
       <AuthHero {...AUTH_HERO.login} />
 
       <AuthFormContainer {...AUTH_FORM.login}>
@@ -59,7 +72,7 @@ export default function Login() {
             onChange={handleChange('identifier')}
             placeholder="Enter your email, phone, or CNIC"
             required
-            disabled={loading}
+            disabled={isLoading}
             autoComplete="username"
           />
 
@@ -70,7 +83,7 @@ export default function Login() {
             onChange={handleChange('password')}
             placeholder="Enter your password"
             required
-            disabled={loading}
+            disabled={isLoading}
             autoComplete="current-password"
           />
 
@@ -84,7 +97,7 @@ export default function Login() {
             </label>
           </div>
 
-          <SubmitButton loading={loading} loadingText="Signing in...">
+          <SubmitButton loading={isLoading} loadingText={isRedirecting ? "Redirecting..." : "Signing in..."}>
             Sign In
           </SubmitButton>
 

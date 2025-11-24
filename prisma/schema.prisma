@@ -1,6 +1,12 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Optional: Use direct connection for migrations if needed
+  // directUrl = env("DIRECT_URL")
+  // Connection pooling is handled via DATABASE_URL parameters:
+  // - Use port 6543 for connection pooler (recommended)
+  // - Add pgbouncer=true parameter
+  // - Set connection_limit=10 (adjust based on your Supabase plan)
 }
 
 generator client {
@@ -84,6 +90,7 @@ model Shop {
   stockLedger StockLedger[]
   payments    Payment[]
   customerLedger CustomerLedger[]
+  expenses    Expense[]
   activityLogs ActivityLog[]
 
   @@index([orgId, name])
@@ -105,6 +112,7 @@ model User {
   createdInvoices  Invoice[]   @relation("InvoiceCreatedBy")
   createdPurchases Purchase[]  @relation("PurchaseCreatedBy")
   passwordResets   PasswordResetToken[]
+  expenses         Expense[]
   activityLogs     ActivityLog[]
 
   @@index([phone])
@@ -177,6 +185,7 @@ model ShopSettings {
   requireCostPriceForStockItems   Boolean       @default(false)
   requireBarcodeForProducts       Boolean       @default(false)
   allowCustomUnits                Boolean       @default(true)
+  allowNegativeStock              Boolean       @default(true)  // Allow sales even if stock is insufficient
   languageMode                    LanguageMode  @default(EN_BILINGUAL)
   shop                            Shop          @relation(fields: [shopId], references: [id])
 }
@@ -203,6 +212,8 @@ model Product {
   category     String?
   trackStock   Boolean        @default(true)
   reorderLevel Int?
+  cartonSize   Int?
+  cartonBarcode String?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   shop         Shop           @relation(fields: [shopId], references: [id])
@@ -234,6 +245,10 @@ enum StockMoveType {
   PURCHASE
   SALE
   ADJUSTMENT
+  DAMAGE
+  EXPIRY
+  RETURN
+  SELF_USE
 }
 
 // -----------------------------------------------------
@@ -402,6 +417,27 @@ model Payment {
   customer    Customer?       @relation(fields: [customerId], references: [id])
 
   @@index([shopId, createdAt])
+}
+
+// -----------------------------------------------------
+// Expenses
+// -----------------------------------------------------
+
+model Expense {
+  id          String   @id @default(cuid())
+  shopId      String
+  userId      String
+  amount      Decimal  @db.Decimal(10, 2)
+  category    String
+  description String?
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([shopId, date])
 }
 
 // -----------------------------------------------------

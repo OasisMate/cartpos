@@ -52,7 +52,7 @@ export default function UserDetailPage() {
     phone: '',
     cnic: '',
     isWhatsApp: false,
-    orgRole: 'ORG_ADMIN',
+    orgRole: null as string | null,
   })
 
   const [assignData, setAssignData] = useState({
@@ -74,7 +74,7 @@ export default function UserDetailPage() {
         phone: data.user.phone || '',
         cnic: data.user.cnic || '',
         isWhatsApp: data.user.isWhatsApp || false,
-        orgRole: data.user.orgRole || 'ORG_ADMIN',
+        orgRole: data.user.orgRole || null,
       })
     } catch (e: any) {
       setError(e.message || 'Failed to load user')
@@ -111,10 +111,10 @@ export default function UserDetailPage() {
     try {
       const payload = {
         name: formData.name,
-        phone: formData.phone?.trim() || '',
-        cnic: formData.cnic?.trim() || '',
+        phone: formData.phone?.trim() || null,
+        cnic: formData.cnic?.trim() || null,
         isWhatsApp: formData.isWhatsApp,
-        orgRole: formData.orgRole,
+        orgRole: formData.orgRole || null,
       }
 
       const res = await fetch(`/api/org/users/${userId}`, {
@@ -355,13 +355,17 @@ export default function UserDetailPage() {
                     Organization Role
                   </label>
                   <select
-                    value={formData.orgRole}
-                    onChange={(e) => setFormData({ ...formData, orgRole: e.target.value })}
+                    value={formData.orgRole || ''}
+                    onChange={(e) => setFormData({ ...formData, orgRole: e.target.value || null })}
                     disabled={saving}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
                   >
+                    <option value="">No Org Role (Shop Only)</option>
                     <option value="ORG_ADMIN">Org Admin</option>
                   </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Users can have shop roles without an organization role
+                  </p>
                 </div>
 
                 <div className="flex gap-3 pt-4">
@@ -424,9 +428,15 @@ export default function UserDetailPage() {
                 <div>
                   <span className="text-sm font-medium text-gray-700">Organization Role:</span>
                   <p className="text-gray-900">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium">
-                      {userData.orgRole === 'ORG_ADMIN' ? 'Org Admin' : userData.orgRole}
-                    </span>
+                    {userData.orgRole ? (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium">
+                        {userData.orgRole === 'ORG_ADMIN' ? 'Org Admin' : userData.orgRole}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-sm font-medium">
+                        No Org Role (Shop Only)
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div>
@@ -545,7 +555,11 @@ export default function UserDetailPage() {
               <div>
                 <span className="text-sm text-gray-600">Role:</span>
                 <p className="font-semibold text-gray-900">
-                  {userData.orgRole === 'ORG_ADMIN' ? 'Org Admin' : userData.orgRole}
+                  {userData.orgRole ? (
+                    userData.orgRole === 'ORG_ADMIN' ? 'Org Admin' : userData.orgRole
+                  ) : (
+                    'Shop Only'
+                  )}
                 </p>
               </div>
             </div>

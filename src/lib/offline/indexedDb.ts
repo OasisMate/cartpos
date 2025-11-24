@@ -15,7 +15,35 @@ export interface CachedProduct {
   unit: string
   price: number
   trackStock: boolean
+  cartonSize?: number | null
+  cartonBarcode?: string | null
   updatedAt: number // timestamp
+}
+
+// Stock Adjustment store type
+export interface CachedStockAdjustment {
+  id: string
+  shopId: string
+  productId: string
+  quantity: number
+  type: 'DAMAGE' | 'EXPIRY' | 'RETURN' | 'SELF_USE' | 'ADJUSTMENT'
+  notes?: string
+  createdAt: number
+  syncStatus: 'PENDING' | 'SYNCED'
+  syncError?: string
+}
+
+// Expense store type
+export interface CachedExpense {
+  id: string
+  shopId: string
+  category: string
+  amount: number
+  description?: string
+  date: number
+  createdAt: number
+  syncStatus: 'PENDING' | 'SYNCED'
+  syncError?: string
 }
 
 // Customer store type
@@ -97,6 +125,27 @@ class CartPOSDatabase extends Dexie {
       purchases: 'id, shopId, syncStatus, createdAt', // new purchases store
       udhaarPayments: 'id, shopId, customerId, syncStatus, createdAt', // new payments store
     })
+    this.version(4).stores({
+      meta: 'key',
+      products: 'id, shopId, barcode, updatedAt',
+      customers: 'id, shopId, name, phone, syncStatus, updatedAt',
+      suppliers: 'id, shopId, name, syncStatus, updatedAt',
+      sales: 'id, shopId, syncStatus, createdAt',
+      purchases: 'id, shopId, syncStatus, createdAt',
+      udhaarPayments: 'id, shopId, customerId, syncStatus, createdAt',
+      stockAdjustments: 'id, shopId, syncStatus, createdAt', // new stock adjustments store
+    })
+    this.version(5).stores({
+      meta: 'key',
+      products: 'id, shopId, barcode, updatedAt',
+      customers: 'id, shopId, name, phone, syncStatus, updatedAt',
+      suppliers: 'id, shopId, name, syncStatus, updatedAt',
+      sales: 'id, shopId, syncStatus, createdAt',
+      purchases: 'id, shopId, syncStatus, createdAt',
+      udhaarPayments: 'id, shopId, customerId, syncStatus, createdAt',
+      stockAdjustments: 'id, shopId, syncStatus, createdAt',
+      expenses: 'id, shopId, syncStatus, createdAt', // new expenses store
+    })
   }
 }
 
@@ -139,21 +188,21 @@ export async function saveProducts(shopId: string, products: Omit<CachedProduct,
 export async function getProducts(shopId: string): Promise<CachedProduct[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   return await db.products.where('shopId').equals(shopId).toArray()
 }
 
 export async function getProductByBarcode(shopId: string, barcode: string): Promise<CachedProduct | undefined> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return undefined
-  
+
   return await db.products.where('[shopId+barcode]').equals([shopId, barcode]).first()
 }
 
 export async function searchProducts(shopId: string, searchTerm: string): Promise<CachedProduct[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   const term = searchTerm.toLowerCase()
   const products = await db.products.where('shopId').equals(shopId).toArray()
 
@@ -186,7 +235,7 @@ export async function saveCustomers(shopId: string, customers: Omit<CachedCustom
 export async function getCustomers(shopId: string): Promise<CachedCustomer[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   return await db.customers.where('shopId').equals(shopId).toArray()
 }
 
@@ -223,7 +272,7 @@ export async function saveSuppliers(shopId: string, suppliers: Omit<CachedSuppli
 export async function getSuppliers(shopId: string): Promise<CachedSupplier[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   return await db.suppliers.where('shopId').equals(shopId).toArray()
 }
 
@@ -241,7 +290,7 @@ export async function addSale(sale: Omit<CachedSale, 'createdAt' | 'syncStatus'>
 export async function getPendingSales(shopId: string): Promise<CachedSale[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   return await db.sales
     .where('[shopId+syncStatus]')
     .equals([shopId, 'PENDING'])
@@ -251,7 +300,7 @@ export async function getPendingSales(shopId: string): Promise<CachedSale[]> {
 export async function getSales(shopId: string): Promise<CachedSale[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   return await db.sales.where('shopId').equals(shopId).toArray()
 }
 
@@ -306,7 +355,7 @@ export async function addPurchaseLocal(purchase: Omit<CachedPurchase, 'createdAt
 export async function getPendingPurchases(shopId: string): Promise<CachedPurchase[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   return await (db as any).purchases.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
 }
 
@@ -322,7 +371,7 @@ export async function markPurchaseSyncError(id: string, error: string): Promise<
 export async function getPendingCustomers(shopId: string): Promise<CachedCustomer[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   return await db.customers
     .where('[shopId+syncStatus]')
     .equals([shopId, 'PENDING'])
@@ -354,6 +403,8 @@ export interface CachedUdhaarPayment {
 declare module 'dexie' {
   interface Dexie {
     udhaarPayments: Table<CachedUdhaarPayment, string>
+    stockAdjustments: Table<CachedStockAdjustment, string>
+    expenses: Table<CachedExpense, string>
   }
 }
 
@@ -369,7 +420,7 @@ export async function addUdhaarPaymentLocal(payment: Omit<CachedUdhaarPayment, '
 export async function getPendingUdhaarPayments(shopId: string): Promise<CachedUdhaarPayment[]> {
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return []
-  
+
   return await (db as any).udhaarPayments.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
 }
 
@@ -379,4 +430,54 @@ export async function markUdhaarPaymentAsSynced(id: string): Promise<void> {
 
 export async function markUdhaarPaymentSyncError(id: string, error: string): Promise<void> {
   await (db as any).udhaarPayments.update(id, { syncError: error })
+}
+
+// Helper functions for stock adjustments store
+export async function addStockAdjustmentLocal(adjustment: Omit<CachedStockAdjustment, 'createdAt' | 'syncStatus'>) {
+  const record: CachedStockAdjustment = {
+    ...adjustment,
+    createdAt: Date.now(),
+    syncStatus: 'PENDING',
+  }
+  await (db as any).stockAdjustments.add(record)
+}
+
+export async function getPendingStockAdjustments(shopId: string): Promise<CachedStockAdjustment[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+
+  return await (db as any).stockAdjustments.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
+}
+
+export async function markStockAdjustmentAsSynced(id: string): Promise<void> {
+  await (db as any).stockAdjustments.update(id, { syncStatus: 'SYNCED', syncError: undefined })
+}
+
+export async function markStockAdjustmentSyncError(id: string, error: string): Promise<void> {
+  await (db as any).stockAdjustments.update(id, { syncError: error })
+}
+
+// Helper functions for expenses store
+export async function addExpenseLocal(expense: Omit<CachedExpense, 'createdAt' | 'syncStatus'>) {
+  const record: CachedExpense = {
+    ...expense,
+    createdAt: Date.now(),
+    syncStatus: 'PENDING',
+  }
+  await (db as any).expenses.add(record)
+}
+
+export async function getPendingExpenses(shopId: string): Promise<CachedExpense[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+
+  return await (db as any).expenses.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
+}
+
+export async function markExpenseAsSynced(id: string): Promise<void> {
+  await (db as any).expenses.update(id, { syncStatus: 'SYNCED', syncError: undefined })
+}
+
+export async function markExpenseSyncError(id: string, error: string): Promise<void> {
+  await (db as any).expenses.update(id, { syncError: error })
 }

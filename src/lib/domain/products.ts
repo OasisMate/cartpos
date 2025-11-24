@@ -192,8 +192,38 @@ export async function listProducts(shopId: string, filters: ProductFilters = {})
     prisma.product.count({ where }),
   ])
 
+  // Get stock for all products efficiently
+  const productIds = products.map((p) => p.id)
+  const stockMap = new Map<string, number>()
+
+  if (productIds.length > 0) {
+    // Fetch all stock ledger entries for these products in one query
+    const stockEntries = await prisma.stockLedger.findMany({
+      where: {
+        shopId,
+        productId: { in: productIds },
+      },
+      select: {
+        productId: true,
+        changeQty: true,
+      },
+    })
+
+    // Aggregate stock by productId
+    stockEntries.forEach((entry) => {
+      const current = stockMap.get(entry.productId) || 0
+      stockMap.set(entry.productId, current + parseFloat(entry.changeQty.toString()))
+    })
+  }
+
+  // Add stock to products
+  const productsWithStock = products.map((product) => ({
+    ...product,
+    stock: product.trackStock ? (stockMap.get(product.id) || 0) : null,
+  }))
+
   return {
-    products,
+    products: productsWithStock,
     pagination: {
       page,
       limit,

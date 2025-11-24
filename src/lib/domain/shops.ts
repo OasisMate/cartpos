@@ -74,6 +74,7 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
         requireCostPriceForStockItems: false,
         requireBarcodeForProducts: false,
         allowCustomUnits: true,
+        allowNegativeStock: true, // Default: allow negative stock
         languageMode: 'EN_BILINGUAL',
       },
     })

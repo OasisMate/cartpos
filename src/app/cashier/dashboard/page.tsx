@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import CashierDashboardClient from './CashierDashboardClient'
 
 export default async function CashierDashboardPage() {
   const user = await getCurrentUser()
@@ -38,22 +39,18 @@ export default async function CashierDashboardPage() {
   const today = new Date(new Date().toDateString())
 
   // Get cashier's personal stats
-  const [myInvoicesToday, myTotalSalesToday, lowStockProducts] = await Promise.all([
-    prisma.invoice.count({
+  const [invoices, lowStockProducts] = await Promise.all([
+    prisma.invoice.findMany({
       where: {
         shopId,
         createdByUserId: user.id,
         createdAt: { gte: today },
         status: 'COMPLETED',
       },
-    }),
-    prisma.invoice.aggregate({
-      _sum: { total: true },
-      where: {
-        shopId,
-        createdByUserId: user.id,
-        createdAt: { gte: today },
-        status: 'COMPLETED',
+      select: {
+        total: true,
+        paymentStatus: true,
+        paymentMethod: true,
       },
     }),
     prisma.product.findMany({
@@ -71,60 +68,29 @@ export default async function CashierDashboardPage() {
     }),
   ])
 
+  const summary = invoices.reduce(
+    (acc, inv) => {
+      const amount = Number(inv.total)
+      acc.totalSales += amount
+      acc.invoiceCount += 1
+
+      if (inv.paymentStatus === 'UDHAAR') {
+        acc.udhaarSales += amount
+      } else if (inv.paymentStatus === 'PAID') {
+        if (inv.paymentMethod === 'CASH') acc.cashSales += amount
+        else if (inv.paymentMethod === 'CARD') acc.cardSales += amount
+        else acc.cashSales += amount // Treat OTHER as Cash for now
+      }
+      return acc
+    },
+    { totalSales: 0, cashSales: 0, cardSales: 0, udhaarSales: 0, invoiceCount: 0 }
+  )
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-2">My Dashboard</h1>
-      <p className="text-[hsl(var(--muted-foreground))] mb-6">
-        Your performance today at {shop?.name}
-      </p>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">My Sales Today</div>
-            <div className="text-2xl font-semibold">{myInvoicesToday}</div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Total Amount</div>
-            <div className="text-2xl font-semibold">
-              {Number(myTotalSalesToday._sum.total || 0).toFixed(2)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {lowStockProducts.length > 0 && (
-        <div className="card">
-          <div className="card-body">
-            <h2 className="font-semibold text-lg mb-4">Low Stock Alert</h2>
-            <div className="space-y-2">
-              {lowStockProducts.map((product) => (
-                <div
-                  key={product.id}
-                  className="flex justify-between items-center p-2 bg-[hsl(var(--muted))] rounded"
-                >
-                  <span className="font-medium">{product.name}</span>
-                  <span className="text-sm text-[hsl(var(--muted-foreground))]">
-                    Reorder at: {product.reorderLevel}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6">
-        <a
-          href="/pos"
-          className="block w-full md:w-auto text-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-        >
-          Open POS
-        </a>
-      </div>
-    </div>
+    <CashierDashboardClient
+      shopName={shop?.name}
+      summary={summary}
+      lowStockProducts={lowStockProducts}
+    />
   )
 }
-

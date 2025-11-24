@@ -3,7 +3,9 @@ import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { SyncBootstrapper } from '@/components/SyncBootstrapper'
 import { ToastProvider } from '@/components/ui/ToastProvider'
+import { LanguageProvider } from '@/contexts/LanguageContext'
 import ConditionalLayout from '@/components/layout/ConditionalLayout'
+import { DirectionSetter } from '@/components/layout/DirectionSetter'
 
 export const metadata: Metadata = {
   title: 'CartPOS',
@@ -29,16 +31,19 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="bg-gray-50">
-                <ToastProvider>
-                  <AuthProvider>
-                    <SyncBootstrapper />
-                    <ConditionalLayout>
-                      {children}
-                    </ConditionalLayout>
-                  </AuthProvider>
-                </ToastProvider>
+        <DirectionSetter />
+        <ToastProvider>
+          <AuthProvider>
+            <LanguageProvider>
+              <SyncBootstrapper />
+              <ConditionalLayout>
+                {children}
+              </ConditionalLayout>
+            </LanguageProvider>
+          </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   )

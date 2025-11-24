@@ -19,6 +19,9 @@ interface Product {
   category: string | null
   trackStock: boolean
   reorderLevel: number | null
+  cartonSize: number | null
+  cartonBarcode: string | null
+  stock: number | null
   createdAt: string
   updatedAt: string
 }
@@ -60,9 +63,20 @@ export default function ProductsPage() {
     category: '',
     trackStock: true,
     reorderLevel: '',
+    cartonSize: '',
+    cartonBarcode: '',
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
+  const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null)
+  const [adjustmentData, setAdjustmentData] = useState({
+    type: 'ADJUSTMENT' as 'ADJUSTMENT' | 'DAMAGE' | 'EXPIRY' | 'RETURN' | 'SELF_USE',
+    quantity: '',
+    notes: '',
+  })
+  const [adjusting, setAdjusting] = useState(false)
+  const [adjustmentError, setAdjustmentError] = useState('')
 
   const fetchProducts = useCallback(async () => {
     if (!user?.currentShopId) return
@@ -108,6 +122,8 @@ export default function ProductsPage() {
       category: '',
       trackStock: true,
       reorderLevel: '',
+      cartonSize: '',
+      cartonBarcode: '',
     })
     setError('')
     setShowForm(true)
@@ -125,6 +141,8 @@ export default function ProductsPage() {
       category: product.category || '',
       trackStock: product.trackStock,
       reorderLevel: product.reorderLevel?.toString() || '',
+      cartonSize: product.cartonSize?.toString() || '',
+      cartonBarcode: product.cartonBarcode || '',
     })
     setError('')
     setShowForm(true)
@@ -153,6 +171,8 @@ export default function ProductsPage() {
       if (formData.costPrice) payload.costPrice = formData.costPrice
       if (formData.category) payload.category = formData.category
       if (formData.reorderLevel) payload.reorderLevel = formData.reorderLevel
+      if (formData.cartonSize) payload.cartonSize = formData.cartonSize
+      if (formData.cartonBarcode) payload.cartonBarcode = formData.cartonBarcode
 
       const response = await fetch(url, {
         method,
@@ -187,6 +207,77 @@ export default function ProductsPage() {
     e.preventDefault()
     setCurrentPage(1)
     fetchProducts()
+  }
+
+  const openAdjustmentModal = (product: Product) => {
+    if (!product.trackStock) {
+      show({ title: 'Error', message: 'This product does not track stock', variant: 'destructive' })
+      return
+    }
+    setAdjustingProduct(product)
+    setAdjustmentData({
+      type: 'ADJUSTMENT',
+      quantity: '',
+      notes: '',
+    })
+    setShowAdjustmentModal(true)
+  }
+
+  const closeAdjustmentModal = () => {
+    setShowAdjustmentModal(false)
+    setAdjustingProduct(null)
+    setAdjustmentData({
+      type: 'ADJUSTMENT',
+      quantity: '',
+      notes: '',
+    })
+    setAdjustmentError('')
+  }
+
+  const handleAdjustmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!adjustingProduct) return
+
+    const quantity = parseFloat(adjustmentData.quantity)
+    if (isNaN(quantity) || quantity === 0) {
+      setAdjustmentError('Quantity must be a non-zero number')
+      return
+    }
+
+    setAdjusting(true)
+    setAdjustmentError('')
+
+    try {
+      const response = await fetch('/api/stock-adjustments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: adjustingProduct.id,
+          type: adjustmentData.type,
+          quantity: quantity,
+          notes: adjustmentData.notes || undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to adjust stock')
+      }
+
+      const result = await response.json()
+      show({
+        title: 'Success',
+        message: `Stock adjusted successfully. New stock: ${result.newStock.toFixed(2)} ${adjustingProduct.unit}`,
+        variant: 'success',
+      })
+
+      closeAdjustmentModal()
+      fetchProducts() // Refresh products list
+    } catch (err: any) {
+      setAdjustmentError(err.message || 'Failed to adjust stock')
+    } finally {
+      setAdjusting(false)
+    }
   }
 
   if (!user?.currentShopId) {
@@ -338,6 +429,31 @@ export default function ProductsPage() {
                 </div>
               </div>
 
+              {/* Carton / Packing Section */}
+              <div className="mt-6 border-t pt-4">
+                <h3 className="text-sm font-semibold mb-3 text-gray-700">Carton / Packing Details</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Items per Carton</label>
+                    <Input
+                      type="number"
+                      placeholder="e.g. 12"
+                      value={formData.cartonSize}
+                      onChange={(e) => setFormData({ ...formData, cartonSize: e.target.value })}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Leave empty if not applicable</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Carton Barcode</label>
+                    <Input
+                      placeholder="Scan carton barcode"
+                      value={formData.cartonBarcode}
+                      onChange={(e) => setFormData({ ...formData, cartonBarcode: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="mt-4">
                 <label className="flex items-center gap-2">
                   <input
@@ -391,6 +507,7 @@ export default function ProductsPage() {
                   <TH className="text-right">Price</TH>
                   <TH className="text-right">Cost Price</TH>
                   <TH>Category</TH>
+                  <TH className="text-center">Stock</TH>
                   <TH className="text-center">Track Stock</TH>
                   <TH className="text-right">Reorder Level</TH>
                   <TH className="text-center">Actions</TH>
@@ -398,34 +515,71 @@ export default function ProductsPage() {
               </THead>
               <tbody>
                 {products.length === 0 ? (
-                  <EmptyRow colSpan={10} message="No products" />
+                  <EmptyRow colSpan={11} message="No products" />
                 ) : (
-                  products.map((product) => (
-                    <TR key={product.id}>
-                      <TD>{product.name}</TD>
-                      <TD>{product.sku || '-'}</TD>
-                      <TD>{product.barcode || '-'}</TD>
-                      <TD>{product.unit}</TD>
-                      <TD className="text-right">{parseFloat(product.price).toFixed(2)}</TD>
-                      <TD className="text-right">
-                        {product.costPrice ? parseFloat(product.costPrice).toFixed(2) : '-'}
-                      </TD>
-                      <TD>{product.category || '-'}</TD>
-                      <TD className="text-center">
-                        {product.trackStock ? (
-                          <span className="text-green-600">Yes</span>
-                        ) : (
-                          <span className="text-[hsl(var(--muted-foreground))]">No</span>
-                        )}
-                      </TD>
-                      <TD className="text-right">{product.reorderLevel || '-'}</TD>
-                      <TD className="text-center">
-                        <Button variant="outline" onClick={() => openEditForm(product)} size="sm">
-                          Edit
-                        </Button>
-                      </TD>
-                    </TR>
-                  ))
+                  products.map((product) => {
+                    const stock = product.stock ?? 0
+                    const isLowStock = product.trackStock && 
+                      product.reorderLevel !== null && 
+                      stock <= product.reorderLevel
+                    const isOutOfStock = product.trackStock && stock <= 0
+                    
+                    return (
+                      <TR key={product.id}>
+                        <TD>{product.name}</TD>
+                        <TD>{product.sku || '-'}</TD>
+                        <TD>{product.barcode || '-'}</TD>
+                        <TD>{product.unit}</TD>
+                        <TD className="text-right">{parseFloat(product.price).toFixed(2)}</TD>
+                        <TD className="text-right">
+                          {product.costPrice ? parseFloat(product.costPrice).toFixed(2) : '-'}
+                        </TD>
+                        <TD>{product.category || '-'}</TD>
+                        <TD className="text-center">
+                          {product.trackStock ? (
+                            <span className={
+                              isOutOfStock 
+                                ? 'text-red-600 font-semibold' 
+                                : isLowStock 
+                                  ? 'text-orange-600 font-medium' 
+                                  : 'text-green-600'
+                            }>
+                              {stock.toFixed(2)} {product.unit}
+                              {isOutOfStock && ' (Out)'}
+                              {isLowStock && !isOutOfStock && ' (Low)'}
+                            </span>
+                          ) : (
+                            <span className="text-[hsl(var(--muted-foreground))]">-</span>
+                          )}
+                        </TD>
+                        <TD className="text-center">
+                          {product.trackStock ? (
+                            <span className="text-green-600">Yes</span>
+                          ) : (
+                            <span className="text-[hsl(var(--muted-foreground))]">No</span>
+                          )}
+                        </TD>
+                        <TD className="text-right">{product.reorderLevel || '-'}</TD>
+                        <TD className="text-center">
+                          <div className="flex gap-2 justify-center">
+                            {product.trackStock && (
+                              <Button 
+                                variant="outline" 
+                                onClick={() => openAdjustmentModal(product)} 
+                                size="sm"
+                                className="text-xs"
+                              >
+                                Adjust Stock
+                              </Button>
+                            )}
+                            <Button variant="outline" onClick={() => openEditForm(product)} size="sm">
+                              Edit
+                            </Button>
+                          </div>
+                        </TD>
+                      </TR>
+                    )
+                  })
                 )}
               </tbody>
             </Table>
@@ -459,6 +613,106 @@ export default function ProductsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Stock Adjustment Modal */}
+      {showAdjustmentModal && adjustingProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Adjust Stock</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Product: <span className="font-semibold">{adjustingProduct.name}</span>
+            </p>
+            <p className="text-sm text-gray-600 mb-4">
+              Current Stock: <span className="font-semibold">
+                {(adjustingProduct.stock ?? 0).toFixed(2)} {adjustingProduct.unit}
+              </span>
+            </p>
+
+            {adjustmentError && (
+              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+                {adjustmentError}
+              </div>
+            )}
+
+            <form onSubmit={handleAdjustmentSubmit}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Adjustment Type <span className="text-red-500">*</span>
+                  </label>
+                  <Select
+                    value={adjustmentData.type}
+                    onChange={(e) => setAdjustmentData({
+                      ...adjustmentData,
+                      type: e.target.value as any,
+                    })}
+                    required
+                  >
+                    <option value="ADJUSTMENT">General Adjustment</option>
+                    <option value="DAMAGE">Damage</option>
+                    <option value="EXPIRY">Expiry</option>
+                    <option value="RETURN">Return</option>
+                    <option value="SELF_USE">Self Use</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Quantity <span className="text-red-500">*</span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      (Positive to add, negative to reduce)
+                    </span>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={adjustmentData.quantity}
+                    onChange={(e) => setAdjustmentData({
+                      ...adjustmentData,
+                      quantity: e.target.value,
+                    })}
+                    placeholder="e.g., 10 or -5"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Example: +10 to add 10 units, -5 to reduce 5 units
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    value={adjustmentData.notes}
+                    onChange={(e) => setAdjustmentData({
+                      ...adjustmentData,
+                      notes: e.target.value,
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    rows={3}
+                    placeholder="Reason for adjustment..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end mt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeAdjustmentModal}
+                  disabled={adjusting}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={adjusting}>
+                  {adjusting ? 'Adjusting...' : 'Adjust Stock'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -11,6 +11,7 @@ interface Product {
   name: string
   unit: string
   price: string
+  cartonSize: number | null
 }
 
 interface Supplier {
@@ -22,6 +23,7 @@ interface PurchaseLine {
   productId: string
   quantity: string
   unitCost: string
+  unit: 'piece' | 'carton'
 }
 
 interface Purchase {
@@ -83,6 +85,16 @@ export default function PurchasesPage() {
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showQuickAddProduct, setShowQuickAddProduct] = useState(false)
+  const [quickAddProductData, setQuickAddProductData] = useState({
+    name: '',
+    unit: 'pcs',
+    price: '',
+    costPrice: '',
+    barcode: '',
+    trackStock: true,
+  })
+  const [addingProduct, setAddingProduct] = useState(false)
 
   // Per-page sync removed; handled by global background sync orchestrator
 
@@ -141,13 +153,81 @@ export default function PurchasesPage() {
     }
   }
 
+  async function handleQuickAddProduct() {
+    if (!quickAddProductData.name || !quickAddProductData.price) {
+      setError('Product name and price are required')
+      return
+    }
+
+    setAddingProduct(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: quickAddProductData.name,
+          unit: quickAddProductData.unit,
+          price: parseFloat(quickAddProductData.price),
+          costPrice: quickAddProductData.costPrice ? parseFloat(quickAddProductData.costPrice) : undefined,
+          barcode: quickAddProductData.barcode || undefined,
+          trackStock: quickAddProductData.trackStock,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to create product')
+      }
+
+      const data = await response.json()
+      
+      // Refresh products list
+      await fetchProducts()
+      
+      // Add the new product to the current purchase line
+      const newLines = [...formData.lines]
+      const emptyLineIndex = newLines.findIndex(line => !line.productId)
+      if (emptyLineIndex >= 0) {
+        newLines[emptyLineIndex].productId = data.product.id
+        if (quickAddProductData.costPrice) {
+          newLines[emptyLineIndex].unitCost = quickAddProductData.costPrice
+        }
+      } else {
+        newLines.push({
+          productId: data.product.id,
+          quantity: '',
+          unitCost: quickAddProductData.costPrice || '',
+          unit: 'piece',
+        })
+      }
+      setFormData({ ...formData, lines: newLines })
+
+      // Close quick add modal
+      setShowQuickAddProduct(false)
+      setQuickAddProductData({
+        name: '',
+        unit: 'pcs',
+        price: '',
+        costPrice: '',
+        barcode: '',
+        trackStock: true,
+      })
+    } catch (err: any) {
+      setError(err.message || 'Failed to create product')
+    } finally {
+      setAddingProduct(false)
+    }
+  }
+
   function openCreateForm() {
     setFormData({
       supplierId: '',
       date: new Date().toISOString().split('T')[0],
       reference: '',
       notes: '',
-      lines: [{ productId: '', quantity: '', unitCost: '' }],
+      lines: [{ productId: '', quantity: '', unitCost: '', unit: 'piece' }],
     })
     setError('')
     setShowForm(true)
@@ -156,7 +236,7 @@ export default function PurchasesPage() {
   function addLine() {
     setFormData({
       ...formData,
-      lines: [...formData.lines, { productId: '', quantity: '', unitCost: '' }],
+      lines: [...formData.lines, { productId: '', quantity: '', unitCost: '', unit: 'piece' }],
     })
   }
 
@@ -169,6 +249,7 @@ export default function PurchasesPage() {
 
   function updateLine(index: number, field: keyof PurchaseLine, value: string) {
     const newLines = [...formData.lines]
+    // @ts-ignore
     newLines[index] = { ...newLines[index], [field]: value }
     setFormData({ ...formData, lines: newLines })
   }
@@ -206,7 +287,9 @@ export default function PurchasesPage() {
         notes: formData.notes || undefined,
         lines: validLines.map((line) => ({
           productId: line.productId,
-          quantity: parseFloat(line.quantity),
+          quantity: line.unit === 'carton'
+            ? parseFloat(line.quantity) * (products.find(p => p.id === line.productId)?.cartonSize || 1)
+            : parseFloat(line.quantity),
           unitCost: line.unitCost ? parseFloat(line.unitCost) : undefined,
         })),
       }
@@ -216,15 +299,25 @@ export default function PurchasesPage() {
 
       // Attempt sync if online
       if (typeof navigator !== 'undefined' && navigator.onLine) {
-        await syncPendingPurchasesBatch(user.currentShopId)
+        try {
+          const syncResult = await syncPendingPurchasesBatch(user.currentShopId)
+          if (syncResult.failed > 0) {
+            console.warn(`Some purchases failed to sync: ${syncResult.failed} failed`)
+            // Don't throw error, purchase is saved locally and will retry
+          }
+        } catch (syncErr: any) {
+          console.error('Sync error:', syncErr)
+          // Don't throw - purchase is saved locally, will sync later
+        }
       }
 
       // Reset form and refresh list
       setShowForm(false)
       await fetchPurchases()
       router.refresh()
-    } catch (err) {
-      setError('An error occurred. Please try again.')
+    } catch (err: any) {
+      console.error('Purchase submission error:', err)
+      setError(err.message || err.error || 'An error occurred. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -343,34 +436,57 @@ export default function PurchasesPage() {
                       {formData.lines.map((line, index) => (
                         <tr key={index}>
                           <td className="border p-2">
-                            <select
-                              required={index === 0}
-                              value={line.productId}
-                              onChange={(e) =>
-                                updateLine(index, 'productId', e.target.value)
-                              }
-                              className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            >
-                              <option value="">Select product</option>
-                              {products.map((product) => (
-                                <option key={product.id} value={product.id}>
-                                  {product.name} ({product.unit})
-                                </option>
-                              ))}
-                            </select>
+                            <div className="flex gap-1">
+                              <select
+                                required={index === 0}
+                                value={line.productId}
+                                onChange={(e) =>
+                                  updateLine(index, 'productId', e.target.value)
+                                }
+                                className="flex-1 px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="">Select product...</option>
+                                {products.map((product) => (
+                                  <option key={product.id} value={product.id}>
+                                    {product.name} ({product.unit})
+                                    {product.cartonSize
+                                      ? ` [Carton: ${product.cartonSize}]`
+                                      : ''}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => setShowQuickAddProduct(true)}
+                                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap"
+                                title="Quick Add Product"
+                              >
+                                + New Product
+                              </button>
+                            </div>
                           </td>
                           <td className="border p-2">
-                            <input
-                              type="number"
-                              step="0.001"
-                              required={index === 0}
-                              value={line.quantity}
-                              onChange={(e) =>
-                                updateLine(index, 'quantity', e.target.value)
-                              }
-                              className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="0"
-                            />
+                            <div className="flex gap-1">
+                              <input
+                                type="number"
+                                step="0.001"
+                                required={index === 0}
+                                value={line.quantity}
+                                onChange={(e) =>
+                                  updateLine(index, 'quantity', e.target.value)
+                                }
+                                className="w-20 px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Qty"
+                              />
+                              <select
+                                value={line.unit}
+                                onChange={(e) => updateLine(index, 'unit', e.target.value as 'piece' | 'carton')}
+                                className="w-24 px-1 py-1 border rounded text-sm bg-gray-50"
+                              >
+                                <option value="piece">Piece</option>
+                                <option value="carton">Carton</option>
+                              </select>
+                            </div>
                           </td>
                           <td className="border p-2">
                             <input
@@ -422,6 +538,149 @@ export default function PurchasesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Product Modal */}
+      {showQuickAddProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Quick Add Product</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Create a product quickly and add it to this purchase
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Product Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={quickAddProductData.name}
+                  onChange={(e) =>
+                    setQuickAddProductData({ ...quickAddProductData, name: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter product name"
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Unit <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={quickAddProductData.unit}
+                    onChange={(e) =>
+                      setQuickAddProductData({ ...quickAddProductData, unit: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="pcs">pcs</option>
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="L">L</option>
+                    <option value="mL">mL</option>
+                    <option value="pack">pack</option>
+                    <option value="box">box</option>
+                    <option value="dozen">dozen</option>
+                    <option value="piece">piece</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Sale Price <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={quickAddProductData.price}
+                    onChange={(e) =>
+                      setQuickAddProductData({ ...quickAddProductData, price: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Cost Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={quickAddProductData.costPrice}
+                    onChange={(e) =>
+                      setQuickAddProductData({ ...quickAddProductData, costPrice: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Optional"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Barcode</label>
+                  <input
+                    type="text"
+                    value={quickAddProductData.barcode}
+                    onChange={(e) =>
+                      setQuickAddProductData({ ...quickAddProductData, barcode: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={quickAddProductData.trackStock}
+                    onChange={(e) =>
+                      setQuickAddProductData({ ...quickAddProductData, trackStock: e.target.checked })
+                    }
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Track Stock</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickAddProduct(false)
+                  setQuickAddProductData({
+                    name: '',
+                    unit: 'pcs',
+                    price: '',
+                    costPrice: '',
+                    barcode: '',
+                    trackStock: true,
+                  })
+                }}
+                className="px-4 py-2 border rounded hover:bg-gray-50"
+                disabled={addingProduct}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleQuickAddProduct}
+                disabled={addingProduct || !quickAddProductData.name || !quickAddProductData.price}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                {addingProduct ? 'Adding...' : 'Add Product'}
+              </button>
+            </div>
           </div>
         </div>
       )}

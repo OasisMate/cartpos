@@ -79,6 +79,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing required fields: name, email, password' }, { status: 400 })
   }
 
+  // VALIDATION: If user is being assigned as STORE_MANAGER or CASHIER, they should NOT get org role
+  // Store managers and cashiers should only have shop-level access, not org-level access
+  const hasStoreManagerRole = assignments.some((a) => a.shopRole === 'STORE_MANAGER')
+  const hasCashierRole = assignments.some((a) => a.shopRole === 'CASHIER')
+  
+  if ((hasStoreManagerRole || hasCashierRole) && orgRole) {
+    return NextResponse.json(
+      { 
+        error: 'Store managers and cashiers cannot have organization roles. Remove the organization role assignment.' 
+      },
+      { status: 400 }
+    )
+  }
+
   // Validate phone if provided
   let normalizedPhone: string | null = null
   if (phone) {
@@ -129,13 +143,17 @@ export async function POST(request: Request) {
       },
     })
 
-    await tx.organizationUser.create({
-      data: {
-        userId: newUser.id,
-        orgId: user.currentOrgId!,
-        orgRole: orgRole || 'ORG_ADMIN',
-      },
-    })
+    // Only create organization user if orgRole is explicitly provided
+    // If user is only assigned to shops, they don't need an org role
+    if (orgRole) {
+      await tx.organizationUser.create({
+        data: {
+          userId: newUser.id,
+          orgId: user.currentOrgId!,
+          orgRole: orgRole,
+        },
+      })
+    }
 
     if (assignments.length > 0) {
       for (const a of assignments) {
@@ -159,7 +177,7 @@ export async function POST(request: Request) {
     details: {
       name: result.name,
       email: result.email,
-      orgRole: orgRole || 'ORG_ADMIN',
+      orgRole: orgRole || null,
       assignments: assignments.map((a) => ({ shopId: a.shopId, shopRole: a.shopRole })),
     },
   })

@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Create sale
-        await createSale(user.currentShopId, input, user.id)
+        const result = await createSale(user.currentShopId, input, user.id)
+        // Note: stockWarnings are ignored in batch sync
 
         results.synced++
       } catch (error: any) {

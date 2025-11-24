@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { getProductsWithCache, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 import { saveSale } from '@/lib/offline/sales'
 import { getCustomers, saveCustomers } from '@/lib/offline/indexedDb'
@@ -33,6 +34,8 @@ export default function POSPage() {
   const { show } = useToast()
   const router = useRouter()
   const isOnline = useOnlineStatus()
+  const { t, language } = useLanguage()
+
   const [products, setProducts] = useState<Product[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,6 +51,11 @@ export default function POSPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  // Edit Item State
+  const [editingItem, setEditingItem] = useState<CartItem | null>(null)
+  const [editForm, setEditForm] = useState({ quantity: 0, price: 0 })
+
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -96,7 +104,12 @@ export default function POSPage() {
     }
   }, [user?.currentShopId, isOnline])
 
-  // Per-page sync removed; handled by global background sync orchestrator
+  // Initialize edit form when editingItem changes
+  useEffect(() => {
+    if (editingItem) {
+      setEditForm({ quantity: editingItem.quantity, price: editingItem.unitPrice })
+    }
+  }, [editingItem])
 
   useEffect(() => {
     // Focus barcode input on mount
@@ -113,10 +126,10 @@ export default function POSPage() {
         cart.map((item) =>
           item.product.id === product.id
             ? {
-                ...item,
-                quantity: item.quantity + quantity,
-                lineTotal: (item.quantity + quantity) * item.unitPrice,
-              }
+              ...item,
+              quantity: item.quantity + quantity,
+              lineTotal: (item.quantity + quantity) * item.unitPrice,
+            }
             : item
         )
       )
@@ -154,13 +167,33 @@ export default function POSPage() {
       cart.map((item) =>
         item.product.id === productId
           ? {
-              ...item,
-              quantity,
-              lineTotal: item.unitPrice * quantity,
-            }
+            ...item,
+            quantity,
+            lineTotal: item.unitPrice * quantity,
+          }
           : item
       )
     )
+  }
+
+  function saveEditedItem() {
+    if (!editingItem) return
+
+    if (editForm.quantity <= 0) {
+      removeFromCart(editingItem.product.id)
+    } else {
+      setCart(cart.map(item =>
+        item.product.id === editingItem.product.id
+          ? {
+            ...item,
+            quantity: editForm.quantity,
+            unitPrice: editForm.price,
+            lineTotal: editForm.quantity * editForm.price
+          }
+          : item
+      ))
+    }
+    setEditingItem(null)
   }
 
   async function handleBarcodeSubmit(e: React.FormEvent) {
@@ -171,6 +204,10 @@ export default function POSPage() {
       // Try to find product by barcode in cache
       const product = await findProductByBarcode(user.currentShopId, barcodeInput.trim())
       if (product) {
+        // Check if it's a carton barcode match
+        const isCartonMatch = product.cartonBarcode === barcodeInput.trim()
+        const quantity = isCartonMatch ? (product.cartonSize || 1) : 1
+
         addToCart(
           {
             id: product.id,
@@ -179,14 +216,27 @@ export default function POSPage() {
             unit: product.unit,
             price: product.price,
             trackStock: product.trackStock,
+            cartonSize: product.cartonSize,
+            cartonBarcode: product.cartonBarcode,
           },
-          1
+          quantity
         )
+
+        if (isCartonMatch) {
+          show({ message: `Added carton of ${quantity} ${product.unit}`, variant: 'success' })
+        }
       } else {
-        // Fallback to products array search
-        const foundProduct = products.find((p) => p.barcode === barcodeInput.trim())
+        // Fallback to products array search (in-memory)
+        const foundProduct = products.find((p) => p.barcode === barcodeInput.trim() || p.cartonBarcode === barcodeInput.trim())
         if (foundProduct) {
-          addToCart(foundProduct, 1)
+          const isCartonMatch = foundProduct.cartonBarcode === barcodeInput.trim()
+          const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : 1
+
+          addToCart(foundProduct, quantity)
+
+          if (isCartonMatch) {
+            show({ message: `Added carton of ${quantity} ${foundProduct.unit}`, variant: 'success' })
+          }
         } else {
           setError('Product not found with this barcode')
           setTimeout(() => setError(''), 3000)
@@ -276,7 +326,7 @@ export default function POSPage() {
 
       // Success - reset cart
       setSuccess(true)
-      show({ message: 'Sale saved locally', variant: 'success' })
+      show({ message: t('sale_completed'), variant: 'success' })
       setTimeout(() => {
         setCart([])
         setDiscount(0)
@@ -292,7 +342,7 @@ export default function POSPage() {
         router.refresh()
       }, 2000)
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.')
+      setError(err.message || t('error_occurred'))
       show({ title: 'Error', message: err.message || 'Failed to complete sale', variant: 'destructive' })
       console.error('Sale submission error:', err)
     } finally {
@@ -331,6 +381,8 @@ export default function POSPage() {
               unit: p.unit,
               price: p.price,
               trackStock: p.trackStock,
+              cartonSize: p.cartonSize,
+              cartonBarcode: p.cartonBarcode,
             }))
           )
         } catch (err) {
@@ -355,20 +407,20 @@ export default function POSPage() {
   if (!user?.currentShopId) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">POS</h1>
+        <h1 className="text-2xl font-bold mb-4">{t('pos')}</h1>
         <p className="text-gray-600">Please select a shop first</p>
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen bg-[hsl(var(--background))]">
+    <div className="flex h-screen bg-[hsl(var(--background))]" dir={language === 'ur' ? 'rtl' : 'ltr'}>
       {/* Offline Banner */}
       {!isOnline && (
         <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white text-center py-2 z-50">
           <div className="flex items-center justify-center gap-2">
             <span>⚠️</span>
-            <span className="font-semibold">You are offline. Some features may be limited.</span>
+            <span className="font-semibold">{t('offline_mode')}</span>
           </div>
         </div>
       )}
@@ -376,13 +428,13 @@ export default function POSPage() {
       {/* Left Panel - Product Selection */}
       <div className="w-1/2 border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-y-auto">
         <div className={`p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10 ${!isOnline ? 'mt-8' : ''}`}>
-          <h1 className="text-2xl font-bold mb-4">POS</h1>
+          <h1 className="text-2xl font-bold mb-4">{t('pos')}</h1>
 
           {/* Barcode Input */}
           <form onSubmit={handleBarcodeSubmit} className="mb-4">
             <Input
               ref={barcodeInputRef}
-              placeholder="Scan barcode or enter code..."
+              placeholder={t('scan_barcode')}
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
               className="w-full text-lg h-11"
@@ -394,7 +446,7 @@ export default function POSPage() {
           <div className="relative mb-4">
             <Input
               ref={searchInputRef}
-              placeholder="Search products..."
+              placeholder={t('search_products')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full"
@@ -412,9 +464,10 @@ export default function POSPage() {
                       <div className="font-medium">{product.name}</div>
                       <div className="text-sm text-[hsl(var(--muted-foreground))]">
                         {product.barcode || 'No barcode'} • {product.unit}
+                        {product.cartonSize ? ` • Carton: ${product.cartonSize}` : ''}
                       </div>
                     </div>
-                    <div className="font-semibold">₹{product.price.toFixed(2)}</div>
+                    <div className="font-semibold">Rs.{product.price.toFixed(2)}</div>
                   </button>
                 ))}
               </div>
@@ -429,7 +482,7 @@ export default function POSPage() {
           )}
           {success && (
             <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">
-              Sale completed successfully!
+              {t('sale_completed')}
             </div>
           )}
         </div>
@@ -452,7 +505,7 @@ export default function POSPage() {
                 >
                   <div className="font-medium">{product.name}</div>
                   <div className="text-sm text-[hsl(var(--muted-foreground))]">{product.unit}</div>
-                  <div className="font-semibold mt-1">₹{product.price.toFixed(2)}</div>
+                  <div className="font-semibold mt-1">Rs.{product.price.toFixed(2)}</div>
                 </button>
               ))}
             </div>
@@ -463,7 +516,7 @@ export default function POSPage() {
       {/* Right Panel - Cart */}
       <div className="w-1/2 bg-[hsl(var(--card))] overflow-y-auto">
         <div className="p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10">
-          <h2 className="text-xl font-bold mb-4">Cart</h2>
+          <h2 className="text-xl font-bold mb-4">{t('cart')}</h2>
         </div>
 
         <div className="p-4">
@@ -476,10 +529,10 @@ export default function POSPage() {
                   key={item.product.id}
                   className="flex items-center justify-between p-3 border border-[hsl(var(--border))] rounded-lg"
                 >
-                  <div className="flex-1">
+                  <div className="flex-1 cursor-pointer" onClick={() => setEditingItem(item)}>
                     <div className="font-medium">{item.product.name}</div>
                     <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                      ₹{item.unitPrice.toFixed(2)} × {item.quantity} {item.product.unit}
+                      Rs.{item.unitPrice.toFixed(2)} × {item.quantity} {item.product.unit}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -490,7 +543,13 @@ export default function POSPage() {
                     >
                       −
                     </Button>
-                    <span className="w-12 text-center">{item.quantity}</span>
+                    <Input
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => updateCartQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                      className="w-16 text-center p-1 h-8"
+                      step="0.001"
+                    />
                     <Button
                       onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
                       variant="outline"
@@ -499,7 +558,7 @@ export default function POSPage() {
                       +
                     </Button>
                     <div className="w-24 text-right font-semibold">
-                      ₹{item.lineTotal.toFixed(2)}
+                      Rs.{item.lineTotal.toFixed(2)}
                     </div>
                     <Button
                       onClick={() => removeFromCart(item.product.id)}
@@ -520,11 +579,11 @@ export default function POSPage() {
           <div className="p-4 border-t border-[hsl(var(--border))]">
             <div className="space-y-2 mb-4">
               <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>₹{subtotal.toFixed(2)}</span>
+                <span>{t('subtotal')}:</span>
+                <span>Rs.{subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>Discount:</span>
+                <span>{t('discount')}:</span>
                 <Input
                   type="number"
                   step="0.01"
@@ -536,23 +595,72 @@ export default function POSPage() {
                 />
               </div>
               <div className="flex justify-between font-bold text-lg border-t pt-2">
-                <span>Total:</span>
-                <span>₹{total.toFixed(2)}</span>
+                <span>{t('total')}:</span>
+                <span>Rs.{total.toFixed(2)}</span>
               </div>
             </div>
 
             <Button onClick={handleCompleteSale} className="w-full h-12 text-lg font-semibold">
-              Complete Sale
+              {t('complete_sale')}
             </Button>
           </div>
         )}
       </div>
 
+      {/* Edit Item Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-sm border border-[hsl(var(--border))]">
+            <h2 className="text-xl font-bold mb-4">{t('edit')} {t('item')}</h2>
+            <div className="mb-4 font-medium">{editingItem.product.name}</div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('qty')}</label>
+                <Input
+                  type="number"
+                  value={editForm.quantity}
+                  onChange={(e) => setEditForm({ ...editForm, quantity: parseFloat(e.target.value) || 0 })}
+                  className="w-full"
+                  step="0.001"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('price')}</label>
+                <Input
+                  type="number"
+                  value={editForm.price}
+                  onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) || 0 })}
+                  className="w-full"
+                  step="0.01"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditingItem(null)}
+                  className="flex-1"
+                >
+                  {t('cancel')}
+                </Button>
+                <Button
+                  onClick={saveEditedItem}
+                  className="flex-1"
+                >
+                  {t('save')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Payment Modal */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-md border border-[hsl(var(--border))]">
-            <h2 className="text-xl font-bold mb-4">Complete Payment</h2>
+            <h2 className="text-xl font-bold mb-4">{t('complete_sale')}</h2>
 
             {error && (
               <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
@@ -563,7 +671,7 @@ export default function POSPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  Payment Status <span className="text-red-500">*</span>
+                  {t('payment_status')} <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={paymentStatus}
@@ -575,15 +683,15 @@ export default function POSPage() {
                   }}
                   className="input"
                 >
-                  <option value="PAID">Paid</option>
-                  <option value="UDHAAR">Udhaar (Credit)</option>
+                  <option value="PAID">{t('paid')}</option>
+                  <option value="UDHAAR">{t('udhaar')}</option>
                 </select>
               </div>
 
               {paymentStatus === 'UDHAAR' && (
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Customer <span className="text-red-500">*</span>
+                    {t('customers')} <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={customerId}
@@ -605,23 +713,23 @@ export default function POSPage() {
                 <>
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Payment Method <span className="text-red-500">*</span>
+                      {t('payment_method')} <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'CARD' | 'OTHER')}
                       className="input"
                     >
-                      <option value="CASH">Cash</option>
-                      <option value="CARD">Card</option>
-                      <option value="OTHER">Other</option>
+                      <option value="CASH">{t('cash')}</option>
+                      <option value="CARD">{t('card')}</option>
+                      <option value="OTHER">{t('other')}</option>
                     </select>
                   </div>
 
                   {paymentMethod === 'CASH' && (
                     <div>
                       <label className="block text-sm font-medium mb-1">
-                        Amount Received <span className="text-red-500">*</span>
+                        {t('amount_received')} <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
@@ -635,7 +743,7 @@ export default function POSPage() {
                       />
                       {change > 0 && (
                         <div className="mt-1 text-sm text-green-600">
-                          Change: ₹{change.toFixed(2)}
+                          {t('change')}: Rs.{change.toFixed(2)}
                         </div>
                       )}
                       {change < 0 && (
@@ -650,8 +758,8 @@ export default function POSPage() {
 
               <div className="pt-2 border-t border-[hsl(var(--border))]">
                 <div className="flex justify-between font-bold text-lg mb-4">
-                  <span>Total:</span>
-                  <span>₹{total.toFixed(2)}</span>
+                  <span>{t('total')}:</span>
+                  <span>Rs.{total.toFixed(2)}</span>
                 </div>
 
                 <div className="flex gap-2">
@@ -664,14 +772,14 @@ export default function POSPage() {
                     }}
                     className="flex-1"
                   >
-                    Cancel
+                    {t('cancel')}
                   </Button>
                   <Button
                     onClick={submitSale}
                     disabled={submitting || (paymentStatus === 'PAID' && paymentMethod === 'CASH' && change < 0)}
                     className="flex-1"
                   >
-                    {submitting ? 'Processing...' : 'Confirm'}
+                    {submitting ? t('processing') : t('confirm')}
                   </Button>
                 </div>
               </div>

@@ -93,9 +93,15 @@ export async function POST(request: NextRequest) {
       amountReceived: body.amountReceived ? parseFloat(body.amountReceived) : undefined,
     }
 
-    const invoice = await createSale(user.currentShopId, input, user.id)
+    const result = await createSale(user.currentShopId, input, user.id)
 
-    return NextResponse.json({ invoice }, { status: 201 })
+    return NextResponse.json(
+      { 
+        invoice: result.invoice,
+        stockWarnings: result.stockWarnings,
+      }, 
+      { status: 201 }
+    )
   } catch (error: any) {
     console.error('Create sale error:', error)
     return NextResponse.json(

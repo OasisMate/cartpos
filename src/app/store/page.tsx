@@ -2,6 +2,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { DashboardContent } from './_components/DashboardContent'
 
 export default async function StoreDashboardPage() {
   const user = await getCurrentUser()
@@ -64,61 +65,12 @@ export default async function StoreDashboardPage() {
   ])
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-2">{shop?.name} — Dashboard</h1>
-      <p className="text-[hsl(var(--muted-foreground))] mb-6">Today&apos;s snapshot and quick actions</p>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Invoices Today</div>
-            <div className="text-2xl font-semibold">{invoicesToday}</div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Payments Today</div>
-            <div className="text-2xl font-semibold">
-              {Number(paymentsToday._sum.amount || 0).toFixed(2)}
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Udhaar Today</div>
-            <div className="text-2xl font-semibold">
-              {Number(udhaarCreatedToday._sum.amount || 0).toFixed(2)}
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Low Stock Items</div>
-            <div className="text-2xl font-semibold">{lowStockCount}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/store/pos">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Quick Action</div>
-            <div className="text-lg font-semibold">Open POS</div>
-          </div>
-        </a>
-        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/store/products">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Quick Action</div>
-            <div className="text-lg font-semibold">Add Product</div>
-          </div>
-        </a>
-        <a className="card hover:bg-[hsl(var(--muted))] transition-colors" href="/store/customers">
-          <div className="card-body">
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">Quick Action</div>
-            <div className="text-lg font-semibold">Record Udhaar Payment</div>
-          </div>
-        </a>
-      </div>
-    </div>
+    <DashboardContent
+      shopName={shop?.name || 'Store'}
+      invoicesToday={invoicesToday}
+      paymentsToday={Number(paymentsToday._sum.amount || 0)}
+      udhaarCreatedToday={Number(udhaarCreatedToday._sum.amount || 0)}
+      lowStockCount={lowStockCount}
+    />
   )
 }

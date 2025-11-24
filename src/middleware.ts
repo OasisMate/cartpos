@@ -1,8 +1,28 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { jwtVerify } from 'jose'
 
-export function middleware(request: NextRequest) {
-  const session = request.cookies.get('session')
+const secretKey = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+const encodedKey = new TextEncoder().encode(secretKey)
+
+async function validateSession(sessionCookie: string | undefined): Promise<boolean> {
+  if (!sessionCookie) {
+    return false
+  }
+
+  try {
+    await jwtVerify(sessionCookie, encodedKey, {
+      algorithms: ['HS256'],
+    })
+    return true
+  } catch (error) {
+    // Invalid or expired token
+    return false
+  }
+}
+
+export async function middleware(request: NextRequest) {
+  const sessionCookie = request.cookies.get('session')?.value
   const { pathname } = request.nextUrl
 
   // Public routes that don't require authentication
@@ -14,24 +34,24 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // If no session and trying to access protected route (including root), redirect to login
-  if (!session && !isPublicRoute) {
+  // Validate the session token
+  const hasValidSession = await validateSession(sessionCookie)
+
+  // If no valid session and trying to access protected route (including root), redirect to login
+  if (!hasValidSession && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    return NextResponse.redirect(url)
+    // Clear invalid session cookie
+    const response = NextResponse.redirect(url)
+    response.cookies.delete('session')
+    return response
   }
 
-  // If session exists and on login page, redirect to home
-  if (session && pathname === '/login') {
+  // If valid session exists and on login page, redirect to home
+  if (hasValidSession && pathname === '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
-  }
-
-  // Simple role-scoped guards (defense in depth; server routes also check)
-  if (session) {
-    // For now, rely on server-side handlers for fine-grained checks.
-    // Middleware keeps generic auth flow and public routes handling.
   }
 
   return NextResponse.next()
