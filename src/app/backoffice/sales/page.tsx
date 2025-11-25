@@ -96,6 +96,22 @@ export default function BackofficeSalesPage() {
     }
   }
 
+  async function deleteSale(id: string) {
+    const agreed = await confirm('Delete this sale permanently? This cannot be undone.')
+    if (!agreed) return
+    try {
+      setError('')
+      const resp = await fetch(`/api/sales/${id}`, { method: 'DELETE' })
+      const data = await resp.json()
+      if (!resp.ok) {
+        throw new Error(data.error || 'Failed to delete sale')
+      }
+      await fetchSales()
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete sale')
+    }
+  }
+
   if (!user?.currentShopId) {
     return (
       <div className="p-6">
@@ -176,6 +192,12 @@ export default function BackofficeSalesPage() {
                           title={s.status === 'VOID' ? 'Already voided' : 'Void sale'}
                         >
                           Void
+                        </button>
+                        <button
+                          onClick={() => deleteSale(s.id)}
+                          className="px-3 py-1 text-sm border border-red-200 text-red-600 rounded hover:bg-red-50"
+                        >
+                          Delete
                         </button>
                       </div>
                     </td>

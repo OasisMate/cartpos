@@ -407,3 +407,66 @@ export async function voidSale(shopId: string, invoiceId: string, userId: string
 
   return result
 }
+
+export async function deleteSale(shopId: string, invoiceId: string, userId: string) {
+  const hasPermission = await checkSalePermission(userId, shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to delete sales in this shop')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        lines: true,
+      },
+    })
+
+    if (!invoice || invoice.shopId !== shopId) {
+      throw new Error('Invoice not found')
+    }
+
+    const lineIds = invoice.lines.map((line) => line.id)
+
+    if (lineIds.length) {
+      await tx.stockLedger.deleteMany({
+        where: {
+          refType: 'invoice_line',
+          refId: { in: lineIds },
+        },
+      })
+    }
+
+    await tx.stockLedger.deleteMany({
+      where: {
+        refType: 'invoice_void',
+        refId: invoice.id,
+      },
+    })
+
+    await tx.customerLedger.deleteMany({
+      where: {
+        refId: invoice.id,
+        refType: { in: ['invoice', 'invoice_void'] },
+      },
+    })
+
+    await tx.payment.deleteMany({
+      where: {
+        invoiceId: invoice.id,
+      },
+    })
+
+    await tx.invoiceLine.deleteMany({
+      where: {
+        invoiceId: invoice.id,
+      },
+    })
+
+    await tx.invoice.delete({
+      where: { id: invoice.id },
+    })
+
+    return { id: invoice.id }
+  })
+}

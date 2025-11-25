@@ -29,6 +29,30 @@ interface CartItem {
   lineTotal: number
 }
 
+interface ReceiptItem {
+  name: string
+  quantity: number
+  unit: string | null
+  unitPrice: number
+  lineTotal: number
+}
+
+interface ReceiptData {
+  id: string
+  timestamp: string
+  shopName: string
+  shopCity?: string | null
+  items: ReceiptItem[]
+  subtotal: number
+  discount: number
+  total: number
+  paymentStatus: 'PAID' | 'UDHAAR'
+  paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
+  amountReceived?: number
+  change?: number
+  customerName?: string
+}
+
 export default function POSPage() {
   const { user } = useAuth()
   const { show } = useToast()
@@ -48,9 +72,11 @@ export default function POSPage() {
   const [customerId, setCustomerId] = useState('')
   const [amountReceived, setAmountReceived] = useState('')
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
 
   // Edit Item State
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
@@ -268,11 +294,6 @@ export default function POSPage() {
       return
     }
 
-    if (paymentStatus === 'PAID' && paymentMethod === 'CASH' && !amountReceived) {
-      setError('Please enter amount received')
-      return
-    }
-
     setShowPaymentModal(true)
   }
 
@@ -289,6 +310,27 @@ export default function POSPage() {
 
       const subtotal = sumCartLines(cart)
       const { total } = calculateTotals(subtotal, discount)
+
+      if (paymentStatus === 'PAID' && paymentMethod === 'CASH') {
+        if (!amountReceived) {
+          setError('Please enter amount received')
+          setSubmitting(false)
+          return
+        }
+
+        const parsedAmount = parseFloat(amountReceived)
+        if (Number.isNaN(parsedAmount)) {
+          setError('Amount received must be a valid number')
+          setSubmitting(false)
+          return
+        }
+
+        if (parsedAmount < total) {
+          setError('Amount received is less than total due')
+          setSubmitting(false)
+          return
+        }
+      }
 
       // Generate client-side ID for offline-first
       const saleId = cuid()
@@ -324,23 +366,55 @@ export default function POSPage() {
         return
       }
 
+      // Build receipt data before clearing cart
+      const shopInfo = user?.shops?.find((s) => s.shopId === user?.currentShopId)
+      const selectedCustomer = customers.find((c) => c.id === customerId)
+      const cashAmount =
+        paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
+          ? parseFloat(amountReceived)
+          : undefined
+      const receiptSnapshot: ReceiptData = {
+        id: saleId,
+        timestamp: new Date().toISOString(),
+        shopName: shopInfo?.shop.name || 'CartPOS Shop',
+        shopCity: shopInfo?.shop.city || '',
+        items: cart.map((item) => ({
+          name: item.product.name,
+          quantity: item.quantity,
+          unit: item.product.unit,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal,
+        })),
+        subtotal,
+        discount,
+        total,
+        paymentStatus,
+        paymentMethod: paymentStatus === 'PAID' ? paymentMethod : undefined,
+        amountReceived: cashAmount,
+        change: cashAmount ? cashAmount - total : undefined,
+        customerName: selectedCustomer?.name,
+      }
+
+      setReceiptData(receiptSnapshot)
+      setShowReceiptModal(true)
+      setShowPaymentModal(false)
+
       // Success - reset cart
       setSuccess(true)
       show({ message: t('sale_completed'), variant: 'success' })
+      setCart([])
+      setDiscount(0)
+      setPaymentStatus('PAID')
+      setPaymentMethod('CASH')
+      setCustomerId('')
+      setAmountReceived('')
       setTimeout(() => {
-        setCart([])
-        setDiscount(0)
-        setPaymentStatus('PAID')
-        setPaymentMethod('CASH')
-        setCustomerId('')
-        setAmountReceived('')
-        setShowPaymentModal(false)
         setSuccess(false)
-        if (barcodeInputRef.current) {
-          barcodeInputRef.current.focus()
-        }
-        router.refresh()
       }, 2000)
+      if (barcodeInputRef.current) {
+        barcodeInputRef.current.focus()
+      }
+      router.refresh()
     } catch (err: any) {
       setError(err.message || t('error_occurred'))
       show({ title: 'Error', message: err.message || 'Failed to complete sale', variant: 'destructive' })
@@ -356,6 +430,14 @@ export default function POSPage() {
     paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
       ? parseFloat(amountReceived) - total
       : 0
+  function handlePrintReceipt() {
+    window.print()
+  }
+
+  function closeReceiptModal() {
+    setShowReceiptModal(false)
+    setReceiptData(null)
+  }
 
   // Use cached search when offline, or filter products array when online
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
@@ -786,6 +868,115 @@ export default function POSPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Receipt Modal */}
+      {showReceiptModal && receiptData && (
+        <>
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-md border border-[hsl(var(--border))]">
+              <h2 className="text-xl font-bold mb-4">Receipt</h2>
+              <div id="pos-print-receipt" className="bg-white border rounded p-4 text-sm">
+                <div className="text-center mb-3">
+                  <div className="font-semibold">{receiptData.shopName}</div>
+                  {receiptData.shopCity && <div className="text-xs text-gray-500">{receiptData.shopCity}</div>}
+                  <div className="text-xs text-gray-500">
+                    {new Date(receiptData.timestamp).toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-xs mb-3">
+                  <div>Invoice: {receiptData.id.slice(0, 8)}</div>
+                  {receiptData.customerName && <div>Customer: {receiptData.customerName}</div>}
+                </div>
+                <table className="w-full text-xs mb-3">
+                  <thead>
+                    <tr className="border-t border-b">
+                      <th className="text-left py-1">Item</th>
+                      <th className="text-right py-1">Qty</th>
+                      <th className="text-right py-1">Rate</th>
+                      <th className="text-right py-1">Amt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {receiptData.items.map((item, idx) => (
+                      <tr key={`${item.name}-${idx}`}>
+                        <td className="pr-1">{item.name}</td>
+                        <td className="text-right">
+                          {item.quantity} {item.unit || ''}
+                        </td>
+                        <td className="text-right">{item.unitPrice.toFixed(2)}</td>
+                        <td className="text-right">{item.lineTotal.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span>Rs {receiptData.subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Discount</span>
+                    <span>Rs {receiptData.discount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold border-t pt-1 mt-1">
+                    <span>Total</span>
+                    <span>Rs {receiptData.total.toFixed(2)}</span>
+                  </div>
+                  {receiptData.paymentStatus === 'PAID' && (
+                    <div className="flex justify-between">
+                      <span>Payment</span>
+                      <span>{receiptData.paymentMethod || ''}</span>
+                    </div>
+                  )}
+                  {typeof receiptData.amountReceived === 'number' && (
+                    <div className="flex justify-between">
+                      <span>Received</span>
+                      <span>Rs {receiptData.amountReceived.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {typeof receiptData.change === 'number' && receiptData.change > 0 && (
+                    <div className="flex justify-between">
+                      <span>Change</span>
+                      <span>Rs {receiptData.change.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {receiptData.paymentStatus === 'UDHAAR' && (
+                    <div className="text-right text-yellow-600 font-semibold">UDHAAR</div>
+                  )}
+                </div>
+                <div className="mt-3 text-center text-xs">Shukriya! Visit again.</div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" className="flex-1" onClick={closeReceiptModal}>
+                  Close
+                </Button>
+                <Button className="flex-1" onClick={handlePrintReceipt}>
+                  Print
+                </Button>
+              </div>
+            </div>
+          </div>
+          <style jsx global>{`
+            @media print {
+              body * {
+                visibility: hidden;
+              }
+              #pos-print-receipt,
+              #pos-print-receipt * {
+                visibility: visible;
+              }
+              #pos-print-receipt {
+                position: absolute;
+                left: 0;
+                right: 0;
+                margin: 0 auto;
+                width: 80mm;
+                top: 0;
+              }
+            }
+          `}</style>
+        </>
       )}
     </div>
   )

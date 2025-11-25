@@ -146,6 +146,17 @@ class CartPOSDatabase extends Dexie {
       stockAdjustments: 'id, shopId, syncStatus, createdAt',
       expenses: 'id, shopId, syncStatus, createdAt', // new expenses store
     })
+    this.version(6).stores({
+      meta: 'key',
+      products: 'id, shopId, barcode, updatedAt',
+      customers: 'id, shopId, name, phone, syncStatus, updatedAt, [shopId+syncStatus]',
+      suppliers: 'id, shopId, name, syncStatus, updatedAt, [shopId+syncStatus]',
+      sales: 'id, shopId, syncStatus, createdAt, [shopId+syncStatus]',
+      purchases: 'id, shopId, syncStatus, createdAt, [shopId+syncStatus]',
+      udhaarPayments: 'id, shopId, customerId, syncStatus, createdAt, [shopId+syncStatus]',
+      stockAdjustments: 'id, shopId, syncStatus, createdAt, [shopId+syncStatus]',
+      expenses: 'id, shopId, syncStatus, createdAt, [shopId+syncStatus]',
+    })
   }
 }
 
