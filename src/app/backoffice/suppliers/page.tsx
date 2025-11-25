@@ -6,6 +6,8 @@ import Input from '@/components/ui/Input'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { getSuppliersWithCache } from '@/lib/offline/data'
 
 interface Supplier {
   id: string
@@ -31,6 +33,7 @@ interface SuppliersResponse {
 export default function SuppliersPage() {
   const { user } = useAuth()
   const { show } = useToast()
+  const isOnline = useOnlineStatus()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -56,26 +59,64 @@ export default function SuppliersPage() {
 
     try {
       setLoading(true)
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '50',
-      })
-      if (searchTerm) {
-        params.append('search', searchTerm)
-      }
+      
+      if (isOnline) {
+        // Online: try API first
+        try {
+          const params = new URLSearchParams({
+            page: currentPage.toString(),
+            limit: '50',
+          })
+          if (searchTerm) {
+            params.append('search', searchTerm)
+          }
 
-      const response = await fetch(`/api/suppliers?${params}`)
-      if (response.ok) {
-        const data: SuppliersResponse = await response.json()
-        setSuppliers(data.suppliers || [])
-        setPagination(data.pagination)
+          const response = await fetch(`/api/suppliers?${params}`)
+          if (response.ok) {
+            const data: SuppliersResponse = await response.json()
+            setSuppliers(data.suppliers || [])
+            setPagination(data.pagination)
+            setLoading(false)
+            return
+          }
+        } catch (apiError) {
+          console.warn('API failed, falling back to cache:', apiError)
+        }
       }
+      
+      // Offline or API failed: use cache
+      const cached = await getSuppliersWithCache(user.currentShopId, isOnline)
+      let rows = cached.map((s) => ({
+        id: s.id,
+        name: s.name,
+        phone: s.phone,
+        notes: s.notes,
+        createdAt: new Date(s.updatedAt).toISOString(),
+        _count: { purchases: 0 }, // Purchase count requires server data
+      }))
+      
+      // Apply search filter
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase()
+        rows = rows.filter((s) => 
+          s.name.toLowerCase().includes(term) ||
+          (s.phone && s.phone.includes(term))
+        )
+      }
+      
+      setSuppliers(rows)
+      setPagination({
+        page: 1,
+        limit: 50,
+        total: rows.length,
+        totalPages: 1,
+      })
     } catch (err) {
       console.error('Failed to fetch suppliers:', err)
     } finally {
       setLoading(false)
     }
-  }, [user?.currentShopId, currentPage, searchTerm])
+  }, [user?.currentShopId, currentPage, searchTerm, isOnline])
 
   useEffect(() => {
     if (user?.currentShopId) {

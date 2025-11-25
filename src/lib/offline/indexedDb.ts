@@ -14,6 +14,7 @@ export interface CachedProduct {
   barcode: string | null
   unit: string
   price: number
+  cartonPrice?: number | null
   trackStock: boolean
   cartonSize?: number | null
   cartonBarcode?: string | null
@@ -368,6 +369,13 @@ export async function getPendingPurchases(shopId: string): Promise<CachedPurchas
   if (!shopId) return []
 
   return await (db as any).purchases.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
+}
+
+export async function getPurchases(shopId: string): Promise<CachedPurchase[]> {
+  // Skip if no shopId (Platform Admin case)
+  if (!shopId) return []
+
+  return await (db as any).purchases.where('shopId').equals(shopId).toArray()
 }
 
 export async function markPurchaseAsSynced(id: string): Promise<void> {

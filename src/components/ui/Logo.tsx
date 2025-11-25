@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { useId } from 'react'
 
 interface LogoProps {
   showText?: boolean
@@ -8,16 +9,61 @@ interface LogoProps {
 }
 
 export function Logo({ showText = true, className, href = '/' }: LogoProps) {
+  const gradientId = useId()
+  const glowId = useId()
+
   const logoContent = (
     <>
-      <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
-        <div className="h-4 w-4 bg-white rounded-sm relative">
-          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1.5 h-2 bg-orange-500 rounded-b-sm"></div>
-          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-0.5 h-1.5 bg-red-500 rounded-t-sm"></div>
-        </div>
+      {/* CartPOS neon cart mark */}
+      <div className="relative h-10 w-10 flex items-center justify-center">
+        <div className="absolute inset-0 rounded-2xl bg-white/0 border border-white/40 shadow-[0_3px_12px_rgba(15,118,230,0.12)]" />
+        <svg
+          width={34}
+          height={34}
+          viewBox="0 0 48 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="relative"
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="6" y1="6" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#0284C7" />
+              <stop offset="60%" stopColor="#2563EB" />
+              <stop offset="100%" stopColor="#F97316" />
+            </linearGradient>
+            <filter id={glowId} x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+              <feMerge>
+                <feMergeNode in="coloredBlur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <g filter={`url(#${glowId})`} stroke={`url(#${gradientId})`} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 13h6.2l4 17.2c.3 1.2 1.4 2.1 2.6 2.1H35a2.8 2.8 0 0 0 2.7-2.2l2.5-11.6a1.6 1.6 0 0 0-1.6-1.9H18" />
+            <path d="M24 32h-5.5" />
+            <circle cx="21" cy="37" r="3" />
+            <circle cx="33" cy="37" r="3" />
+            {/* floating tags */}
+            <path d="M31 8l6-2.5 2.5 6L34 14l-3-6z" />
+            <path d="M9 24l4-1.6 1.6 4L10.6 28 9 24z" />
+          </g>
+          <text
+            x="24"
+            y="24"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize="9"
+            fontWeight="700"
+            fontFamily="'Inter','Segoe UI',sans-serif"
+            fill={`url(#${gradientId})`}
+          >
+            CP
+          </text>
+        </svg>
       </div>
       {showText && (
-        <span className="font-bold text-lg bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent whitespace-pre transition-opacity duration-200">
+        <span className="font-semibold text-lg tracking-tight bg-gradient-to-r from-sky-600 via-blue-700 to-orange-600 bg-clip-text text-transparent whitespace-pre transition-opacity duration-200">
           CartPOS
         </span>
       )}

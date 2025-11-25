@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
@@ -19,6 +19,13 @@ import {
   Truck,
   FileText,
   Languages,
+  Repeat,
+  ShoppingBag,
+  CreditCard,
+  Factory,
+  BarChart3,
+  UserCircle,
+  ChevronDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
@@ -70,6 +77,7 @@ interface NavLink {
 interface NavGroup {
   title?: string
   links: NavLink[]
+  isSubmenu?: boolean
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -80,6 +88,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [orgMeta, setOrgMeta] = useState<{ id: string; name: string } | null>(null)
   const [storeMeta, setStoreMeta] = useState<{ id: string; name: string } | null>(null)
   const [orgAdminStoreMeta, setOrgAdminStoreMeta] = useState<{ id: string; name: string } | null>(null)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Extract context from URL if Platform Admin viewing org/store
   const orgIdMatch = pathname?.match(/\/org\/([^\/]+)/)
@@ -277,6 +298,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const orgName = orgMeta?.name || 'Organization'
         groups.push({
           title: `${orgName} Options`,
+          isSubmenu: true,
           links: [
             {
               label: t('dashboard'),
@@ -302,6 +324,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const storeName = storeMeta?.name || 'Store'
         groups.push({
           title: `${storeName} Options`,
+          isSubmenu: true,
           links: [
             {
               label: t('pos'),
@@ -394,6 +417,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         
         groups.push({
           title: `${storeName} Options`,
+          isSubmenu: true,
           links: [
             {
               label: t('pos'),
@@ -469,7 +493,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {
             label: t('stock_adjustments'),
             href: '/store/stock-adjustments',
-            icon: <Package className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+            icon: <Repeat className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
           {
             label: t('sales'),
@@ -479,27 +503,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {
             label: t('purchases'),
             href: '/store/purchases',
-            icon: <Truck className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+            icon: <ShoppingBag className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
           {
             label: t('customers'),
             href: '/store/customers',
-            icon: <Users className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+            icon: <UserCircle className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
-            {
-              label: t('suppliers'),
-              href: '/store/suppliers',
-              icon: <Truck className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-            },
+          {
+            label: t('suppliers'),
+            href: '/store/suppliers',
+            icon: <Factory className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          },
           {
             label: t('udhaar'),
             href: '/backoffice/customers?balance=true',
-            icon: <Receipt className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+            icon: <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
           {
             label: t('reports'),
             href: '/store/reports',
-            icon: <FileText className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+            icon: <BarChart3 className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
           {
             label: t('settings'),
@@ -554,15 +578,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar open={open} setOpen={setOpen}>
-        <SidebarBody className="justify-between gap-10 bg-gradient-to-b from-blue-50 to-white border-r border-blue-200">
+        <SidebarBody className="justify-between gap-3 bg-gradient-to-b from-blue-50 to-white border-r border-blue-200">
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden hide-scrollbar">
             {/* Logo */}
-            <Logo showText={open} />
+            <div className={cn('w-full', open ? 'flex justify-center' : '')}>
+              <Logo showText={open} />
+            </div>
 
             {/* Navigation Links */}
-            <div className="mt-8 flex flex-col gap-5">
+            <div className="mt-6 flex flex-col gap-4 pb-0">
               {navGroups.map((group, index) => {
-                const isSubmenu = group.title === 'Store Options'
+                const isSubmenu = group.isSubmenu
                 return (
                   <div 
                     key={group.title || `group-${index}`} 
@@ -610,29 +636,66 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* User Profile Section */}
-          <div className="border-t border-blue-200 pt-4 space-y-2">
+          <div className="border-t border-blue-200 pt-3 relative" ref={userMenuRef}>
             {user && (
               <>
-                <div
+                <button
+                  onClick={() => setUserMenuOpen((prev) => !prev)}
                   className={cn(
-                    'flex items-center py-2 rounded-lg hover:bg-blue-100 transition-colors',
-                    open ? 'gap-3 px-3' : 'justify-center px-0'
+                    'w-full flex items-center py-1.5 rounded-md transition-colors text-sm',
+                    'hover:bg-blue-100',
+                    open ? 'gap-2 px-3 justify-between' : 'justify-center px-0'
                   )}
+                  title={!open ? user.name : undefined}
                 >
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-sm font-semibold">
-                      {user.name?.[0]?.toUpperCase() || 'U'}
-                    </span>
-                  </div>
-                  {open && (
-                    <div className="flex-1 min-w-0 transition-opacity duration-200">
+                  <div className="flex items-center gap-3">
+                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-xs font-semibold">
+                        {user.name?.[0]?.toUpperCase() || 'U'}
+                      </span>
+                    </div>
+                    {open && (
                       <div className="text-sm font-medium text-gray-900 truncate">
                         {user.name}
                       </div>
-                      <div className="text-xs text-gray-500 truncate">{user.email}</div>
-                    </div>
+                    )}
+                  </div>
+                  {open && (
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 text-gray-500 transition-transform',
+                        userMenuOpen && 'rotate-180'
+                      )}
+                    />
                   )}
-                </div>
+                </button>
+
+                {userMenuOpen && (
+                  <div
+                    className={cn(
+                      'mt-2 rounded-lg border border-blue-100 bg-white shadow-lg p-3 space-y-2',
+                      open ? 'mx-2' : 'absolute left-2 right-2 bottom-20'
+                    )}
+                  >
+                    <button
+                      onClick={() => {
+                        setLanguage(language === 'en' ? 'ur' : 'en')
+                        setUserMenuOpen(false)
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-blue-50"
+                    >
+                      <Languages className="h-4 w-4" />
+                      <span>{language === 'en' ? 'اردو' : 'English'}</span>
+                    </button>
+                    <button
+                      onClick={logout}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>{t('logout')}</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Organization/Shop Selectors - hide for Platform Admin */}
                 {open && user.role !== 'PLATFORM_ADMIN' && (
@@ -668,48 +731,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </>
             )}
 
-            {/* Language Toggle - Compact version next to user info */}
-            {open && (
-              <div className="px-3 pb-2">
-                <button
-                  onClick={() => setLanguage(language === 'en' ? 'ur' : 'en')}
-                  className={cn(
-                    'w-full flex items-center justify-center py-1.5 rounded-md transition-all duration-200',
-                    'text-xs text-gray-600 hover:bg-blue-100 hover:text-blue-700',
-                    'border border-gray-200'
-                  )}
-                  title={language === 'en' ? 'Switch to Urdu' : 'Switch to English'}
-                >
-                  <Languages className="h-3.5 w-3.5 mr-1.5" />
-                  <span>{language === 'en' ? 'اردو' : 'English'}</span>
-                </button>
-              </div>
-            )}
-            {!open && (
-              <button
-                onClick={() => setLanguage(language === 'en' ? 'ur' : 'en')}
-                className={cn(
-                  'w-full flex items-center justify-center py-2 rounded-lg transition-all duration-200',
-                  'text-gray-700 hover:bg-blue-100 hover:text-blue-700'
-                )}
-                title={language === 'en' ? 'Switch to Urdu' : 'Switch to English'}
-              >
-                <Languages className="h-4 w-4 flex-shrink-0" />
-              </button>
-            )}
-
-            <button
-              onClick={logout}
-              className={cn(
-                'w-full mt-2 flex items-center py-2 rounded-lg transition-all duration-200',
-                'text-red-600 hover:bg-red-50',
-                open ? 'gap-2 px-3 justify-start' : 'justify-center px-0'
-              )}
-              title={!open ? t('logout') : undefined}
-            >
-              <LogOut className="h-4 w-4 flex-shrink-0" />
-              {open && <span className="text-sm font-medium transition-opacity duration-200">{t('logout')}</span>}
-            </button>
           </div>
         </SidebarBody>
       </Sidebar>

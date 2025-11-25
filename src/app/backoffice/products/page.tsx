@@ -59,6 +59,7 @@ export default function ProductsPage() {
     barcode: '',
     unit: 'pcs',
     price: '',
+    cartonPrice: '',
     costPrice: '',
     category: '',
     trackStock: true,
@@ -83,20 +84,69 @@ export default function ProductsPage() {
 
     try {
       setLoading(true)
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '50',
-      })
-      if (searchTerm) {
-        params.append('search', searchTerm)
-      }
+      
+      // Try API first if online
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          const params = new URLSearchParams({
+            page: currentPage.toString(),
+            limit: '50',
+          })
+          if (searchTerm) {
+            params.append('search', searchTerm)
+          }
 
-      const response = await fetch(`/api/products?${params}`)
-      if (response.ok) {
-        const data: ProductsResponse = await response.json()
-        setProducts(data.products || [])
-        setPagination(data.pagination)
+          const response = await fetch(`/api/products?${params}`)
+          if (response.ok) {
+            const data: ProductsResponse = await response.json()
+            setProducts(data.products || [])
+            setPagination(data.pagination)
+            setLoading(false)
+            return
+          }
+        } catch (apiError) {
+          console.warn('API failed, falling back to cache:', apiError)
+        }
       }
+      
+      // Offline or API failed: use cached products (basic info only)
+      const { getProductsWithCache } = await import('@/lib/offline/products')
+      const cached = await getProductsWithCache(user.currentShopId, false)
+      let rows = cached.map((p) => ({
+        id: p.id,
+        name: p.name,
+        sku: null,
+        barcode: p.barcode,
+        unit: p.unit,
+        price: p.price.toString(),
+        costPrice: null,
+        category: null,
+        trackStock: p.trackStock,
+        reorderLevel: null,
+        stock: null, // Stock requires server calculation
+        cartonSize: p.cartonSize ?? null,
+        cartonBarcode: p.cartonBarcode ?? null,
+        cartonPrice: p.cartonPrice?.toString() || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }))
+      
+      // Apply search filter
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase()
+        rows = rows.filter((p) => 
+          p.name.toLowerCase().includes(term) ||
+          (p.barcode && p.barcode.toLowerCase().includes(term))
+        )
+      }
+      
+      setProducts(rows)
+      setPagination({
+        page: 1,
+        limit: 50,
+        total: rows.length,
+        totalPages: 1,
+      })
     } catch (err) {
       console.error('Failed to fetch products:', err)
     } finally {
@@ -118,6 +168,7 @@ export default function ProductsPage() {
       barcode: '',
       unit: 'pcs',
       price: '',
+      cartonPrice: '',
       costPrice: '',
       category: '',
       trackStock: true,
@@ -137,6 +188,7 @@ export default function ProductsPage() {
       barcode: product.barcode || '',
       unit: product.unit,
       price: product.price,
+      cartonPrice: (product as any).cartonPrice || '',
       costPrice: product.costPrice || '',
       category: product.category || '',
       trackStock: product.trackStock,
@@ -432,7 +484,7 @@ export default function ProductsPage() {
               {/* Carton / Packing Section */}
               <div className="mt-6 border-t pt-4">
                 <h3 className="text-sm font-semibold mb-3 text-gray-700">Carton / Packing Details</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Items per Carton</label>
                     <Input
@@ -442,6 +494,17 @@ export default function ProductsPage() {
                       onChange={(e) => setFormData({ ...formData, cartonSize: e.target.value })}
                     />
                     <p className="text-xs text-gray-500 mt-1">Leave empty if not applicable</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Carton Price</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Price for full carton"
+                      value={formData.cartonPrice}
+                      onChange={(e) => setFormData({ ...formData, cartonPrice: e.target.value })}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Price when selling whole carton</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Carton Barcode</label>

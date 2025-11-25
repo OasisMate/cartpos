@@ -50,20 +50,68 @@ export default function BackofficeSalesPage() {
     try {
       setLoading(true)
       setError('')
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '50',
-      })
+      
+      // Try API first if online
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          const params = new URLSearchParams({
+            page: currentPage.toString(),
+            limit: '50',
+          })
+          if (statusFilter !== 'ALL') {
+            params.set('paymentStatus', statusFilter)
+          }
+          const resp = await fetch(`/api/sales?${params}`)
+          const data: SalesResponse = await resp.json()
+          if (resp.ok) {
+            setSales(data.sales || [])
+            setPagination(data.pagination)
+            setLoading(false)
+            return
+          }
+        } catch (apiError) {
+          console.warn('API failed, falling back to cache:', apiError)
+        }
+      }
+      
+      // Offline or API failed: use cached sales
+      const { getSales } = await import('@/lib/offline/indexedDb')
+      const cached = await getSales(user.currentShopId)
+      let rows = cached.map((s) => ({
+        id: s.id,
+        createdAt: new Date(s.createdAt).toISOString(),
+        status: 'COMPLETED' as const,
+        paymentStatus: s.paymentStatus,
+        paymentMethod: s.paymentMethod ?? null,
+        total: s.total.toString(),
+        customer: s.customerId ? { id: s.customerId, name: 'Customer' } : null,
+        lines: s.items.map((item) => ({
+          id: item.productId,
+          product: { id: item.productId, name: 'Product', unit: 'pcs' },
+          quantity: item.quantity.toString(),
+          unitPrice: item.unitPrice.toString(),
+          lineTotal: item.lineTotal.toString(),
+        })),
+        payments: s.paymentStatus === 'PAID' && s.amountReceived ? [{
+          id: s.id,
+          amount: s.amountReceived.toString(),
+          method: s.paymentMethod || 'CASH',
+        }] : [],
+        createdBy: null,
+      }))
+      
+      // Apply payment status filter
       if (statusFilter !== 'ALL') {
-        params.set('paymentStatus', statusFilter)
+        rows = rows.filter((s) => s.paymentStatus === statusFilter)
       }
-      const resp = await fetch(`/api/sales?${params}`)
-      const data: SalesResponse = await resp.json()
-      if (!resp.ok) {
-        throw new Error((data as any)?.error || 'Failed to load sales')
-      }
-      setSales(data.sales || [])
-      setPagination(data.pagination)
+      
+      setSales(rows)
+      setPagination({
+        page: 1,
+        limit: 50,
+        total: rows.length,
+        totalPages: 1,
+      })
     } catch (err: any) {
       setError(err.message || 'Failed to load sales')
     } finally {

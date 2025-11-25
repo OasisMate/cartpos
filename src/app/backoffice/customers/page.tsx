@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
+import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { getCustomersWithCache } from '@/lib/offline/data'
 
 interface Customer {
   id: string
@@ -13,6 +15,7 @@ interface Customer {
 
 export default function CustomersPage() {
   const { user } = useAuth()
+  const isOnline = useOnlineStatus()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -30,15 +33,48 @@ export default function CustomersPage() {
     setLoading(true)
     setError('')
     try {
-      const params = new URLSearchParams()
-      if (search) params.append('search', search)
-      const res = await fetch(`/api/customers?${params.toString()}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to load customers')
-      let rows: Customer[] = data.customers || data || []
+      if (isOnline) {
+        // Online: try API first
+        try {
+          const params = new URLSearchParams()
+          if (search) params.append('search', search)
+          const res = await fetch(`/api/customers?${params.toString()}`)
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Failed to load customers')
+          let rows: Customer[] = data.customers || data || []
+          if (onlyWithBalance) {
+            rows = rows.filter((c) => (c.balance || 0) > 0)
+          }
+          setCustomers(rows)
+          setLoading(false)
+          return
+        } catch (apiError) {
+          console.warn('API failed, falling back to cache:', apiError)
+        }
+      }
+      
+      // Offline or API failed: use cache
+      const cached = await getCustomersWithCache(user!.currentShopId!, isOnline)
+      let rows: Customer[] = cached.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        balance: 0, // Balance calculation requires server data
+      }))
+      
+      // Apply search filter
+      if (search) {
+        const term = search.toLowerCase()
+        rows = rows.filter((c) => 
+          c.name.toLowerCase().includes(term) ||
+          (c.phone && c.phone.includes(term))
+        )
+      }
+      
       if (onlyWithBalance) {
         rows = rows.filter((c) => (c.balance || 0) > 0)
       }
+      
       setCustomers(rows)
     } catch (e: any) {
       setError(e.message || 'Failed to load')

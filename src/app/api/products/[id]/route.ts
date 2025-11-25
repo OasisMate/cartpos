@@ -43,10 +43,13 @@ export async function PUT(
       barcode: body.barcode,
       unit: body.unit,
       price: body.price ? parseFloat(body.price) : undefined,
+      cartonPrice: body.cartonPrice ? parseFloat(body.cartonPrice) : undefined,
       costPrice: body.costPrice ? parseFloat(body.costPrice) : undefined,
       category: body.category,
       trackStock: body.trackStock,
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,
+      cartonSize: body.cartonSize ? parseInt(body.cartonSize) : undefined,
+      cartonBarcode: body.cartonBarcode || undefined,
     }
 
     const product = await updateProduct(params.id, input, user.id)

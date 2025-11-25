@@ -27,6 +27,7 @@ interface CartItem {
   quantity: number
   unitPrice: number
   lineTotal: number
+  isCarton?: boolean  // true if selling by carton, false if by piece
 }
 
 interface ReceiptItem {
@@ -144,18 +145,28 @@ export default function POSPage() {
     }
   }, [])
 
-  function addToCart(product: Product, quantity: number = 1) {
-    const existingItem = cart.find((item) => item.product.id === product.id)
+  function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
+    // Determine price based on carton vs piece
+    const unitPrice = isCarton && product.cartonPrice 
+      ? product.cartonPrice 
+      : product.price
+    
+    // If adding carton, quantity should be in cartons, not pieces
+    const finalQuantity = isCarton ? quantity : quantity
+
+    const existingItem = cart.find((item) => 
+      item.product.id === product.id && item.isCarton === isCarton
+    )
 
     if (existingItem) {
       setCart(
         cart.map((item) =>
-          item.product.id === product.id
+          item.product.id === product.id && item.isCarton === isCarton
             ? {
-              ...item,
-              quantity: item.quantity + quantity,
-              lineTotal: (item.quantity + quantity) * item.unitPrice,
-            }
+                ...item,
+                quantity: item.quantity + finalQuantity,
+                lineTotal: (item.quantity + finalQuantity) * item.unitPrice,
+              }
             : item
         )
       )
@@ -164,9 +175,10 @@ export default function POSPage() {
         ...cart,
         {
           product,
-          quantity,
-          unitPrice: product.price,
-          lineTotal: product.price * quantity,
+          quantity: finalQuantity,
+          unitPrice,
+          lineTotal: unitPrice * finalQuantity,
+          isCarton,
         },
       ])
     }
@@ -233,6 +245,7 @@ export default function POSPage() {
         // Check if it's a carton barcode match
         const isCartonMatch = product.cartonBarcode === barcodeInput.trim()
         const quantity = isCartonMatch ? (product.cartonSize || 1) : 1
+        const isCarton = isCartonMatch && !!product.cartonPrice
 
         addToCart(
           {
@@ -241,15 +254,17 @@ export default function POSPage() {
             barcode: product.barcode,
             unit: product.unit,
             price: product.price,
+            cartonPrice: product.cartonPrice,
             trackStock: product.trackStock,
             cartonSize: product.cartonSize,
             cartonBarcode: product.cartonBarcode,
           },
-          quantity
+          isCarton ? 1 : quantity,  // If carton, quantity is 1 carton
+          isCarton
         )
 
         if (isCartonMatch) {
-          show({ message: `Added carton of ${quantity} ${product.unit}`, variant: 'success' })
+          show({ message: `Added 1 carton (${quantity} ${product.unit})`, variant: 'success' })
         }
       } else {
         // Fallback to products array search (in-memory)
@@ -258,10 +273,11 @@ export default function POSPage() {
           const isCartonMatch = foundProduct.cartonBarcode === barcodeInput.trim()
           const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : 1
 
-          addToCart(foundProduct, quantity)
+          const isCarton = isCartonMatch && !!foundProduct.cartonPrice
+          addToCart(foundProduct, isCarton ? 1 : quantity, isCarton)
 
           if (isCartonMatch) {
-            show({ message: `Added carton of ${quantity} ${foundProduct.unit}`, variant: 'success' })
+            show({ message: `Added 1 carton (${quantity} ${foundProduct.unit})`, variant: 'success' })
           }
         } else {
           setError('Product not found with this barcode')
@@ -579,17 +595,49 @@ export default function POSPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {products.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => addToCart(product, 1)}
-                  className="p-3 border border-[hsl(var(--border))] rounded-lg hover:bg-[hsl(var(--muted))] text-left"
-                >
-                  <div className="font-medium">{product.name}</div>
-                  <div className="text-sm text-[hsl(var(--muted-foreground))]">{product.unit}</div>
-                  <div className="font-semibold mt-1">Rs.{product.price.toFixed(2)}</div>
-                </button>
-              ))}
+              {products.map((product) => {
+                const hasCarton = product.cartonSize && product.cartonSize > 0 && product.cartonPrice
+                return (
+                  <div
+                    key={product.id}
+                    className="p-3 border border-[hsl(var(--border))] rounded-lg hover:bg-[hsl(var(--muted))]"
+                  >
+                    <div className="font-medium">{product.name}</div>
+                    <div className="text-sm text-[hsl(var(--muted-foreground))]">{product.unit}</div>
+                    <div className="font-semibold mt-1 mb-2">
+                      Rs.{product.price.toFixed(2)}
+                      {hasCarton && (
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] ml-2">
+                          / Carton: Rs.{product.cartonPrice!.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                    {hasCarton ? (
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => addToCart(product, 1, false)}
+                          className="flex-1 px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        >
+                          Add Piece
+                        </button>
+                        <button
+                          onClick={() => addToCart(product, 1, true)}
+                          className="flex-1 px-2 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                        >
+                          Add Carton
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addToCart(product, 1, false)}
+                        className="w-full mt-2 px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

@@ -103,17 +103,54 @@ export default function PurchasesPage() {
 
     try {
       setLoading(true)
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '50',
-      })
+      const isOnline = typeof navigator !== 'undefined' && navigator.onLine
+      
+      if (isOnline) {
+        try {
+          const params = new URLSearchParams({
+            page: currentPage.toString(),
+            limit: '50',
+          })
 
-      const response = await fetch(`/api/purchases?${params}`)
-      if (response.ok) {
-        const data: PurchasesResponse = await response.json()
-        setPurchases(data.purchases || [])
-        setPagination(data.pagination)
+          const response = await fetch(`/api/purchases?${params}`)
+          if (response.ok) {
+            const data: PurchasesResponse = await response.json()
+            setPurchases(data.purchases || [])
+            setPagination(data.pagination)
+            setLoading(false)
+            return
+          }
+        } catch (apiError) {
+          console.warn('API failed, falling back to cache:', apiError)
+        }
       }
+      
+      // Offline or API failed: use cached purchases
+      const { getPurchases } = await import('@/lib/offline/indexedDb')
+      const cached = await getPurchases(user.currentShopId)
+      const rows = cached.map((p) => ({
+        id: p.id,
+        date: new Date(p.date || p.createdAt).toISOString().split('T')[0],
+        reference: p.reference || null,
+        notes: p.notes || null,
+        supplier: p.supplierId ? { id: p.supplierId, name: 'Supplier' } : null,
+        createdBy: null,
+        _count: { lines: p.lines.length },
+        lines: p.lines.map((l) => ({
+          id: l.productId,
+          product: { id: l.productId, name: 'Product', unit: 'pcs' },
+          quantity: l.quantity.toString(),
+          unitCost: l.unitCost?.toString() || null,
+        })),
+      }))
+      
+      setPurchases(rows)
+      setPagination({
+        page: 1,
+        limit: 50,
+        total: rows.length,
+        totalPages: 1,
+      })
     } catch (err) {
       console.error('Failed to fetch purchases:', err)
     } finally {
@@ -121,37 +158,78 @@ export default function PurchasesPage() {
     }
   }, [user?.currentShopId, currentPage])
 
+  const fetchProducts = useCallback(async () => {
+    if (!user?.currentShopId) return
+    try {
+      const isOnline = typeof navigator !== 'undefined' && navigator.onLine
+      
+      if (isOnline) {
+        try {
+          const response = await fetch('/api/products?limit=1000')
+          if (response.ok) {
+            const data = await response.json()
+            setProducts(data.products || [])
+            return
+          }
+        } catch (apiError) {
+          console.warn('API failed, falling back to cache:', apiError)
+        }
+      }
+      
+      // Offline or API failed: use cache
+      const { getProductsWithCache } = await import('@/lib/offline/products')
+      const cached = await getProductsWithCache(user.currentShopId, isOnline)
+      setProducts(cached.map((p) => ({
+        id: p.id,
+        name: p.name,
+        unit: p.unit,
+        price: p.price.toString(),
+        cartonSize: p.cartonSize ?? null,
+      })))
+    } catch (err) {
+      console.error('Failed to fetch products:', err)
+    }
+  }, [user?.currentShopId])
+
+  const fetchSuppliers = useCallback(async () => {
+    if (!user?.currentShopId) return
+    try {
+      const isOnline = typeof navigator !== 'undefined' && navigator.onLine
+      
+      if (isOnline) {
+        try {
+          const response = await fetch('/api/suppliers?limit=1000')
+          if (response.ok) {
+            const data = await response.json()
+            setSuppliers(data.suppliers || [])
+            return
+          }
+        } catch (apiError) {
+          console.warn('API failed, falling back to cache:', apiError)
+        }
+      }
+      
+      // Offline or API failed: use cache
+      const { getSuppliersWithCache } = await import('@/lib/offline/data')
+      const cached = await getSuppliersWithCache(user.currentShopId, isOnline)
+      setSuppliers(cached.map((s) => ({
+        id: s.id,
+        name: s.name,
+        phone: s.phone,
+        notes: s.notes,
+      })))
+    } catch (err) {
+      console.error('Failed to fetch suppliers:', err)
+    }
+  }, [user?.currentShopId])
+
   useEffect(() => {
     if (user?.currentShopId) {
       fetchPurchases()
       fetchProducts()
       fetchSuppliers()
     }
-  }, [user?.currentShopId, fetchPurchases])
-
-  async function fetchProducts() {
-    try {
-      const response = await fetch('/api/products?limit=1000')
-      if (response.ok) {
-        const data = await response.json()
-        setProducts(data.products || [])
-      }
-    } catch (err) {
-      console.error('Failed to fetch products:', err)
-    }
-  }
-
-  async function fetchSuppliers() {
-    try {
-      const response = await fetch('/api/suppliers?limit=1000')
-      if (response.ok) {
-        const data = await response.json()
-        setSuppliers(data.suppliers || [])
-      }
-    } catch (err) {
-      console.error('Failed to fetch suppliers:', err)
-    }
-  }
+  }, [user?.currentShopId, fetchPurchases, fetchProducts, fetchSuppliers])
 
   async function handleQuickAddProduct() {
     if (!quickAddProductData.name || !quickAddProductData.price) {
@@ -478,14 +556,21 @@ export default function PurchasesPage() {
                                 className="w-20 px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="Qty"
                               />
-                              <select
-                                value={line.unit}
-                                onChange={(e) => updateLine(index, 'unit', e.target.value as 'piece' | 'carton')}
-                                className="w-24 px-1 py-1 border rounded text-sm bg-gray-50"
-                              >
-                                <option value="piece">Piece</option>
-                                <option value="carton">Carton</option>
-                              </select>
+                              {(() => {
+                                const selectedProduct = products.find(p => p.id === line.productId)
+                                const hasCarton = selectedProduct?.cartonSize && selectedProduct.cartonSize > 0
+                                if (!hasCarton) return null
+                                return (
+                                  <select
+                                    value={line.unit}
+                                    onChange={(e) => updateLine(index, 'unit', e.target.value as 'piece' | 'carton')}
+                                    className="w-24 px-1 py-1 border rounded text-sm bg-gray-50"
+                                  >
+                                    <option value="piece">Piece</option>
+                                    <option value="carton">Carton</option>
+                                  </select>
+                                )
+                              })()}
                             </div>
                           </td>
                           <td className="border p-2">
@@ -497,7 +582,13 @@ export default function PurchasesPage() {
                                 updateLine(index, 'unitCost', e.target.value)
                               }
                               className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="Optional"
+                              placeholder={(() => {
+                                const selectedProduct = products.find(p => p.id === line.productId)
+                                const hasCarton = selectedProduct?.cartonSize && selectedProduct.cartonSize > 0
+                                return line.unit === 'carton' && hasCarton 
+                                  ? `Per carton (optional)` 
+                                  : `Per ${selectedProduct?.unit || 'piece'} (optional)`
+                              })()}
                             />
                           </td>
                           <td className="border p-2 text-center">

@@ -1,6 +1,7 @@
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
   // Optional: Use direct connection for migrations if needed
   // directUrl = env("DIRECT_URL")
   // Connection pooling is handled via DATABASE_URL parameters:
@@ -208,11 +209,12 @@ model Product {
   barcode      String?
   unit         String
   price        Decimal        @db.Decimal(10, 2)
+  cartonPrice  Decimal?       @db.Decimal(10, 2)  // Price for full carton
   costPrice    Decimal?       @db.Decimal(10, 2)
   category     String?
   trackStock   Boolean        @default(true)
   reorderLevel Int?
-  cartonSize   Int?
+  cartonSize   Int?           // Number of pieces in a carton
   cartonBarcode String?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt

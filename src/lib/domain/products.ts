@@ -7,10 +7,13 @@ export interface CreateProductInput {
   barcode?: string
   unit: string
   price: number
+  cartonPrice?: number
   costPrice?: number
   category?: string
   trackStock?: boolean
   reorderLevel?: number
+  cartonSize?: number
+  cartonBarcode?: string
 }
 
 export interface UpdateProductInput extends Partial<CreateProductInput> {}
@@ -85,10 +88,13 @@ export async function createProduct(
       barcode: input.barcode || null,
       unit: input.unit,
       price: new Decimal(input.price),
+      cartonPrice: input.cartonPrice ? new Decimal(input.cartonPrice) : null,
       costPrice: input.costPrice ? new Decimal(input.costPrice) : null,
       category: input.category || null,
       trackStock: input.trackStock ?? true,
       reorderLevel: input.reorderLevel || null,
+      cartonSize: input.cartonSize || null,
+      cartonBarcode: input.cartonBarcode || null,
     },
   })
 
@@ -140,6 +146,9 @@ export async function updateProduct(
       ...(input.barcode !== undefined && { barcode: input.barcode || null }),
       ...(input.unit && { unit: input.unit }),
       ...(input.price !== undefined && { price: new Decimal(input.price) }),
+      ...(input.cartonPrice !== undefined && {
+        cartonPrice: input.cartonPrice ? new Decimal(input.cartonPrice) : null,
+      }),
       ...(input.costPrice !== undefined && {
         costPrice: input.costPrice ? new Decimal(input.costPrice) : null,
       }),
@@ -148,6 +157,8 @@ export async function updateProduct(
       ...(input.reorderLevel !== undefined && {
         reorderLevel: input.reorderLevel || null,
       }),
+      ...(input.cartonSize !== undefined && { cartonSize: input.cartonSize || null }),
+      ...(input.cartonBarcode !== undefined && { cartonBarcode: input.cartonBarcode || null }),
     },
   })
 
@@ -263,7 +274,10 @@ export async function getProductsForPOS(shopId: string) {
       barcode: true,
       unit: true,
       price: true,
+      cartonPrice: true,
       trackStock: true,
+      cartonSize: true,
+      cartonBarcode: true,
     },
     orderBy: { name: 'asc' },
   })
@@ -274,6 +288,9 @@ export async function getProductsForPOS(shopId: string) {
     barcode: p.barcode,
     unit: p.unit,
     price: parseFloat(p.price.toString()),
+    cartonPrice: p.cartonPrice ? parseFloat(p.cartonPrice.toString()) : null,
     trackStock: p.trackStock,
+    cartonSize: p.cartonSize,
+    cartonBarcode: p.cartonBarcode,
   }))
 }

@@ -8,6 +8,7 @@ export interface Product {
   barcode: string | null
   unit: string
   price: number
+  cartonPrice?: number | null
   trackStock: boolean
   cartonSize?: number | null
   cartonBarcode?: string | null
@@ -62,6 +63,7 @@ export async function getProductsWithCache(shopId: string, isOnline: boolean): P
         barcode: p.barcode,
         unit: p.unit,
         price: p.price,
+        cartonPrice: p.cartonPrice,
         trackStock: p.trackStock,
         cartonSize: p.cartonSize,
         cartonBarcode: p.cartonBarcode,
