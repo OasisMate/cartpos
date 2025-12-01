@@ -188,6 +188,8 @@ model ShopSettings {
   allowCustomUnits                Boolean       @default(true)
   allowNegativeStock              Boolean       @default(true)  // Allow sales even if stock is insufficient
   languageMode                    LanguageMode  @default(EN_BILINGUAL)
+  printerName                     String?       // Preferred printer name (for reference, actual selection handled by browser)
+  autoPrint                       Boolean       @default(false)  // Auto-print receipts after sale completion
   shop                            Shop          @relation(fields: [shopId], references: [id])
 }
 

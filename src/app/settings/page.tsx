@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard } from 'lucide-react'
+import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
 
 export default function SettingsPage() {
@@ -26,6 +26,21 @@ export default function SettingsPage() {
     confirmPassword: '',
   })
   const [showPasswordForm, setShowPasswordForm] = useState(false)
+  
+  // Shop settings state (for STORE_MANAGER only)
+  const [shopSettings, setShopSettings] = useState({
+    printerName: '',
+    autoPrint: false,
+  })
+  const [loadingSettings, setLoadingSettings] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsError, setSettingsError] = useState('')
+  const [settingsSuccess, setSettingsSuccess] = useState('')
+  
+  // Check if user is STORE_MANAGER
+  const isStoreManager = user?.shops?.some(
+    (s) => s.shopId === user?.currentShopId && s.shopRole === 'STORE_MANAGER'
+  )
 
   useEffect(() => {
     if (user) {
@@ -36,6 +51,31 @@ export default function SettingsPage() {
       })
     }
   }, [user])
+
+  // Load shop settings if user is STORE_MANAGER
+  useEffect(() => {
+    async function loadShopSettings() {
+      if (!isStoreManager || !user?.currentShopId) return
+      
+      try {
+        setLoadingSettings(true)
+        const response = await fetch('/api/shop/settings')
+        if (response.ok) {
+          const data = await response.json()
+          setShopSettings({
+            printerName: data.settings?.printerName || '',
+            autoPrint: data.settings?.autoPrint || false,
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load shop settings:', err)
+      } finally {
+        setLoadingSettings(false)
+      }
+    }
+    
+    loadShopSettings()
+  }, [isStoreManager, user?.currentShopId])
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
@@ -135,6 +175,34 @@ export default function SettingsPage() {
     }
   }
 
+  const handleShopSettingsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingSettings(true)
+    setSettingsError('')
+    setSettingsSuccess('')
+
+    try {
+      const response = await fetch('/api/shop/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(shopSettings),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update shop settings')
+      }
+
+      setSettingsSuccess('Printer settings updated successfully')
+      setTimeout(() => setSettingsSuccess(''), 3000)
+    } catch (err: any) {
+      setSettingsError(err.message || 'Failed to update shop settings')
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -162,6 +230,18 @@ export default function SettingsPage() {
       {success && (
         <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
           <p className="text-sm text-green-600">{success}</p>
+        </div>
+      )}
+
+      {settingsError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-600">{settingsError}</p>
+        </div>
+      )}
+
+      {settingsSuccess && (
+        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-sm text-green-600">{settingsSuccess}</p>
         </div>
       )}
 
@@ -367,6 +447,64 @@ export default function SettingsPage() {
           </form>
         )}
       </div>
+
+      {/* Shop Settings - Only for STORE_MANAGER */}
+      {isStoreManager && (
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Printer className="h-5 w-5 text-blue-600" />
+            <h2 className="text-xl font-semibold text-gray-900">Printer Settings</h2>
+          </div>
+
+          {loadingSettings ? (
+            <div className="text-gray-600">Loading printer settings...</div>
+          ) : (
+            <form onSubmit={handleShopSettingsSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="printerName" className="block text-sm font-medium text-gray-700 mb-2">
+                  Printer Name
+                </label>
+                <input
+                  type="text"
+                  id="printerName"
+                  value={shopSettings.printerName}
+                  onChange={(e) => setShopSettings({ ...shopSettings, printerName: e.target.value })}
+                  placeholder="Enter printer name (e.g., Thermal Printer, HP LaserJet)"
+                  disabled={savingSettings}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Enter the name of your default printer. This will be used as a preference when printing receipts.
+                </p>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="autoPrint"
+                  checked={shopSettings.autoPrint}
+                  onChange={(e) => setShopSettings({ ...shopSettings, autoPrint: e.target.checked })}
+                  disabled={savingSettings}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+                />
+                <label htmlFor="autoPrint" className="ml-2 text-sm text-gray-700">
+                  Auto-print receipts after sale completion
+                </label>
+              </div>
+
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={savingSettings}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingSettings ? 'Saving...' : 'Save Printer Settings'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   )
 }

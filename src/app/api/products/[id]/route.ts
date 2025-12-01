@@ -37,14 +37,69 @@ export async function PUT(
     }
 
     const body = await request.json()
+    
+    // Validate and parse price if provided
+    let price: number | undefined
+    if (body.price !== undefined && body.price !== null && body.price !== '') {
+      price = parseFloat(body.price)
+      if (isNaN(price) || price <= 0) {
+        return NextResponse.json(
+          { error: 'Price must be a valid positive number' },
+          { status: 400 }
+        )
+      }
+      if (price >= 100000000) {
+        return NextResponse.json(
+          { error: 'Price must be less than 100,000,000' },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // Validate cost price if provided
+    let costPrice: number | undefined
+    if (body.costPrice !== undefined && body.costPrice !== null && body.costPrice !== '') {
+      costPrice = parseFloat(body.costPrice)
+      if (isNaN(costPrice) || costPrice < 0) {
+        return NextResponse.json(
+          { error: 'Cost price must be a valid non-negative number' },
+          { status: 400 }
+        )
+      }
+      if (costPrice >= 100000000) {
+        return NextResponse.json(
+          { error: 'Cost price must be less than 100,000,000' },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // Validate carton price if provided
+    let cartonPrice: number | undefined
+    if (body.cartonPrice !== undefined && body.cartonPrice !== null && body.cartonPrice !== '') {
+      cartonPrice = parseFloat(body.cartonPrice)
+      if (isNaN(cartonPrice) || cartonPrice <= 0) {
+        return NextResponse.json(
+          { error: 'Carton price must be a valid positive number' },
+          { status: 400 }
+        )
+      }
+      if (cartonPrice >= 100000000) {
+        return NextResponse.json(
+          { error: 'Carton price must be less than 100,000,000' },
+          { status: 400 }
+        )
+      }
+    }
+    
     const input: UpdateProductInput = {
       name: body.name,
       sku: body.sku,
       barcode: body.barcode,
       unit: body.unit,
-      price: body.price ? parseFloat(body.price) : undefined,
-      cartonPrice: body.cartonPrice ? parseFloat(body.cartonPrice) : undefined,
-      costPrice: body.costPrice ? parseFloat(body.costPrice) : undefined,
+      price: price,
+      cartonPrice: cartonPrice,
+      costPrice: costPrice,
       category: body.category,
       trackStock: body.trackStock,
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,

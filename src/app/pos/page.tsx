@@ -40,9 +40,11 @@ interface ReceiptItem {
 
 interface ReceiptData {
   id: string
+  invoiceNumber: string
   timestamp: string
   shopName: string
   shopCity?: string | null
+  shopPhone?: string | null
   items: ReceiptItem[]
   subtotal: number
   discount: number
@@ -144,6 +146,26 @@ export default function POSPage() {
       barcodeInputRef.current.focus()
     }
   }, [])
+
+  // Refresh products when page regains focus (in case products were added in another tab)
+  useEffect(() => {
+    async function refreshProducts() {
+      if (!user?.currentShopId) return
+      try {
+        const productsList = await getProductsWithCache(user.currentShopId, isOnline)
+        setProducts(productsList)
+      } catch (err) {
+        console.error('Failed to refresh products:', err)
+      }
+    }
+
+    function handleFocus() {
+      refreshProducts()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [user?.currentShopId, isOnline])
 
   function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
     // Determine price based on carton vs piece
@@ -268,7 +290,12 @@ export default function POSPage() {
         }
       } else {
         // Fallback to products array search (in-memory)
-        const foundProduct = products.find((p) => p.barcode === barcodeInput.trim() || p.cartonBarcode === barcodeInput.trim())
+        const trimmedBarcode = barcodeInput.trim()
+        const foundProduct = products.find(
+          (p) => 
+            (p.barcode && p.barcode.trim() === trimmedBarcode) || 
+            (p.cartonBarcode && p.cartonBarcode.trim() === trimmedBarcode)
+        )
         if (foundProduct) {
           const isCartonMatch = foundProduct.cartonBarcode === barcodeInput.trim()
           const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : 1
@@ -389,11 +416,21 @@ export default function POSPage() {
         paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
           ? parseFloat(amountReceived)
           : undefined
+      
+      // Generate sequential invoice number (stored per shop in localStorage)
+      const invoiceKey = `invoice_counter_${user.currentShopId}`
+      const lastNum = parseInt(localStorage.getItem(invoiceKey) || '0', 10)
+      const nextNum = lastNum + 1
+      localStorage.setItem(invoiceKey, String(nextNum))
+      const invoiceNumber = String(nextNum).padStart(6, '0')
+
       const receiptSnapshot: ReceiptData = {
         id: saleId,
+        invoiceNumber,
         timestamp: new Date().toISOString(),
         shopName: shopInfo?.shop.name || 'CartPOS Shop',
         shopCity: shopInfo?.shop.city || '',
+        shopPhone: shopInfo?.shop.phone || '',
         items: cart.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
@@ -446,8 +483,12 @@ export default function POSPage() {
     paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
       ? parseFloat(amountReceived) - total
       : 0
-  function handlePrintReceipt() {
-    window.print()
+  async function handlePrintReceipt() {
+    // Use print utility - keep it as fast as possible (no extra API calls)
+    const { printReceipt } = await import('@/lib/utils/print')
+    await printReceipt('pos-print-receipt', {
+      silent: true, // Browser will still show dialog but we keep our side instant
+    })
   }
 
   function closeReceiptModal() {
@@ -924,80 +965,87 @@ export default function POSPage() {
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-md border border-[hsl(var(--border))]">
               <h2 className="text-xl font-bold mb-4">Receipt</h2>
-              <div id="pos-print-receipt" className="bg-white border rounded p-4 text-sm">
-                <div className="text-center mb-3">
-                  <div className="font-semibold">{receiptData.shopName}</div>
-                  {receiptData.shopCity && <div className="text-xs text-gray-500">{receiptData.shopCity}</div>}
-                  <div className="text-xs text-gray-500">
-                    {new Date(receiptData.timestamp).toLocaleString()}
+              <div id="pos-print-receipt" className="bg-white p-2 text-black" style={{ fontFamily: 'Arial, sans-serif', fontSize: '10pt', lineHeight: '1.2' }}>
+                {/* Header */}
+                <div className="shop-name">{receiptData.shopName}</div>
+                {receiptData.shopCity && <div className="shop-address">{receiptData.shopCity}</div>}
+                {receiptData.shopPhone && <div className="shop-phone">{receiptData.shopPhone}</div>}
+                <div className="sale-invoice">Sale Invoice</div>
+                
+                {/* Invoice Info - 2 columns per row */}
+                <div className="info-grid">
+                  <div className="info-row">
+                    <div className="info-col"><span className="label">Inv #:</span><span>{receiptData.invoiceNumber}</span></div>
+                    <div className="info-col"><span className="label">Date:</span><span>{new Date(receiptData.timestamp).toLocaleDateString('en-GB').replace(/\//g, '-')}</span></div>
+                  </div>
+                  <div className="info-row">
+                    <div className="info-col"><span className="label">M.O.P:</span><span>{receiptData.paymentStatus === 'PAID' ? (receiptData.paymentMethod || 'Cash') : 'UDHAAR'}</span></div>
+                    <div className="info-col"><span className="label">Time:</span><span>{new Date(receiptData.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span></div>
                   </div>
                 </div>
-                <div className="text-xs mb-3">
-                  <div>Invoice: {receiptData.id.slice(0, 8)}</div>
-                  {receiptData.customerName && <div>Customer: {receiptData.customerName}</div>}
-                </div>
-                <table className="w-full text-xs mb-3">
+                
+                <div className="divider"></div>
+                
+                {/* Items Table */}
+                <table>
                   <thead>
-                    <tr className="border-t border-b">
-                      <th className="text-left py-1">Item</th>
-                      <th className="text-right py-1">Qty</th>
-                      <th className="text-right py-1">Rate</th>
-                      <th className="text-right py-1">Amt</th>
+                    <tr>
+                      <th>Sr#</th>
+                      <th>Item Details</th>
+                      <th className="price">Price</th>
+                      <th className="qty">Qty</th>
+                      <th className="total">Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {receiptData.items.map((item, idx) => (
                       <tr key={`${item.name}-${idx}`}>
-                        <td className="pr-1">{item.name}</td>
-                        <td className="text-right">
-                          {item.quantity} {item.unit || ''}
-                        </td>
-                        <td className="text-right">{item.unitPrice.toFixed(2)}</td>
-                        <td className="text-right">{item.lineTotal.toFixed(2)}</td>
+                        <td className="sn">{idx + 1}</td>
+                        <td className="item-name">{item.name}</td>
+                        <td className="price">{item.unitPrice.toFixed(0)}</td>
+                        <td className="qty">{item.quantity}</td>
+                        <td className="total">{item.lineTotal.toFixed(0)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div className="text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span>Rs {receiptData.subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Discount</span>
-                    <span>Rs {receiptData.discount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold border-t pt-1 mt-1">
-                    <span>Total</span>
-                    <span>Rs {receiptData.total.toFixed(2)}</span>
-                  </div>
-                  {receiptData.paymentStatus === 'PAID' && (
-                    <div className="flex justify-between">
-                      <span>Payment</span>
-                      <span>{receiptData.paymentMethod || ''}</span>
-                    </div>
+                
+                <div className="divider"></div>
+                
+                {/* Summary */}
+                <div className="summary">
+                  {receiptData.discount > 0 && (
+                    <>
+                      <div className="summary-row"><span>Subtotal:</span><span>{receiptData.subtotal.toFixed(0)}</span></div>
+                      <div className="summary-row"><span>Discount:</span><span>-{receiptData.discount.toFixed(0)}</span></div>
+                    </>
                   )}
-                  {typeof receiptData.amountReceived === 'number' && (
-                    <div className="flex justify-between">
-                      <span>Received</span>
-                      <span>Rs {receiptData.amountReceived.toFixed(2)}</span>
-                    </div>
-                  )}
-                  {typeof receiptData.change === 'number' && receiptData.change > 0 && (
-                    <div className="flex justify-between">
-                      <span>Change</span>
-                      <span>Rs {receiptData.change.toFixed(2)}</span>
-                    </div>
-                  )}
-                  {receiptData.paymentStatus === 'UDHAAR' && (
-                    <div className="text-right text-yellow-600 font-semibold">UDHAAR</div>
+                  <div className="summary-row total"><span>Grand Total:</span><span>{receiptData.total.toFixed(0)}</span></div>
+                  {receiptData.paymentStatus === 'PAID' && receiptData.paymentMethod === 'CASH' && typeof receiptData.amountReceived === 'number' && (
+                    <>
+                      <div className="summary-row"><span>Cash Paid:</span><span>{receiptData.amountReceived.toFixed(0)}</span></div>
+                      {typeof receiptData.change === 'number' && receiptData.change > 0 && (
+                        <div className="summary-row"><span>Change:</span><span>{receiptData.change.toFixed(0)}</span></div>
+                      )}
+                    </>
                   )}
                 </div>
-                <div className="mt-3 text-center text-xs">Shukriya! Visit again.</div>
+                
+                {/* Footer */}
+                <div className="footer">
+                  <div className="footer-row"><span>Total Items:</span><span>{receiptData.items.length}</span></div>
+                  <div style={{ textAlign: 'center', marginTop: '1mm' }}>Shukriya! Visit again.</div>
+                </div>
               </div>
               <div className="flex gap-2 mt-4">
                 <Button variant="outline" className="flex-1" onClick={closeReceiptModal}>
                   Close
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={async () => {
+                  const { printReceipt } = await import('@/lib/utils/print')
+                  await printReceipt('pos-print-receipt', { debug: true })
+                }}>
+                  Debug Print
                 </Button>
                 <Button className="flex-1" onClick={handlePrintReceipt}>
                   Print

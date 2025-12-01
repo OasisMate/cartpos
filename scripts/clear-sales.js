@@ -30,3 +30,5 @@ async function clearSales() {
 
 clearSales()
 
+
+

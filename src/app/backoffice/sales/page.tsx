@@ -225,14 +225,65 @@ export default function BackofficeSalesPage() {
                     <td className="border p-2">{s.status}</td>
                     <td className="border p-2 text-center">
                       <div className="flex justify-center gap-2">
-                        <a
-                          href={`/store/sales/${s.id}/receipt`}
-                          target="_blank"
+                        <button
+                          onClick={async () => {
+                            const { printReceipt } = await import('@/lib/utils/print')
+                            try {
+                              const response = await fetch(`/api/sales/${s.id}`)
+                              if (response.ok) {
+                                const data = await response.json()
+                                const inv = data.invoice
+                                const tempDiv = document.createElement('div')
+                                tempDiv.id = 'temp-receipt-' + Date.now()
+                                tempDiv.style.cssText = 'position:fixed;left:-9999px'
+                                const dateStr = new Date(inv.createdAt).toLocaleDateString('en-GB').replace(/\//g, '-')
+                                const timeStr = new Date(inv.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                                tempDiv.innerHTML = `
+                                  <div class="shop-name">${inv.shop?.name || 'Shop'}</div>
+                                  ${inv.shop?.city ? `<div class="shop-address">${inv.shop.city}</div>` : ''}
+                                  ${inv.shop?.phone ? `<div class="shop-phone">${inv.shop.phone}</div>` : ''}
+                                  <div class="sale-invoice">Sale Invoice</div>
+                                  <div class="info-grid">
+                                    <div class="info-row">
+                                      <div class="info-col"><span class="label">Inv #:</span><span>${inv.number || inv.id.slice(0, 8)}</span></div>
+                                      <div class="info-col"><span class="label">Date:</span><span>${dateStr}</span></div>
+                                    </div>
+                                    <div class="info-row">
+                                      <div class="info-col"><span class="label">M.O.P:</span><span>${inv.paymentStatus === 'PAID' ? (inv.paymentMethod || 'Cash') : 'UDHAAR'}</span></div>
+                                      <div class="info-col"><span class="label">Time:</span><span>${timeStr}</span></div>
+                                    </div>
+                                  </div>
+                                  <div class="divider"></div>
+                                  <table>
+                                    <thead><tr><th>Sr#</th><th>Item Details</th><th class="price">Price</th><th class="qty">Qty</th><th class="total">Total</th></tr></thead>
+                                    <tbody>
+                                      ${inv.lines.map((l: any, i: number) => `<tr><td class="sn">${i+1}</td><td class="item-name">${l.product.name}</td><td class="price">${Number(l.unitPrice).toFixed(0)}</td><td class="qty">${Number(l.quantity).toFixed(0)}</td><td class="total">${Number(l.lineTotal).toFixed(0)}</td></tr>`).join('')}
+                                    </tbody>
+                                  </table>
+                                  <div class="divider"></div>
+                                  <div class="summary">
+                                    ${Number(inv.discount) > 0 ? `<div class="summary-row"><span>Subtotal:</span><span>${Number(inv.subtotal).toFixed(0)}</span></div><div class="summary-row"><span>Discount:</span><span>-${Number(inv.discount).toFixed(0)}</span></div>` : ''}
+                                    <div class="summary-row total"><span>Grand Total:</span><span>${Number(inv.total).toFixed(0)}</span></div>
+                                    ${inv.paymentStatus === 'PAID' && inv.paymentMethod === 'CASH' && inv.payments && inv.payments.length > 0 ? `<div class="summary-row"><span>Cash Paid:</span><span>${Number(inv.payments[0]?.amount || inv.total).toFixed(0)}</span></div>` : ''}
+                                  </div>
+                                  <div class="footer">
+                                    <div class="footer-row"><span>Total Items:</span><span>${inv.lines.length}</span></div>
+                                    <div style="text-align:center;margin-top:1mm">Shukriya! Visit again.</div>
+                                  </div>
+                                `
+                                document.body.appendChild(tempDiv)
+                                printReceipt(tempDiv.id, { silent: true })
+                                setTimeout(() => tempDiv.remove(), 2000)
+                              }
+                            } catch (err) {
+                              console.error('Print failed:', err)
+                            }
+                          }}
                           className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
                           title="Print receipt"
                         >
                           Print
-                        </a>
+                        </button>
                         <button
                           disabled={s.status === 'VOID'}
                           onClick={() => voidSale(s.id)}

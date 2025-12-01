@@ -208,7 +208,24 @@ export async function getProductByBarcode(shopId: string, barcode: string): Prom
   // Skip if no shopId (Platform Admin case)
   if (!shopId) return undefined
 
-  return await db.products.where('[shopId+barcode]').equals([shopId, barcode]).first()
+  // Trim barcode to handle whitespace issues
+  const trimmedBarcode = barcode.trim()
+
+  // Try compound index first
+  try {
+    const product = await db.products.where('[shopId+barcode]').equals([shopId, trimmedBarcode]).first()
+    if (product) return product
+  } catch (err) {
+    // Compound index might not work in all cases, fall through to manual search
+    console.warn('Compound index query failed, falling back to manual search:', err)
+  }
+
+  // Fallback: Get all products for this shop and filter manually
+  // This handles cases where the compound index doesn't work or barcode is null
+  const products = await db.products.where('shopId').equals(shopId).toArray()
+  return products.find(
+    (p) => p.barcode && p.barcode.trim() === trimmedBarcode
+  )
 }
 
 export async function searchProducts(shopId: string, searchTerm: string): Promise<CachedProduct[]> {

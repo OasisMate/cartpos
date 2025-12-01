@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
@@ -78,6 +78,12 @@ export default function ProductsPage() {
   })
   const [adjusting, setAdjusting] = useState(false)
   const [adjustmentError, setAdjustmentError] = useState('')
+
+  // Refs for form inputs to support barcode scanning and navigation
+  const barcodeInputRef = useRef<HTMLInputElement>(null)
+  const cartonBarcodeInputRef = useRef<HTMLInputElement>(null)
+  const unitSelectRef = useRef<HTMLSelectElement>(null)
+  const priceInputRef = useRef<HTMLInputElement>(null)
 
   const fetchProducts = useCallback(async () => {
     if (!user?.currentShopId) return
@@ -178,6 +184,12 @@ export default function ProductsPage() {
     })
     setError('')
     setShowForm(true)
+    // Auto-focus barcode input for scanning when form opens
+    setTimeout(() => {
+      if (barcodeInputRef.current) {
+        barcodeInputRef.current.focus()
+      }
+    }, 100)
   }
 
   function openEditForm(product: Product) {
@@ -206,6 +218,49 @@ export default function ProductsPage() {
     setSubmitting(true)
 
     try {
+      // Validate price
+      const price = parseFloat(formData.price)
+      if (isNaN(price) || price <= 0) {
+        setError('Price must be a valid positive number')
+        setSubmitting(false)
+        return
+      }
+      if (price >= 100000000) {
+        setError('Price must be less than 100,000,000')
+        setSubmitting(false)
+        return
+      }
+      
+      // Validate cost price if provided
+      if (formData.costPrice) {
+        const costPrice = parseFloat(formData.costPrice)
+        if (isNaN(costPrice) || costPrice < 0) {
+          setError('Cost price must be a valid non-negative number')
+          setSubmitting(false)
+          return
+        }
+        if (costPrice >= 100000000) {
+          setError('Cost price must be less than 100,000,000')
+          setSubmitting(false)
+          return
+        }
+      }
+      
+      // Validate carton price if provided
+      if (formData.cartonPrice) {
+        const cartonPrice = parseFloat(formData.cartonPrice)
+        if (isNaN(cartonPrice) || cartonPrice <= 0) {
+          setError('Carton price must be a valid positive number')
+          setSubmitting(false)
+          return
+        }
+        if (cartonPrice >= 100000000) {
+          setError('Carton price must be less than 100,000,000')
+          setSubmitting(false)
+          return
+        }
+      }
+
       const url = editingProduct
         ? `/api/products/${editingProduct.id}`
         : '/api/products'
@@ -408,10 +463,27 @@ export default function ProductsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Barcode</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Barcode <span className="text-xs text-gray-500">(Scan or type)</span>
+                  </label>
                   <Input
+                    ref={barcodeInputRef}
                     value={formData.barcode}
                     onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                    placeholder="Scan barcode or type manually"
+                    onKeyDown={(e) => {
+                      // When Enter is pressed (typical barcode scanner behavior), move to price field
+                      // This minimizes manual work - barcode is scanned, then user just enters price
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        // Move focus to price field (most important field after barcode)
+                        if (priceInputRef.current) {
+                          priceInputRef.current.focus()
+                          priceInputRef.current.select() // Select existing value for easy replacement
+                        }
+                      }
+                    }}
+                    autoFocus={!editingProduct}
                   />
                 </div>
 
@@ -421,6 +493,7 @@ export default function ProductsPage() {
                   </label>
                   <div className="flex gap-2">
                     <Select
+                      ref={unitSelectRef}
                       value={formData.unit}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                       className="flex-1"
@@ -445,6 +518,7 @@ export default function ProductsPage() {
                     Price <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    ref={priceInputRef}
                     type="number"
                     step="0.01"
                     required
@@ -509,9 +583,20 @@ export default function ProductsPage() {
                   <div>
                     <label className="block text-sm font-medium mb-1">Carton Barcode</label>
                     <Input
-                      placeholder="Scan carton barcode"
+                      ref={cartonBarcodeInputRef}
+                      placeholder="Scan carton barcode or type manually"
                       value={formData.cartonBarcode}
                       onChange={(e) => setFormData({ ...formData, cartonBarcode: e.target.value })}
+                      onKeyDown={(e) => {
+                        // When Enter is pressed, move to track stock checkbox or submit button
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const trackStockCheckbox = document.querySelector('input[type="checkbox"]') as HTMLInputElement
+                          if (trackStockCheckbox) {
+                            trackStockCheckbox.focus()
+                          }
+                        }
+                      }}
                     />
                   </div>
                 </div>

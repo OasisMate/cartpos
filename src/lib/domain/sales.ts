@@ -142,11 +142,28 @@ export async function createSale(
 
   // Create sale (invoice) and lines in a transaction
   const invoice = await prisma.$transaction(async (tx) => {
+    // Generate sequential invoice number for this shop
+    const lastInvoice = await tx.invoice.findFirst({
+      where: { shopId },
+      orderBy: { createdAt: 'desc' },
+      select: { number: true },
+    })
+    
+    let nextNumber = 1
+    if (lastInvoice?.number) {
+      const lastNum = parseInt(lastInvoice.number, 10)
+      if (!isNaN(lastNum)) {
+        nextNumber = lastNum + 1
+      }
+    }
+    const invoiceNumber = String(nextNumber).padStart(6, '0') // Format: 000001, 000002, etc.
+
     // Create invoice header
     const invoice = await tx.invoice.create({
       data: {
         shopId,
         customerId: input.customerId || null,
+        number: invoiceNumber,
         paymentStatus: input.paymentStatus,
         paymentMethod:
           input.paymentStatus === 'PAID' ? input.paymentMethod! : null,

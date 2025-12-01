@@ -28,6 +28,7 @@ interface User {
       id: string
       name: string
       city: string | null
+      phone?: string | null
     }
   }>
   currentShopId?: string | null
