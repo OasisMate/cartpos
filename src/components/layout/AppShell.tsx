@@ -90,17 +90,39 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [orgAdminStoreMeta, setOrgAdminStoreMeta] = useState<{ id: string; name: string } | null>(null)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
+  const menuContainerRef = useRef<HTMLDivElement | null>(null)
+  const isClickingInsideRef = useRef(false)
 
   useEffect(() => {
+    if (!userMenuOpen) return
+
     function handleClickOutside(event: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+      // If we're clicking inside, don't close
+      if (isClickingInsideRef.current) {
+        isClickingInsideRef.current = false
+        return
+      }
+
+      const target = event.target as Node
+      const isClickInsideMenu = 
+        (userMenuRef.current && userMenuRef.current.contains(target)) ||
+        (menuContainerRef.current && menuContainerRef.current.contains(target))
+      
+      if (!isClickInsideMenu) {
         setUserMenuOpen(false)
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    // Add listener after a small delay to avoid immediate closure
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside, true)
+    }, 10)
+
+    return () => {
+      clearTimeout(timeoutId)
+      document.removeEventListener('click', handleClickOutside, true)
+    }
+  }, [userMenuOpen])
 
   // Extract context from URL if Platform Admin viewing org/store
   const orgIdMatch = pathname?.match(/\/org\/([^\/]+)/)
@@ -672,24 +694,50 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
                 {userMenuOpen && (
                   <div
+                    ref={menuContainerRef}
+                    onMouseDown={(e) => {
+                      isClickingInsideRef.current = true
+                      e.stopPropagation()
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                    }}
                     className={cn(
-                      'mt-2 rounded-lg border border-blue-100 bg-white shadow-lg p-3 space-y-2',
+                      'mt-2 rounded-lg border border-blue-100 bg-white shadow-lg p-3 space-y-2 z-50',
                       open ? 'mx-2' : 'absolute left-2 right-2 bottom-20'
                     )}
                   >
                     <button
-                      onClick={() => {
-                        setLanguage(language === 'en' ? 'ur' : 'en')
+                      type="button"
+                      onMouseDown={(e) => {
+                        isClickingInsideRef.current = true
+                        e.stopPropagation()
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const newLang = language === 'en' ? 'ur' : 'en'
+                        setLanguage(newLang)
                         setUserMenuOpen(false)
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-blue-50"
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-blue-50 transition-colors cursor-pointer"
                     >
                       <Languages className="h-4 w-4" />
                       <span>{language === 'en' ? 'اردو' : 'English'}</span>
                     </button>
                     <button
-                      onClick={logout}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50"
+                      type="button"
+                      onMouseDown={(e) => {
+                        isClickingInsideRef.current = true
+                        e.stopPropagation()
+                      }}
+                      onClick={async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setUserMenuOpen(false)
+                        await logout()
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                     >
                       <LogOut className="h-4 w-4" />
                       <span>{t('logout')}</span>

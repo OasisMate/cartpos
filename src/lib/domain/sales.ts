@@ -258,6 +258,9 @@ export async function createSale(
       invoice: invoiceWithDetails!,
       stockWarnings: stockWarnings.length > 0 ? stockWarnings : undefined,
     }
+  }, {
+    maxWait: 10000, // 10 seconds max wait
+    timeout: 30000, // 30 seconds timeout
   })
 
   return invoice
@@ -420,6 +423,9 @@ export async function voidSale(shopId: string, invoiceId: string, userId: string
     }
 
     return updated
+  }, {
+    maxWait: 10000,
+    timeout: 30000,
   })
 
   return result
@@ -485,5 +491,8 @@ export async function deleteSale(shopId: string, invoiceId: string, userId: stri
     })
 
     return { id: invoice.id }
+  }, {
+    maxWait: 10000,
+    timeout: 30000,
   })
 }
