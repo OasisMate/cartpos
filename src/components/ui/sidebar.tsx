@@ -86,6 +86,13 @@ export const DesktopSidebar = ({
   ...props
 }: React.ComponentProps<"div">) => {
   const { open, setOpen, animate } = useSidebar();
+  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Check if device supports touch
+    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
   return (
     <div
       className={cn(
@@ -94,8 +101,9 @@ export const DesktopSidebar = ({
         !animate && "w-[300px]",
         className
       )}
-      onMouseEnter={() => animate && setOpen(true)}
-      onMouseLeave={() => animate && setOpen(false)}
+      // Only use hover for non-touch devices (desktop with mouse)
+      onMouseEnter={() => animate && !isTouchDevice && setOpen(true)}
+      onMouseLeave={() => animate && !isTouchDevice && setOpen(false)}
       {...props}
     >
       {children}
@@ -155,16 +163,42 @@ export const SidebarLink = ({
   className?: string;
   props?: LinkProps;
 }) => {
-  const { open, animate } = useSidebar();
+  const { open, animate, setOpen } = useSidebar();
   const indentOffset = open ? (link.indent ?? 0) * 12 : 0;
   const isSubLink = (link.indent ?? 0) > 0;
+  
+  // Detect if device supports touch (mobile/tablet)
+  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Check if device supports touch
+    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    // On touch devices or when sidebar is closed, navigate directly
+    // On desktop with mouse and sidebar open, let default Link behavior handle it
+    if (isTouchDevice || !open) {
+      // Navigate immediately - Link will handle the navigation
+      // Close mobile sidebar if it's open
+      if (isTouchDevice && open) {
+        setOpen(false);
+      }
+      return; // Let Link handle navigation
+    }
+    // On desktop with hover, if sidebar is open, normal navigation happens
+  };
+
   return (
     <Link
       href={link.href}
+      onClick={handleClick}
       className={cn(
         "flex items-center group/sidebar py-2.5 focus:outline-none rounded-lg transition-all duration-200",
         "border-0 outline-0 ring-0",
         open ? "justify-start gap-2 px-3" : "justify-center px-0",
+        // Make clickable area larger on mobile when collapsed
+        !open && isTouchDevice && "min-h-[44px] min-w-[44px]",
         className
       )}
       aria-label={link.label}
