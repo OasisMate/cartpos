@@ -48,8 +48,4 @@ export async function getDailySummary(shopId: string, dateISO: string): Promise<
     totalPaymentsReceived: Number(payments._sum.amount || 0),
   }
 }
-// Reports domain logic
-// To be implemented in M14
-
-export {}
 

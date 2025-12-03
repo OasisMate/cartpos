@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { updateSupplier, getSupplier, UpdateSupplierInput } from '@/lib/domain/suppliers'
+import { updateSupplier, getSupplier, deleteSupplier, UpdateSupplierInput } from '@/lib/domain/suppliers'
 
 // GET: Get single supplier
 export async function GET(
@@ -40,6 +40,7 @@ export async function PUT(
     const input: UpdateSupplierInput = {
       name: body.name,
       phone: body.phone,
+      address: body.address,
       notes: body.notes,
     }
 
@@ -50,6 +51,29 @@ export async function PUT(
     console.error('Update supplier error:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to update supplier' },
+      { status: 400 }
+    )
+  }
+}
+
+// DELETE: Delete supplier
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
+    await deleteSupplier(params.id, user.id)
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error('Delete supplier error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete supplier' },
       { status: 400 }
     )
   }

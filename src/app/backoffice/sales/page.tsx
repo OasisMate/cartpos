@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 
 interface SaleLine {
   id: string
@@ -200,30 +201,31 @@ export default function BackofficeSalesPage() {
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border p-2 text-left">Date</th>
-                  <th className="border p-2 text-left">Customer</th>
-                  <th className="border p-2 text-left">Payment</th>
-                  <th className="border p-2 text-right">Total</th>
-                  <th className="border p-2 text-left">Status</th>
-                  <th className="border p-2 text-center">Actions</th>
-                </tr>
-              </thead>
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Date</TH>
+                  <TH>Customer</TH>
+                  <TH>Payment</TH>
+                  <TH className="text-right">Total</TH>
+                  <TH>Status</TH>
+                  <TH className="text-center">Actions</TH>
+                </TR>
+              </THead>
               <tbody>
-                {sales.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="border p-2">
-                      {new Date(s.createdAt).toLocaleString()}
-                    </td>
-                    <td className="border p-2">{s.customer?.name || '-'}</td>
-                    <td className="border p-2">
-                      {s.paymentStatus === 'PAID' ? `PAID (${s.paymentMethod || 'CASH'})` : 'UDHAAR'}
-                    </td>
-                    <td className="border p-2 text-right">Rs {Number(s.total).toFixed(2)}</td>
-                    <td className="border p-2">{s.status}</td>
-                    <td className="border p-2 text-center">
+                {sales.length === 0 ? (
+                  <EmptyRow colSpan={6} message="No sales found" />
+                ) : (
+                  sales.map((s) => (
+                    <TR key={s.id}>
+                      <TD>{new Date(s.createdAt).toLocaleString()}</TD>
+                      <TD>{s.customer?.name || '-'}</TD>
+                      <TD>
+                        {s.paymentStatus === 'PAID' ? `PAID (${s.paymentMethod || 'CASH'})` : 'UDHAAR'}
+                      </TD>
+                      <TD className="text-right">Rs {Number(s.total).toFixed(2)}</TD>
+                      <TD>{s.status}</TD>
+                      <TD className="text-center">
                       <div className="flex justify-center gap-2">
                         <button
                           onClick={async () => {
@@ -299,11 +301,12 @@ export default function BackofficeSalesPage() {
                           Delete
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
+                      </TD>
+                    </TR>
+                  ))
+                )}
               </tbody>
-            </table>
+            </Table>
           </div>
 
           {pagination.totalPages > 1 && (

@@ -9,11 +9,11 @@ export interface CreateProductInput {
   price: number
   cartonPrice?: number
   costPrice?: number
-  category?: string
   trackStock?: boolean
   reorderLevel?: number
   cartonSize?: number
   cartonBarcode?: string
+  initialStock?: number
 }
 
 export interface UpdateProductInput extends Partial<CreateProductInput> {}
@@ -45,6 +45,49 @@ async function checkProductPermission(userId: string, shopId: string): Promise<b
   // STORE_MANAGER can manage products in their shop
   const userShop = user.shops.find((us) => us.shopId === shopId)
   return userShop?.shopRole === 'STORE_MANAGER'
+}
+
+/**
+ * Generate a random SKU
+ * Format: SKU-XXXXXX where X is alphanumeric
+ */
+function generateRandomSKU(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  const randomPart = Array.from({ length: 6 }, () => 
+    chars.charAt(Math.floor(Math.random() * chars.length))
+  ).join('')
+  return `SKU-${randomPart}`
+}
+
+/**
+ * Generate a unique SKU for a shop
+ * Retries up to 10 times if generated SKU already exists
+ */
+async function generateUniqueSKU(shopId: string): Promise<string> {
+  let attempts = 0
+  const maxAttempts = 10
+
+  while (attempts < maxAttempts) {
+    const sku = generateRandomSKU()
+    
+    // Check if SKU already exists in this shop
+    const existing = await prisma.product.findFirst({
+      where: {
+        shopId,
+        sku,
+      },
+    })
+
+    if (!existing) {
+      return sku
+    }
+
+    attempts++
+  }
+
+  // If we couldn't generate a unique SKU after max attempts, use timestamp-based fallback
+  const timestamp = Date.now().toString(36).toUpperCase()
+  return `SKU-${timestamp}`
 }
 
 export async function createProduct(
@@ -79,23 +122,57 @@ export async function createProduct(
     }
   }
 
-  // Create product
-  const product = await prisma.product.create({
-    data: {
-      shopId,
-      name: input.name,
-      sku: input.sku || null,
-      barcode: input.barcode || null,
-      unit: input.unit,
-      price: new Decimal(input.price),
-      cartonPrice: input.cartonPrice ? new Decimal(input.cartonPrice) : null,
-      costPrice: input.costPrice ? new Decimal(input.costPrice) : null,
-      category: input.category || null,
-      trackStock: input.trackStock ?? true,
-      reorderLevel: input.reorderLevel || null,
-      cartonSize: input.cartonSize || null,
-      cartonBarcode: input.cartonBarcode || null,
-    },
+  // Generate SKU if not provided
+  const finalSKU = input.sku?.trim() || await generateUniqueSKU(shopId)
+
+  // Validate SKU uniqueness per shop
+  if (finalSKU) {
+    const existing = await prisma.product.findFirst({
+      where: {
+        shopId,
+        sku: finalSKU,
+      },
+    })
+
+    if (existing) {
+      throw new Error('A product with this SKU already exists in this shop')
+    }
+  }
+
+  // Create product in a transaction so we can add initial stock if provided
+  const product = await prisma.$transaction(async (tx) => {
+    const newProduct = await tx.product.create({
+      data: {
+        shopId,
+        name: input.name,
+        sku: finalSKU,
+        barcode: input.barcode || null,
+        unit: input.unit,
+        price: new Decimal(input.price),
+        cartonPrice: input.cartonPrice ? new Decimal(input.cartonPrice) : null,
+        costPrice: input.costPrice ? new Decimal(input.costPrice) : null,
+        trackStock: input.trackStock ?? true,
+        reorderLevel: input.reorderLevel || null,
+        cartonSize: input.cartonSize || null,
+        cartonBarcode: input.cartonBarcode || null,
+      },
+    })
+
+    // If initial stock is provided and product tracks stock, create stock ledger entry
+    if (input.initialStock && input.initialStock > 0 && newProduct.trackStock) {
+      await tx.stockLedger.create({
+        data: {
+          shopId,
+          productId: newProduct.id,
+          changeQty: new Decimal(input.initialStock),
+          type: 'ADJUSTMENT',
+          refType: 'initial_stock',
+          refId: null,
+        },
+      })
+    }
+
+    return newProduct
   })
 
   return product
@@ -137,12 +214,32 @@ export async function updateProduct(
     }
   }
 
+  // Lazy migration: Generate SKU if product doesn't have one and SKU is not being explicitly set
+  let finalSKU = input.sku?.trim() || product.sku
+  if (!finalSKU) {
+    finalSKU = await generateUniqueSKU(product.shopId)
+  }
+
+  // Validate SKU uniqueness if it's being changed
+  if (finalSKU && finalSKU !== product.sku) {
+    const existing = await prisma.product.findFirst({
+      where: {
+        shopId: product.shopId,
+        sku: finalSKU,
+      },
+    })
+
+    if (existing) {
+      throw new Error('A product with this SKU already exists in this shop')
+    }
+  }
+
   // Update product
   const updated = await prisma.product.update({
     where: { id },
     data: {
       ...(input.name && { name: input.name }),
-      ...(input.sku !== undefined && { sku: input.sku || null }),
+      ...(finalSKU && { sku: finalSKU }),
       ...(input.barcode !== undefined && { barcode: input.barcode || null }),
       ...(input.unit && { unit: input.unit }),
       ...(input.price !== undefined && { price: new Decimal(input.price) }),
@@ -152,7 +249,6 @@ export async function updateProduct(
       ...(input.costPrice !== undefined && {
         costPrice: input.costPrice ? new Decimal(input.costPrice) : null,
       }),
-      ...(input.category !== undefined && { category: input.category || null }),
       ...(input.trackStock !== undefined && { trackStock: input.trackStock }),
       ...(input.reorderLevel !== undefined && {
         reorderLevel: input.reorderLevel || null,
@@ -260,6 +356,39 @@ export async function getProduct(id: string, userId: string) {
   }
 
   return product
+}
+
+export async function deleteProduct(id: string, userId: string) {
+  // Get product to find shop
+  const product = await prisma.product.findUnique({
+    where: { id },
+  })
+
+  if (!product) {
+    throw new Error('Product not found')
+  }
+
+  // Check permission
+  const hasPermission = await checkProductPermission(userId, product.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to delete this product')
+  }
+
+  // Check if product has been used in any invoices (sales)
+  const invoiceLineCount = await prisma.invoiceLine.count({
+    where: { productId: id },
+  })
+
+  if (invoiceLineCount > 0) {
+    throw new Error('Cannot delete product that has been used in sales. Consider disabling it instead.')
+  }
+
+  // Delete product
+  await prisma.product.delete({
+    where: { id },
+  })
+
+  return { success: true }
 }
 
 // Get products for POS (lightweight, no pagination)

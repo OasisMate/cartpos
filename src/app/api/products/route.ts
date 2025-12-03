@@ -142,12 +142,12 @@ export async function POST(request: NextRequest) {
       unit: body.unit,
       price: price,
       costPrice: costPrice,
-      category: body.category,
       trackStock: body.trackStock !== undefined ? body.trackStock : true,
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,
       cartonPrice: cartonPrice,
       cartonSize: body.cartonSize ? parseInt(body.cartonSize) : undefined,
       cartonBarcode: body.cartonBarcode || undefined,
+      initialStock: body.initialStock ? parseFloat(body.initialStock) : undefined,
     }
 
     const product = await createProduct(user.currentShopId, input, user.id)

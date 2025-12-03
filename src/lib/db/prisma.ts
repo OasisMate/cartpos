@@ -9,26 +9,22 @@ const globalForPrisma = globalThis as unknown as {
 const enableQueryLogging = process.env.PRISMA_LOG_QUERIES === 'true'
 
 // Configure Prisma with connection pooling optimizations for Supabase
+// Note: Connection errors will be logged but are handled by retry logic
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log:
       process.env.NODE_ENV === 'development'
         ? enableQueryLogging
-          ? ['query', 'error', 'warn']
-          : ['error', 'warn']
-        : ['error'],
+          ? ['query', 'warn'] // Only log queries and warnings, not errors (errors are handled by retry)
+          : ['warn'] // Only log warnings in dev to reduce connection error noise
+        : ['error'], // Log errors in production
     datasources: {
       db: {
         url: process.env.DATABASE_URL,
       },
     },
   })
-
-// Handle connection errors and reconnect
-prisma.$on('error' as never, (e: any) => {
-  console.error('Prisma error:', e)
-})
 
 // Graceful shutdown
 if (process.env.NODE_ENV !== 'production') {

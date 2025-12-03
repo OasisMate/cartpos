@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { updateProduct, getProduct, UpdateProductInput } from '@/lib/domain/products'
+import { updateProduct, getProduct, deleteProduct, UpdateProductInput } from '@/lib/domain/products'
 
 // GET: Get single product
 export async function GET(
@@ -100,7 +100,6 @@ export async function PUT(
       price: price,
       cartonPrice: cartonPrice,
       costPrice: costPrice,
-      category: body.category,
       trackStock: body.trackStock,
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,
       cartonSize: body.cartonSize ? parseInt(body.cartonSize) : undefined,
@@ -114,6 +113,29 @@ export async function PUT(
     console.error('Update product error:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to update product' },
+      { status: 400 }
+    )
+  }
+}
+
+// DELETE: Delete product
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
+    await deleteProduct(params.id, user.id)
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error('Delete product error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete product' },
       { status: 400 }
     )
   }

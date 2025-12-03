@@ -15,6 +15,14 @@ export interface CreatePurchaseInput {
   lines: PurchaseLineInput[]
 }
 
+export interface UpdatePurchaseInput {
+  supplierId?: string
+  date?: Date
+  reference?: string
+  notes?: string
+  lines?: PurchaseLineInput[]
+}
+
 export interface PurchaseFilters {
   supplierId?: string
   startDate?: Date
@@ -315,4 +323,217 @@ export async function getShopStock(shopId: string) {
   )
 
   return stock
+}
+
+export async function updatePurchase(
+  id: string,
+  input: UpdatePurchaseInput,
+  userId: string
+) {
+  // Get purchase to find shop
+  const purchase = await prisma.purchase.findUnique({
+    where: { id },
+    include: {
+      lines: true,
+    },
+  })
+
+  if (!purchase) {
+    throw new Error('Purchase not found')
+  }
+
+  // Check permission
+  const hasPermission = await checkPurchasePermission(userId, purchase.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to update this purchase')
+  }
+
+  // If lines are being updated, we need to reverse old stock and apply new stock
+  if (input.lines !== undefined) {
+    if (input.lines.length === 0) {
+      throw new Error('Purchase must have at least one line item')
+    }
+
+    // Validate all products exist and belong to shop
+    const productIds = input.lines.map((line) => line.productId)
+    const products = await prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        shopId: purchase.shopId,
+      },
+    })
+
+    if (products.length !== productIds.length) {
+      throw new Error('One or more products not found or do not belong to this shop')
+    }
+
+    // Validate quantities
+    for (const line of input.lines) {
+      if (!line.quantity || line.quantity <= 0) {
+        throw new Error('All line items must have a quantity greater than 0')
+      }
+    }
+
+    // Update in transaction
+    return await prisma.$transaction(async (tx) => {
+      // Reverse old stock ledger entries (delete them)
+      for (const oldLine of purchase.lines) {
+        await tx.stockLedger.deleteMany({
+          where: {
+            refType: 'purchase_line',
+            refId: oldLine.id,
+          },
+        })
+      }
+
+      // Delete old purchase lines
+      await tx.purchaseLine.deleteMany({
+        where: { purchaseId: id },
+      })
+
+      // Update purchase header
+      const updatedPurchase = await tx.purchase.update({
+        where: { id },
+        data: {
+          ...(input.supplierId !== undefined && { supplierId: input.supplierId || null }),
+          ...(input.date !== undefined && { date: input.date }),
+          ...(input.reference !== undefined && { reference: input.reference?.trim() || null }),
+          ...(input.notes !== undefined && { notes: input.notes?.trim() || null }),
+        },
+      })
+
+      // Create new purchase lines and stock ledger entries
+      if (!input.lines) {
+        throw new Error('Purchase lines are required')
+      }
+      for (const lineInput of input.lines) {
+        const product = products.find((p) => p.id === lineInput.productId)!
+        const quantity = new Decimal(lineInput.quantity)
+        const unitCost = lineInput.unitCost ? new Decimal(lineInput.unitCost) : null
+
+        // Create purchase line
+        const purchaseLine = await tx.purchaseLine.create({
+          data: {
+            purchaseId: id,
+            productId: lineInput.productId,
+            quantity,
+            unitCost,
+          },
+        })
+
+        // Create stock ledger entry
+        await tx.stockLedger.create({
+          data: {
+            shopId: purchase.shopId,
+            productId: lineInput.productId,
+            changeQty: quantity,
+            type: 'PURCHASE',
+            refType: 'purchase_line',
+            refId: purchaseLine.id,
+          },
+        })
+
+        // Update product costPrice if unitCost provided
+        if (unitCost) {
+          await tx.product.update({
+            where: { id: lineInput.productId },
+            data: { costPrice: unitCost },
+          })
+        }
+      }
+
+      // Return updated purchase with lines
+      return await tx.purchase.findUnique({
+        where: { id },
+        include: {
+          lines: {
+            include: {
+              product: true,
+            },
+          },
+          supplier: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      })
+    })
+  } else {
+    // Only update header fields
+    const updated = await prisma.purchase.update({
+      where: { id },
+      data: {
+        ...(input.supplierId !== undefined && { supplierId: input.supplierId || null }),
+        ...(input.date !== undefined && { date: input.date }),
+        ...(input.reference !== undefined && { reference: input.reference?.trim() || null }),
+        ...(input.notes !== undefined && { notes: input.notes?.trim() || null }),
+      },
+      include: {
+        lines: {
+          include: {
+            product: true,
+          },
+        },
+        supplier: true,
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    })
+
+    return updated
+  }
+}
+
+export async function deletePurchase(id: string, userId: string) {
+  // Get purchase to find shop
+  const purchase = await prisma.purchase.findUnique({
+    where: { id },
+    include: {
+      lines: true,
+    },
+  })
+
+  if (!purchase) {
+    throw new Error('Purchase not found')
+  }
+
+  // Check permission
+  const hasPermission = await checkPurchasePermission(userId, purchase.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to delete this purchase')
+  }
+
+  // Delete in transaction - reverse stock entries first
+  await prisma.$transaction(async (tx) => {
+    // Delete stock ledger entries for all purchase lines
+    for (const line of purchase.lines) {
+      await tx.stockLedger.deleteMany({
+        where: {
+          refType: 'purchase_line',
+          refId: line.id,
+        },
+      })
+    }
+
+    // Delete purchase lines
+    await tx.purchaseLine.deleteMany({
+      where: { purchaseId: id },
+    })
+
+    // Delete purchase
+    await tx.purchase.delete({
+      where: { id },
+    })
+  })
+
+  return { success: true }
 }

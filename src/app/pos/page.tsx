@@ -9,10 +9,11 @@ import { getProductsWithCache, findProductByBarcode, searchCachedProducts, Produ
 import { saveSale } from '@/lib/offline/sales'
 import { getCustomers, saveCustomers } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
-import { sumCartLines, calculateTotals } from '@/lib/utils/money'
+import { sumCartLines, calculateTotals, formatNumber, formatCurrency } from '@/lib/utils/money'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { useToast } from '@/components/ui/ToastProvider'
+import { Minus, Plus, X, ShoppingCart, Package } from 'lucide-react'
 
 // Product interface is imported from lib/offline/products
 
@@ -70,6 +71,8 @@ export default function POSPage() {
   const [barcodeInput, setBarcodeInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [discount, setDiscount] = useState(0)
+  const [quickAddProduct, setQuickAddProduct] = useState<Product | null>(null)
+  const [quickAddQuantity, setQuickAddQuantity] = useState('1')
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'UDHAAR'>('PAID')
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'OTHER'>('CASH')
   const [customerId, setCustomerId] = useState('')
@@ -80,6 +83,8 @@ export default function POSPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
+  const [productStock, setProductStock] = useState<Record<string, number>>({})
+  const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(true) // Default: allow
 
   // Edit Item State
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
@@ -96,7 +101,11 @@ export default function POSPage() {
         setLoading(true)
         // Always load from cache first for speed
         const productsList = await getProductsWithCache(user.currentShopId, isOnline)
-        setProducts(productsList)
+        // Sort products alphabetically by name
+        const sortedProducts = [...productsList].sort((a, b) => 
+          a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+        )
+        setProducts(sortedProducts)
       } catch (err) {
         console.error('Failed to load products:', err)
       } finally {
@@ -127,9 +136,50 @@ export default function POSPage() {
       }
     }
 
+    async function loadStock() {
+      if (!user?.currentShopId) return
+      try {
+        if (isOnline) {
+          const response = await fetch('/api/stock')
+          if (response.ok) {
+            const data = await response.json()
+            const stockMap: Record<string, number> = {}
+            if (data.stock && Array.isArray(data.stock)) {
+              data.stock.forEach((item: { productId: string; stock: number }) => {
+                stockMap[item.productId] = item.stock
+              })
+            }
+            setProductStock(stockMap)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load stock:', err)
+      }
+    }
+
+    async function loadShopSettings() {
+      if (!user?.currentShopId || !isOnline) return
+      try {
+        // Try to fetch shop settings, but don't fail if we can't (for CASHIER role)
+        // Default to allowNegativeStock = true if we can't fetch
+        const response = await fetch('/api/shop/settings')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.settings?.allowNegativeStock !== undefined) {
+            setAllowNegativeStock(data.settings.allowNegativeStock)
+          }
+        }
+      } catch (err) {
+        // Silently fail - use default (allow negative stock)
+        console.warn('Could not load shop settings, using defaults:', err)
+      }
+    }
+
     if (user?.currentShopId) {
       loadProducts()
       loadCustomers()
+      loadStock()
+      loadShopSettings()
     }
   }, [user?.currentShopId, isOnline])
 
@@ -147,27 +197,51 @@ export default function POSPage() {
     }
   }, [])
 
-  // Refresh products when page regains focus (in case products were added in another tab)
+  // Refresh products and stock when page regains focus (in case products were added in another tab)
   useEffect(() => {
     async function refreshProducts() {
       if (!user?.currentShopId) return
       try {
         const productsList = await getProductsWithCache(user.currentShopId, isOnline)
-        setProducts(productsList)
+        // Sort products alphabetically by name
+        const sortedProducts = [...productsList].sort((a, b) => 
+          a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+        )
+        setProducts(sortedProducts)
       } catch (err) {
         console.error('Failed to refresh products:', err)
       }
     }
 
+    async function refreshStock() {
+      if (!user?.currentShopId || !isOnline) return
+      try {
+        const response = await fetch('/api/stock')
+        if (response.ok) {
+          const data = await response.json()
+          const stockMap: Record<string, number> = {}
+          if (data.stock && Array.isArray(data.stock)) {
+            data.stock.forEach((item: { productId: string; stock: number }) => {
+              stockMap[item.productId] = item.stock
+            })
+          }
+          setProductStock(stockMap)
+        }
+      } catch (err) {
+        console.error('Failed to refresh stock:', err)
+      }
+    }
+
     function handleFocus() {
       refreshProducts()
+      refreshStock()
     }
 
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
   }, [user?.currentShopId, isOnline])
 
-  function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
+  async function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
     // Determine price based on carton vs piece
     const unitPrice = isCarton && product.cartonPrice 
       ? product.cartonPrice 
@@ -175,6 +249,94 @@ export default function POSPage() {
     
     // If adding carton, quantity should be in cartons, not pieces
     const finalQuantity = isCarton ? quantity : quantity
+
+    // Check stock if product tracks stock
+    if (product.trackStock) {
+      let currentStock = productStock[product.id]
+      
+      // If stock not loaded yet, try to fetch it
+      if (currentStock === undefined && isOnline) {
+        try {
+          const response = await fetch(`/api/stock?productId=${product.id}`)
+          if (response.ok) {
+            const data = await response.json()
+            currentStock = data.stock ?? 0
+            setProductStock(prev => ({ ...prev, [product.id]: currentStock }))
+          } else {
+            // If fetch fails, default to 0
+            currentStock = 0
+            setProductStock(prev => ({ ...prev, [product.id]: 0 }))
+          }
+        } catch (err) {
+          console.error('Failed to fetch stock:', err)
+          // Default to 0 if fetch fails
+          currentStock = 0
+          setProductStock(prev => ({ ...prev, [product.id]: 0 }))
+        }
+      } else if (currentStock === undefined) {
+        // Offline and stock not cached, default to 0
+        currentStock = 0
+        setProductStock(prev => ({ ...prev, [product.id]: 0 }))
+      }
+
+      // Use 0 if still undefined
+      currentStock = currentStock ?? 0
+
+      // Calculate total quantity in cart (including what we're about to add)
+      // Need to sum all items for this product (both pieces and cartons) and convert to pieces
+      const cartonSize = product.cartonSize || 1
+      const existingItem = cart.find((item) => 
+        item.product.id === product.id && item.isCarton === isCarton
+      )
+      
+      // Calculate total pieces already in cart for this product
+      let totalPiecesInCart = 0
+      cart.forEach((item) => {
+        if (item.product.id === product.id) {
+          if (item.isCarton) {
+            totalPiecesInCart += item.quantity * cartonSize
+          } else {
+            totalPiecesInCart += item.quantity
+          }
+        }
+      })
+      
+      // Add the quantity we're about to add
+      const piecesToAdd = isCarton ? finalQuantity * cartonSize : finalQuantity
+      const totalPiecesAfterAdd = totalPiecesInCart + piecesToAdd
+
+      // Check if we exceed available stock
+      // If stock is 0 or negative, prevent adding unless allowNegativeStock is true
+      if (currentStock <= 0 && totalPiecesAfterAdd > 0) {
+        if (!allowNegativeStock) {
+          show({ 
+            message: `Out of stock. Available: ${formatNumber(currentStock)} ${product.unit}`, 
+            variant: 'destructive' 
+          })
+          return
+        } else {
+          // Warn but allow if shop setting allows negative stock
+          show({ 
+            message: `Warning: Stock is ${formatNumber(currentStock)}. Adding will create negative stock.`, 
+            variant: 'warning' 
+          })
+        }
+      } else if (currentStock < totalPiecesAfterAdd) {
+        if (!allowNegativeStock) {
+          show({ 
+            message: `Insufficient stock. Available: ${formatNumber(currentStock)} ${product.unit}, Requested: ${formatNumber(totalPiecesAfterAdd)} ${product.unit}`, 
+            variant: 'destructive' 
+          })
+          return
+        } else {
+          // Warn but allow
+          show({ 
+            message: `Warning: Stock will go negative. Available: ${formatNumber(currentStock)} ${product.unit}`, 
+            variant: 'warning' 
+          })
+        }
+      }
+    }
 
     const existingItem = cart.find((item) => 
       item.product.id === product.id && item.isCarton === isCarton
@@ -217,10 +379,71 @@ export default function POSPage() {
     setCart(cart.filter((item) => item.product.id !== productId))
   }
 
-  function updateCartQuantity(productId: string, quantity: number) {
+  async function updateCartQuantity(productId: string, quantity: number) {
     if (quantity <= 0) {
       removeFromCart(productId)
       return
+    }
+
+    const cartItem = cart.find(item => item.product.id === productId)
+    if (!cartItem) return
+
+    // Check stock if product tracks stock
+    if (cartItem.product.trackStock) {
+      let currentStock = productStock[productId] ?? 0
+      
+      // If stock not loaded yet, try to fetch it
+      if (currentStock === 0 && isOnline && !productStock[productId]) {
+        try {
+          const response = await fetch(`/api/stock?productId=${productId}`)
+          if (response.ok) {
+            const data = await response.json()
+            currentStock = data.stock ?? 0
+            setProductStock(prev => ({ ...prev, [productId]: currentStock }))
+          }
+        } catch (err) {
+          console.error('Failed to fetch stock:', err)
+        }
+      }
+
+      // Calculate total pieces in cart for this product (including other items)
+      const cartonSize = cartItem.product.cartonSize || 1
+      let totalPiecesInCart = 0
+      cart.forEach((item) => {
+        if (item.product.id === productId) {
+          if (item.isCarton) {
+            totalPiecesInCart += item.quantity * cartonSize
+          } else {
+            totalPiecesInCart += item.quantity
+          }
+        }
+      })
+      
+      // Remove the current item's quantity and add the new quantity
+      const currentItemPieces = cartItem.isCarton 
+        ? cartItem.quantity * cartonSize 
+        : cartItem.quantity
+      const newItemPieces = cartItem.isCarton 
+        ? quantity * cartonSize 
+        : quantity
+      const totalPiecesAfterUpdate = totalPiecesInCart - currentItemPieces + newItemPieces
+
+      // Check if we exceed available stock
+      if (currentStock < totalPiecesAfterUpdate) {
+        if (!allowNegativeStock) {
+          show({ 
+            message: `Insufficient stock. Available: ${formatNumber(currentStock)} ${cartItem.product.unit}`, 
+            variant: 'destructive' 
+          })
+          return
+        } else {
+          // Warn but allow
+          show({ 
+            message: `Warning: Stock will go negative. Available: ${formatNumber(currentStock)} ${cartItem.product.unit}`, 
+            variant: 'warning' 
+          })
+        }
+      }
     }
 
     setCart(
@@ -261,12 +484,53 @@ export default function POSPage() {
     if (!barcodeInput.trim() || !user?.currentShopId) return
 
     try {
-      // Try to find product by barcode in cache
-      const product = await findProductByBarcode(user.currentShopId, barcodeInput.trim())
+      // Check if input contains quantity (format: "barcode x5" or "barcode*5")
+      const input = barcodeInput.trim()
+      const quantityMatch = input.match(/^(.+?)\s*[x*]\s*(\d+)$/i)
+      const barcodeToSearch = quantityMatch ? quantityMatch[1].trim() : input
+      const requestedQuantity = quantityMatch ? parseInt(quantityMatch[2]) : 1
+
+      // Try to find product by barcode, SKU, or code in cache
+      let product = await findProductByBarcode(user.currentShopId, barcodeToSearch)
+      
+      // If not found by barcode, try searching by SKU or name
+      if (!product) {
+        const productsList = await getProductsWithCache(user.currentShopId, isOnline)
+        // First try SKU
+        const skuMatch = productsList.find(
+          (p) => (p as any).sku?.toLowerCase() === barcodeToSearch.toLowerCase()
+        )
+        if (skuMatch) {
+          product = skuMatch as any
+        }
+        
+        // If not found by SKU, try name - but if multiple products with same name exist, 
+        // we'll need to show selection (for now, take the first one by price)
+        if (!product) {
+          const nameMatches = productsList.filter(
+            (p) => p.name.toLowerCase() === barcodeToSearch.toLowerCase()
+          )
+          if (nameMatches.length === 1) {
+            product = nameMatches[0] as any
+          } else if (nameMatches.length > 1) {
+            // Multiple products with same name - sort by price and take first (cheapest)
+            nameMatches.sort((a, b) => parseFloat(a.price.toString()) - parseFloat(b.price.toString()))
+            product = nameMatches[0] as any
+            // Show message that multiple variants exist
+            if (product) {
+              show({ 
+                message: `Multiple variants found. Added: ${product.name} (${formatCurrency(product.price)})`, 
+                variant: 'default' 
+              })
+            }
+          }
+        }
+      }
+
       if (product) {
         // Check if it's a carton barcode match
-        const isCartonMatch = product.cartonBarcode === barcodeInput.trim()
-        const quantity = isCartonMatch ? (product.cartonSize || 1) : 1
+        const isCartonMatch = product.cartonBarcode === barcodeToSearch
+        const quantity = isCartonMatch ? (product.cartonSize || 1) : requestedQuantity
         const isCarton = isCartonMatch && !!product.cartonPrice
 
         addToCart(
@@ -290,24 +554,28 @@ export default function POSPage() {
         }
       } else {
         // Fallback to products array search (in-memory)
-        const trimmedBarcode = barcodeInput.trim()
+        // Use the same barcodeToSearch and requestedQuantity from above
         const foundProduct = products.find(
           (p) => 
-            (p.barcode && p.barcode.trim() === trimmedBarcode) || 
-            (p.cartonBarcode && p.cartonBarcode.trim() === trimmedBarcode)
+            (p.barcode && p.barcode.trim() === barcodeToSearch) ||      
+            (p.cartonBarcode && p.cartonBarcode.trim() === barcodeToSearch) ||                                                                          
+            ((p as any).sku && (p as any).sku.toLowerCase() === barcodeToSearch.toLowerCase()) ||                                                                         
+            (p.name && p.name.toLowerCase() === barcodeToSearch.toLowerCase())
         )
         if (foundProduct) {
-          const isCartonMatch = foundProduct.cartonBarcode === barcodeInput.trim()
-          const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : 1
+          const isCartonMatch = foundProduct.cartonBarcode === barcodeToSearch
+          const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : requestedQuantity
 
           const isCarton = isCartonMatch && !!foundProduct.cartonPrice
           addToCart(foundProduct, isCarton ? 1 : quantity, isCarton)
 
           if (isCartonMatch) {
             show({ message: `Added 1 carton (${quantity} ${foundProduct.unit})`, variant: 'success' })
+          } else if (requestedQuantity > 1) {
+            show({ message: `Added ${requestedQuantity} ${foundProduct.unit}`, variant: 'success' })
           }
         } else {
-          setError('Product not found with this barcode')
+          setError('Product not found. Try searching by name or SKU.')
           setTimeout(() => setError(''), 3000)
         }
       }
@@ -319,8 +587,25 @@ export default function POSPage() {
   }
 
   function handleProductSearch(product: Product) {
-    addToCart(product, 1)
+    // Show quick add modal for quantity input
+    setQuickAddProduct(product)
+    setQuickAddQuantity('1')
     setSearchTerm('')
+  }
+
+  function handleQuickAdd() {
+    if (!quickAddProduct) return
+    
+    const quantity = parseInt(quickAddQuantity) || 1
+    if (quantity <= 0) {
+      show({ message: 'Quantity must be greater than 0', variant: 'destructive' })
+      return
+    }
+
+    addToCart(quickAddProduct, quantity, false)
+    setQuickAddProduct(null)
+    setQuickAddQuantity('1')
+    
     if (searchInputRef.current) {
       searchInputRef.current.focus()
     }
@@ -512,31 +797,41 @@ export default function POSPage() {
         // Offline: use IndexedDB search
         try {
           const results = await searchCachedProducts(user.currentShopId, searchTerm)
-          setFilteredProducts(
-            results.map((p) => ({
-              id: p.id,
-              name: p.name,
-              barcode: p.barcode,
-              unit: p.unit,
-              price: p.price,
-              trackStock: p.trackStock,
-              cartonSize: p.cartonSize,
-              cartonBarcode: p.cartonBarcode,
-            }))
-          )
+          const mapped = results.map((p) => ({
+            id: p.id,
+            name: p.name,
+            barcode: p.barcode,
+            unit: p.unit,
+            price: p.price,
+            trackStock: p.trackStock,
+            cartonSize: p.cartonSize,
+            cartonBarcode: p.cartonBarcode,
+          }))
+          // Sort: first by name alphabetically, then by price (ascending) for same names
+          mapped.sort((a, b) => {
+            const nameCompare = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+            if (nameCompare !== 0) return nameCompare
+            return parseFloat(a.price.toString()) - parseFloat(b.price.toString())
+          })
+          setFilteredProducts(mapped)
         } catch (err) {
           console.error('Error searching cached products:', err)
           setFilteredProducts([])
         }
       } else {
         // Online: filter products array
-        setFilteredProducts(
-          products.filter(
-            (p) =>
-              p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              (p.barcode && p.barcode.includes(searchTerm))
-          )
+        const filtered = products.filter(
+          (p) =>
+            p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (p.barcode && p.barcode.includes(searchTerm))
         )
+        // Sort: first by name alphabetically, then by price (ascending) for same names
+        filtered.sort((a, b) => {
+          const nameCompare = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+          if (nameCompare !== 0) return nameCompare
+          return parseFloat(a.price.toString()) - parseFloat(b.price.toString())
+        })
+        setFilteredProducts(filtered)
       }
     }
 
@@ -573,12 +868,15 @@ export default function POSPage() {
           <form onSubmit={handleBarcodeSubmit} className="mb-4">
             <Input
               ref={barcodeInputRef}
-              placeholder={t('scan_barcode')}
+              placeholder={t('scan_barcode') + ' or enter SKU/name (e.g., "candy x5")'}
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
               className="w-full text-lg h-11"
               autoFocus
             />
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              Tip: Enter product name or SKU followed by &quot;x&quot; and quantity (e.g., &quot;candy x5&quot;)
+            </p>
           </form>
 
           {/* Product Search */}
@@ -592,23 +890,48 @@ export default function POSPage() {
             />
             {searchTerm && filteredProducts.length > 0 && (
               <div className="absolute z-20 w-full mt-1 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                {filteredProducts.slice(0, 10).map((product) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() => handleProductSearch(product)}
-                    className="w-full px-4 py-2 text-left hover:bg-[hsl(var(--muted))] flex justify-between items-center"
-                  >
-                    <div>
-                      <div className="font-medium">{product.name}</div>
-                      <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                        {product.barcode || 'No barcode'} • {product.unit}
-                        {product.cartonSize ? ` • Carton: ${product.cartonSize}` : ''}
+                {filteredProducts.slice(0, 15).map((product, index) => {
+                  // Check if there are other products with the same name
+                  const sameNameProducts = filteredProducts.filter(p => p.name === product.name)
+                  const hasVariants = sameNameProducts.length > 1
+                  
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => handleProductSearch(product)}
+                      className="w-full px-4 py-2.5 text-left hover:bg-[hsl(var(--muted))] border-b border-[hsl(var(--border))] last:border-b-0"
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{product.name}</div>
+                          <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 space-y-0.5">
+                            {hasVariants && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-blue-600">Price: {formatCurrency(product.price)}</span>
+                                {product.unit && <span>• {product.unit}</span>}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {product.barcode && (
+                                <span className="font-mono text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">
+                                  {product.barcode}
+                                </span>
+                              )}
+                              {product.cartonSize && (
+                                <span>Carton: {product.cartonSize} {product.unit}</span>
+                              )}
+                              {!hasVariants && product.unit && <span>{product.unit}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="font-semibold text-sm text-right whitespace-nowrap">
+                          {formatCurrency(product.price)}
+                        </div>
                       </div>
-                    </div>
-                    <div className="font-semibold">Rs.{product.price.toFixed(2)}</div>
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -635,48 +958,42 @@ export default function POSPage() {
               No products available
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-4 gap-1.5 p-2">
               {products.map((product) => {
                 const hasCarton = product.cartonSize && product.cartonSize > 0 && product.cartonPrice
+                const stock = productStock[product.id] ?? null
+                const showStock = product.trackStock && stock !== null
                 return (
-                  <div
+                  <button
                     key={product.id}
-                    className="p-3 border border-[hsl(var(--border))] rounded-lg hover:bg-[hsl(var(--muted))]"
+                    onClick={() => {
+                      if (hasCarton) {
+                        // For products with cartons, show quick add modal
+                        setQuickAddProduct(product)
+                        setQuickAddQuantity('1')
+                      } else {
+                        // For regular products, add directly
+                        addToCart(product, 1, false)
+                      }
+                    }}
+                    className="p-1.5 border border-[hsl(var(--border))] rounded-md hover:bg-[hsl(var(--muted))] hover:border-blue-400 transition-colors text-left cursor-pointer active:scale-95"
+                    title={hasCarton ? "Click to add (piece or carton)" : "Click to add to cart"}
                   >
-                    <div className="font-medium">{product.name}</div>
-                    <div className="text-sm text-[hsl(var(--muted-foreground))]">{product.unit}</div>
-                    <div className="font-semibold mt-1 mb-2">
-                      Rs.{product.price.toFixed(2)}
-                      {hasCarton && (
-                        <span className="text-xs text-[hsl(var(--muted-foreground))] ml-2">
-                          / Carton: Rs.{product.cartonPrice!.toFixed(2)}
-                        </span>
+                    <div className="font-medium text-xs leading-tight mb-0.5 truncate">{product.name}</div>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="font-semibold text-xs">{formatCurrency(product.price)}</div>
+                      {showStock && (
+                        <div className={`text-[10px] ${stock <= 0 ? 'text-red-600 font-semibold' : stock <= ((product as any).reorderLevel || 0) ? 'text-orange-600' : 'text-gray-500'}`}>
+                          {formatNumber(stock)} {product.unit}
+                        </div>
                       )}
                     </div>
-                    {hasCarton ? (
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => addToCart(product, 1, false)}
-                          className="flex-1 px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-                        >
-                          Add Piece
-                        </button>
-                        <button
-                          onClick={() => addToCart(product, 1, true)}
-                          className="flex-1 px-2 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
-                        >
-                          Add Carton
-                        </button>
+                    {hasCarton && (
+                      <div className="text-[10px] text-[hsl(var(--muted-foreground))] truncate">
+                        Carton: {formatCurrency(product.cartonPrice!)}
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => addToCart(product, 1, false)}
-                        className="w-full mt-2 px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-                      >
-                        Add
-                      </button>
                     )}
-                  </div>
+                  </button>
                 )
               })}
             </div>
@@ -703,16 +1020,17 @@ export default function POSPage() {
                   <div className="flex-1 cursor-pointer" onClick={() => setEditingItem(item)}>
                     <div className="font-medium">{item.product.name}</div>
                     <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                      Rs.{item.unitPrice.toFixed(2)} × {item.quantity} {item.product.unit}
+                      {formatCurrency(item.unitPrice)} × {formatNumber(item.quantity)} {item.product.unit}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
                       variant="outline"
-                      className="w-8 h-8 p-0"
+                      className="w-8 h-8 p-0 flex items-center justify-center"
+                      title="Decrease quantity"
                     >
-                      −
+                      <Minus className="w-4 h-4" />
                     </Button>
                     <Input
                       type="number"
@@ -724,19 +1042,21 @@ export default function POSPage() {
                     <Button
                       onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
                       variant="outline"
-                      className="w-8 h-8 p-0"
+                      className="w-8 h-8 p-0 flex items-center justify-center"
+                      title="Increase quantity"
                     >
-                      +
+                      <Plus className="w-4 h-4" />
                     </Button>
                     <div className="w-24 text-right font-semibold">
-                      Rs.{item.lineTotal.toFixed(2)}
+                      {formatCurrency(item.lineTotal)}
                     </div>
                     <Button
                       onClick={() => removeFromCart(item.product.id)}
                       variant="outline"
-                      className="ml-2"
+                      className="ml-2 p-2"
+                      title="Remove from cart"
                     >
-                      ×
+                      <X className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
@@ -751,23 +1071,28 @@ export default function POSPage() {
             <div className="space-y-2 mb-4">
               <div className="flex justify-between">
                 <span>{t('subtotal')}:</span>
-                <span>Rs.{subtotal.toFixed(2)}</span>
+                <span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span>{t('discount')}:</span>
                 <Input
                   type="number"
-                  step="0.01"
+                  step="1"
                   min={0}
-                  max={subtotal}
-                  value={discount}
-                  onChange={(e) => setDiscount(Math.max(0, Math.min(subtotal, parseFloat(e.target.value as any) || 0)))}
+                  max={Math.floor(subtotal)}
+                  value={Math.round(discount).toString()}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0
+                    const rounded = Math.round(val)
+                    setDiscount(Math.max(0, Math.min(Math.floor(subtotal), rounded)))
+                  }}
                   className="w-24 text-right"
+                  placeholder="0"
                 />
               </div>
               <div className="flex justify-between font-bold text-lg border-t pt-2">
                 <span>{t('total')}:</span>
-                <span>Rs.{total.toFixed(2)}</span>
+                <span>{formatCurrency(total)}</span>
               </div>
             </div>
 
@@ -914,7 +1239,7 @@ export default function POSPage() {
                       />
                       {change > 0 && (
                         <div className="mt-1 text-sm text-green-600">
-                          {t('change')}: Rs.{change.toFixed(2)}
+                          {t('change')}: {formatCurrency(change)}
                         </div>
                       )}
                       {change < 0 && (
@@ -930,7 +1255,7 @@ export default function POSPage() {
               <div className="pt-2 border-t border-[hsl(var(--border))]">
                 <div className="flex justify-between font-bold text-lg mb-4">
                   <span>{t('total')}:</span>
-                  <span>Rs.{total.toFixed(2)}</span>
+                  <span>{formatCurrency(total)}</span>
                 </div>
 
                 <div className="flex gap-2">
@@ -962,92 +1287,131 @@ export default function POSPage() {
       {/* Receipt Modal */}
       {showReceiptModal && receiptData && (
         <>
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-md border border-[hsl(var(--border))]">
-              <h2 className="text-xl font-bold mb-4">Receipt</h2>
-              <div id="pos-print-receipt" className="bg-white p-2 text-black" style={{ fontFamily: 'Arial, sans-serif', fontSize: '10pt', lineHeight: '1.2' }}>
-                {/* Header */}
-                <div className="shop-name">{receiptData.shopName}</div>
-                {receiptData.shopCity && <div className="shop-address">{receiptData.shopCity}</div>}
-                {receiptData.shopPhone && <div className="shop-phone">{receiptData.shopPhone}</div>}
-                <div className="sale-invoice">Sale Invoice</div>
-                
-                {/* Invoice Info - 2 columns per row */}
-                <div className="info-grid">
-                  <div className="info-row">
-                    <div className="info-col"><span className="label">Inv #:</span><span>{receiptData.invoiceNumber}</span></div>
-                    <div className="info-col"><span className="label">Date:</span><span>{new Date(receiptData.timestamp).toLocaleDateString('en-GB').replace(/\//g, '-')}</span></div>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+                <h2 className="text-xl font-bold text-white">Receipt</h2>
+              </div>
+              
+              {/* Receipt Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <div id="pos-print-receipt" className="bg-white text-gray-900 mx-auto" style={{ maxWidth: '80mm' }}>
+                  {/* Store Header */}
+                  <div className="text-center mb-4">
+                    <div className="text-2xl font-bold text-gray-900 mb-1">{receiptData.shopName}</div>
+                    {receiptData.shopCity && (
+                      <div className="text-sm text-gray-600 mb-0.5">{receiptData.shopCity}</div>
+                    )}
+                    {receiptData.shopPhone && (
+                      <div className="text-sm text-gray-600">{receiptData.shopPhone}</div>
+                    )}
                   </div>
-                  <div className="info-row">
-                    <div className="info-col"><span className="label">M.O.P:</span><span>{receiptData.paymentStatus === 'PAID' ? (receiptData.paymentMethod || 'Cash') : 'UDHAAR'}</span></div>
-                    <div className="info-col"><span className="label">Time:</span><span>{new Date(receiptData.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span></div>
+                  
+                  {/* Sale Invoice Label */}
+                  <div className="text-center py-2 border-y-2 border-gray-900 my-3">
+                    <div className="text-base font-semibold">Sale Invoice</div>
                   </div>
-                </div>
-                
-                <div className="divider"></div>
-                
-                {/* Items Table */}
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Sr#</th>
-                      <th>Item Details</th>
-                      <th className="price">Price</th>
-                      <th className="qty">Qty</th>
-                      <th className="total">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {receiptData.items.map((item, idx) => (
-                      <tr key={`${item.name}-${idx}`}>
-                        <td className="sn">{idx + 1}</td>
-                        <td className="item-name">{item.name}</td>
-                        <td className="price">{item.unitPrice.toFixed(0)}</td>
-                        <td className="qty">{item.quantity}</td>
-                        <td className="total">{item.lineTotal.toFixed(0)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                
-                <div className="divider"></div>
-                
-                {/* Summary */}
-                <div className="summary">
-                  {receiptData.discount > 0 && (
-                    <>
-                      <div className="summary-row"><span>Subtotal:</span><span>{receiptData.subtotal.toFixed(0)}</span></div>
-                      <div className="summary-row"><span>Discount:</span><span>-{receiptData.discount.toFixed(0)}</span></div>
-                    </>
-                  )}
-                  <div className="summary-row total"><span>Grand Total:</span><span>{receiptData.total.toFixed(0)}</span></div>
-                  {receiptData.paymentStatus === 'PAID' && receiptData.paymentMethod === 'CASH' && typeof receiptData.amountReceived === 'number' && (
-                    <>
-                      <div className="summary-row"><span>Cash Paid:</span><span>{receiptData.amountReceived.toFixed(0)}</span></div>
-                      {typeof receiptData.change === 'number' && receiptData.change > 0 && (
-                        <div className="summary-row"><span>Change:</span><span>{receiptData.change.toFixed(0)}</span></div>
-                      )}
-                    </>
-                  )}
-                </div>
-                
-                {/* Footer */}
-                <div className="footer">
-                  <div className="footer-row"><span>Total Items:</span><span>{receiptData.items.length}</span></div>
-                  <div style={{ textAlign: 'center', marginTop: '1mm' }}>Shukriya! Visit again.</div>
+                  
+                  {/* Invoice Info */}
+                  <div className="space-y-1.5 mb-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Inv #:</span>
+                      <span>{receiptData.invoiceNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Date:</span>
+                      <span>{new Date(receiptData.timestamp).toLocaleDateString('en-GB').replace(/\//g, '-')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">M.O.P:</span>
+                      <span>{receiptData.paymentStatus === 'PAID' ? (receiptData.paymentMethod || 'CASH') : 'UDHAAR'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Time:</span>
+                      <span>{new Date(receiptData.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Divider */}
+                  <div className="border-t border-dashed border-gray-400 my-3"></div>
+                  
+                  {/* Items Table */}
+                  <div className="mb-3">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-gray-900">
+                          <th className="text-left py-1.5 font-bold">Sr#</th>
+                          <th className="text-left py-1.5 font-bold">Item Details</th>
+                          <th className="text-right py-1.5 font-bold">Price</th>
+                          <th className="text-right py-1.5 font-bold">Qty</th>
+                          <th className="text-right py-1.5 font-bold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {receiptData.items.map((item, idx) => (
+                          <tr key={`${item.name}-${idx}`} className="border-b border-gray-200">
+                            <td className="py-1.5 text-gray-700">{idx + 1}</td>
+                            <td className="py-1.5 text-gray-900 font-medium">{item.name}</td>
+                            <td className="py-1.5 text-right text-gray-700">{formatNumber(item.unitPrice)}</td>
+                            <td className="py-1.5 text-right text-gray-700">{formatNumber(item.quantity)}</td>
+                            <td className="py-1.5 text-right text-gray-900 font-semibold">{formatNumber(item.lineTotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Divider */}
+                  <div className="border-t border-dashed border-gray-400 my-3"></div>
+                  
+                  {/* Summary */}
+                  <div className="space-y-1.5 mb-3">
+                    {receiptData.discount > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span>Subtotal:</span>
+                          <span>{formatNumber(receiptData.subtotal)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-red-600">
+                          <span>Discount:</span>
+                          <span>-{formatNumber(receiptData.discount)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex justify-between text-base font-bold pt-1 border-t border-gray-300">
+                      <span>Grand Total:</span>
+                      <span>{formatNumber(receiptData.total)}</span>
+                    </div>
+                    {receiptData.paymentStatus === 'PAID' && receiptData.paymentMethod === 'CASH' && typeof receiptData.amountReceived === 'number' && (
+                      <>
+                        <div className="flex justify-between text-sm pt-1">
+                          <span>Cash Paid:</span>
+                          <span>{formatNumber(receiptData.amountReceived)}</span>
+                        </div>
+                        {typeof receiptData.change === 'number' && receiptData.change > 0 && (
+                          <div className="flex justify-between text-sm text-green-600">
+                            <span>Change:</span>
+                            <span>{formatNumber(receiptData.change)}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  
+                  {/* Footer */}
+                  <div className="text-center text-sm text-gray-600 pt-2 border-t border-dashed border-gray-400">
+                    <div className="mt-2">Shukriya! Visit again.</div>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
+              
+              {/* Modal Footer Buttons */}
+              <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={closeReceiptModal}>
                   Close
                 </Button>
-                <Button variant="outline" className="flex-1" onClick={async () => {
-                  const { printReceipt } = await import('@/lib/utils/print')
-                  await printReceipt('pos-print-receipt', { debug: true })
-                }}>
-                  Debug Print
-                </Button>
-                <Button className="flex-1" onClick={handlePrintReceipt}>
+                <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={handlePrintReceipt}>
                   Print
                 </Button>
               </div>
@@ -1073,6 +1437,61 @@ export default function POSPage() {
             }
           `}</style>
         </>
+      )}
+
+      {/* Quick Add Quantity Modal */}
+      {quickAddProduct && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-sm border border-[hsl(var(--border))]">
+            <h2 className="text-xl font-bold mb-4">Add {quickAddProduct.name}</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Quantity <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={quickAddQuantity}
+                  onChange={(e) => setQuickAddQuantity(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleQuickAdd()
+                    }
+                    if (e.key === 'Escape') {
+                      setQuickAddProduct(null)
+                      setQuickAddQuantity('1')
+                    }
+                  }}
+                  className="w-full text-lg"
+                  autoFocus
+                />
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  Price: {formatCurrency(quickAddProduct.price)} per {quickAddProduct.unit}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setQuickAddProduct(null)
+                    setQuickAddQuantity('1')
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleQuickAdd}
+                >
+                  Add to Cart
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

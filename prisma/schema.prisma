@@ -264,6 +264,7 @@ model Supplier {
   shopId    String
   name      String
   phone     String?
+  address   String?
   notes     String?
   createdAt DateTime   @default(now())
   shop      Shop       @relation(fields: [shopId], references: [id])

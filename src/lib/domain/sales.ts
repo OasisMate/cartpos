@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { Decimal } from '@prisma/client/runtime/library'
 import { getProductStock } from './purchases'
+import { formatNumber } from '@/lib/utils/money'
 
 export interface SaleItemInput {
   productId: string
@@ -113,7 +114,7 @@ export async function createSale(
         // If negative stock not allowed, block the sale
         if (!allowNegativeStock) {
           throw new Error(
-            `Insufficient stock for ${product.name}. Available: ${currentStock.toFixed(2)} ${product.unit}, Requested: ${item.quantity} ${product.unit}. Negative stock is not allowed for this shop.`
+            `Insufficient stock for ${product.name}. Available: ${formatNumber(currentStock)} ${product.unit}, Requested: ${formatNumber(item.quantity)} ${product.unit}. Negative stock is not allowed for this shop.`
           )
         }
         // If allowed, collect warning but proceed

@@ -7,6 +7,8 @@ import Select from '@/components/ui/Select'
 import { Table, THead, TR, TH, TD, EmptyRow, SkeletonRow } from '@/components/ui/DataTable'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
+import { formatNumber, formatCurrency } from '@/lib/utils/money'
+import { Pencil, Trash2, Package, Loader2, Plus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Product {
   id: string
@@ -36,7 +38,7 @@ interface ProductsResponse {
   }
 }
 
-const COMMON_UNITS = ['pcs', 'kg', 'g', 'L', 'mL', 'pack', 'box', 'dozen', 'piece']
+const COMMON_UNITS = ['pcs', 'kg', 'g', 'L', 'mL', 'pack', 'box', 'dozen']
 
 export default function ProductsPage() {
   const { user } = useAuth()
@@ -61,11 +63,11 @@ export default function ProductsPage() {
     price: '',
     cartonPrice: '',
     costPrice: '',
-    category: '',
     trackStock: true,
     reorderLevel: '',
     cartonSize: '',
     cartonBarcode: '',
+    initialStock: '',
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -78,6 +80,86 @@ export default function ProductsPage() {
   })
   const [adjusting, setAdjusting] = useState(false)
   const [adjustmentError, setAdjustmentError] = useState('')
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+
+  // Sorting function
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // New column, default to ascending
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  // Sort products
+  const sortedProducts = [...products].sort((a, b) => {
+    if (!sortColumn) return 0
+
+    let aValue: any
+    let bValue: any
+
+    switch (sortColumn) {
+      case 'name':
+        aValue = a.name.toLowerCase()
+        bValue = b.name.toLowerCase()
+        break
+      case 'sku':
+        aValue = (a.sku || '').toLowerCase()
+        bValue = (b.sku || '').toLowerCase()
+        break
+      case 'barcode':
+        aValue = (a.barcode || '').toLowerCase()
+        bValue = (b.barcode || '').toLowerCase()
+        break
+      case 'unit':
+        aValue = a.unit.toLowerCase()
+        bValue = b.unit.toLowerCase()
+        break
+      case 'price':
+        aValue = parseFloat(a.price)
+        bValue = parseFloat(b.price)
+        break
+      case 'costPrice':
+        aValue = a.costPrice ? parseFloat(a.costPrice) : 0
+        bValue = b.costPrice ? parseFloat(b.costPrice) : 0
+        break
+      case 'stock':
+        aValue = a.stock ?? 0
+        bValue = b.stock ?? 0
+        break
+      case 'trackStock':
+        aValue = a.trackStock ? 1 : 0
+        bValue = b.trackStock ? 1 : 0
+        break
+      case 'reorderLevel':
+        aValue = a.reorderLevel ?? 0
+        bValue = b.reorderLevel ?? 0
+        break
+      default:
+        return 0
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
+
+  // Helper function to render sort icon
+  const renderSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="w-3 h-3 ml-1 text-gray-400" />
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="w-3 h-3 ml-1 text-blue-600" />
+      : <ArrowDown className="w-3 h-3 ml-1 text-blue-600" />
+  }
 
   // Refs for form inputs to support barcode scanning and navigation
   const barcodeInputRef = useRef<HTMLInputElement>(null)
@@ -176,11 +258,11 @@ export default function ProductsPage() {
       price: '',
       cartonPrice: '',
       costPrice: '',
-      category: '',
       trackStock: true,
       reorderLevel: '',
       cartonSize: '',
       cartonBarcode: '',
+      initialStock: '',
     })
     setError('')
     setShowForm(true)
@@ -202,11 +284,11 @@ export default function ProductsPage() {
       price: product.price,
       cartonPrice: (product as any).cartonPrice || '',
       costPrice: product.costPrice || '',
-      category: product.category || '',
       trackStock: product.trackStock,
       reorderLevel: product.reorderLevel?.toString() || '',
       cartonSize: product.cartonSize?.toString() || '',
       cartonBarcode: product.cartonBarcode || '',
+      initialStock: '', // Not editable for existing products
     })
     setError('')
     setShowForm(true)
@@ -276,10 +358,18 @@ export default function ProductsPage() {
       if (formData.sku) payload.sku = formData.sku
       if (formData.barcode) payload.barcode = formData.barcode
       if (formData.costPrice) payload.costPrice = formData.costPrice
-      if (formData.category) payload.category = formData.category
       if (formData.reorderLevel) payload.reorderLevel = formData.reorderLevel
       if (formData.cartonSize) payload.cartonSize = formData.cartonSize
       if (formData.cartonBarcode) payload.cartonBarcode = formData.cartonBarcode
+      if (formData.cartonPrice) payload.cartonPrice = formData.cartonPrice
+      
+      // Add initial stock only when creating new product
+      if (!editingProduct && formData.initialStock && formData.trackStock) {
+        const initialStock = parseFloat(formData.initialStock)
+        if (!isNaN(initialStock) && initialStock > 0) {
+          payload.initialStock = initialStock
+        }
+      }
 
       const response = await fetch(url, {
         method,
@@ -374,7 +464,7 @@ export default function ProductsPage() {
       const result = await response.json()
       show({
         title: 'Success',
-        message: `Stock adjusted successfully. New stock: ${result.newStock.toFixed(2)} ${adjustingProduct.unit}`,
+        message: `Stock adjusted successfully. New stock: ${formatNumber(result.newStock)} ${adjustingProduct.unit}`,
         variant: 'success',
       })
 
@@ -384,6 +474,45 @@ export default function ProductsPage() {
       setAdjustmentError(err.message || 'Failed to adjust stock')
     } finally {
       setAdjusting(false)
+    }
+  }
+
+  const handleDeleteClick = (product: Product) => {
+    setProductToDelete(product)
+    setShowDeleteConfirm(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!productToDelete) return
+
+    setDeletingProductId(productToDelete.id)
+    try {
+      const response = await fetch(`/api/products/${productToDelete.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to delete product')
+      }
+
+      show({
+        title: 'Success',
+        message: 'Product deleted successfully',
+        variant: 'success',
+      })
+
+      setShowDeleteConfirm(false)
+      setProductToDelete(null)
+      await fetchProducts()
+    } catch (err: any) {
+      show({
+        title: 'Error',
+        message: err.message || 'Failed to delete product',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeletingProductId(null)
     }
   }
 
@@ -410,7 +539,10 @@ export default function ProductsPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Products</h1>
-        <Button onClick={openCreateForm}>Add Product</Button>
+        <Button onClick={openCreateForm} className="flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          <span>Add Product</span>
+        </Button>
       </div>
 
       {/* Search */}
@@ -455,10 +587,13 @@ export default function ProductsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">SKU</label>
+                  <label className="block text-sm font-medium mb-1">
+                    SKU <span className="text-xs text-gray-500 font-normal">(Optional - auto-generated if empty)</span>
+                  </label>
                   <Input
                     value={formData.sku}
                     onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    placeholder="Leave empty to auto-generate"
                   />
                 </div>
 
@@ -491,26 +626,18 @@ export default function ProductsPage() {
                   <label className="block text-sm font-medium mb-1">
                     Unit <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2">
-                    <Select
-                      ref={unitSelectRef}
-                      value={formData.unit}
-                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="flex-1"
-                    >
-                      {COMMON_UNITS.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit}
-                        </option>
-                      ))}
-                    </Select>
-                    <Input
-                      placeholder="Custom"
-                      value={!COMMON_UNITS.includes(formData.unit) ? formData.unit : ''}
-                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="flex-1"
-                    />
-                  </div>
+                  <Select
+                    ref={unitSelectRef}
+                    value={formData.unit}
+                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                    className="w-full"
+                  >
+                    {COMMON_UNITS.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {unit}
+                      </option>
+                    ))}
+                  </Select>
                 </div>
 
                 <div>
@@ -538,14 +665,6 @@ export default function ProductsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Category</label>
-                  <Input
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  />
-                </div>
-
-                <div>
                   <label className="block text-sm font-medium mb-1">Reorder Level</label>
                   <Input
                     type="number"
@@ -553,6 +672,25 @@ export default function ProductsPage() {
                     onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value })}
                   />
                 </div>
+
+                {!editingProduct && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Initial Stock Quantity
+                      <span className="text-xs text-gray-500 ml-2">(Optional - for products that track stock)</span>
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.initialStock}
+                      onChange={(e) => setFormData({ ...formData, initialStock: e.target.value })}
+                      placeholder="Enter initial stock quantity"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Leave empty if you don&apos;t want to set initial stock now
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Carton / Packing Section */}
@@ -648,24 +786,95 @@ export default function ProductsPage() {
             <Table>
               <THead>
                 <TR>
-                  <TH>Name</TH>
-                  <TH>SKU</TH>
-                  <TH>Barcode</TH>
-                  <TH>Unit</TH>
-                  <TH className="text-right">Price</TH>
-                  <TH className="text-right">Cost Price</TH>
-                  <TH>Category</TH>
-                  <TH className="text-center">Stock</TH>
-                  <TH className="text-center">Track Stock</TH>
-                  <TH className="text-right">Reorder Level</TH>
+                  <TH>
+                    <button
+                      onClick={() => handleSort('name')}
+                      className="flex items-center gap-1 hover:text-blue-600 transition-colors w-full text-left"
+                    >
+                      Name
+                      {renderSortIcon('name')}
+                    </button>
+                  </TH>
+                  <TH>
+                    <button
+                      onClick={() => handleSort('sku')}
+                      className="flex items-center gap-1 hover:text-blue-600 transition-colors w-full text-left"
+                    >
+                      SKU
+                      {renderSortIcon('sku')}
+                    </button>
+                  </TH>
+                  <TH>
+                    <button
+                      onClick={() => handleSort('barcode')}
+                      className="flex items-center gap-1 hover:text-blue-600 transition-colors w-full text-left"
+                    >
+                      Barcode
+                      {renderSortIcon('barcode')}
+                    </button>
+                  </TH>
+                  <TH>
+                    <button
+                      onClick={() => handleSort('unit')}
+                      className="flex items-center gap-1 hover:text-blue-600 transition-colors w-full text-left"
+                    >
+                      Unit
+                      {renderSortIcon('unit')}
+                    </button>
+                  </TH>
+                  <TH className="text-right">
+                    <button
+                      onClick={() => handleSort('price')}
+                      className="flex items-center gap-1 justify-end ml-auto hover:text-blue-600 transition-colors"
+                    >
+                      Price
+                      {renderSortIcon('price')}
+                    </button>
+                  </TH>
+                  <TH className="text-right">
+                    <button
+                      onClick={() => handleSort('costPrice')}
+                      className="flex items-center gap-1 justify-end ml-auto hover:text-blue-600 transition-colors"
+                    >
+                      Cost Price
+                      {renderSortIcon('costPrice')}
+                    </button>
+                  </TH>
+                  <TH className="text-center">
+                    <button
+                      onClick={() => handleSort('stock')}
+                      className="flex items-center gap-1 justify-center mx-auto hover:text-blue-600 transition-colors"
+                    >
+                      Stock
+                      {renderSortIcon('stock')}
+                    </button>
+                  </TH>
+                  <TH className="text-center">
+                    <button
+                      onClick={() => handleSort('trackStock')}
+                      className="flex items-center gap-1 justify-center mx-auto hover:text-blue-600 transition-colors"
+                    >
+                      Track Stock
+                      {renderSortIcon('trackStock')}
+                    </button>
+                  </TH>
+                  <TH className="text-right">
+                    <button
+                      onClick={() => handleSort('reorderLevel')}
+                      className="flex items-center gap-1 justify-end ml-auto hover:text-blue-600 transition-colors"
+                    >
+                      Reorder Level
+                      {renderSortIcon('reorderLevel')}
+                    </button>
+                  </TH>
                   <TH className="text-center">Actions</TH>
                 </TR>
               </THead>
               <tbody>
-                {products.length === 0 ? (
-                  <EmptyRow colSpan={11} message="No products" />
+                {sortedProducts.length === 0 ? (
+                  <EmptyRow colSpan={10} message="No products" />
                 ) : (
-                  products.map((product) => {
+                  sortedProducts.map((product) => {
                     const stock = product.stock ?? 0
                     const isLowStock = product.trackStock && 
                       product.reorderLevel !== null && 
@@ -678,11 +887,10 @@ export default function ProductsPage() {
                         <TD>{product.sku || '-'}</TD>
                         <TD>{product.barcode || '-'}</TD>
                         <TD>{product.unit}</TD>
-                        <TD className="text-right">{parseFloat(product.price).toFixed(2)}</TD>
+                        <TD className="text-right">{formatCurrency(parseFloat(product.price), '')}</TD>
                         <TD className="text-right">
-                          {product.costPrice ? parseFloat(product.costPrice).toFixed(2) : '-'}
+                          {product.costPrice ? formatCurrency(parseFloat(product.costPrice), '') : '-'}
                         </TD>
-                        <TD>{product.category || '-'}</TD>
                         <TD className="text-center">
                           {product.trackStock ? (
                             <span className={
@@ -692,7 +900,7 @@ export default function ProductsPage() {
                                   ? 'text-orange-600 font-medium' 
                                   : 'text-green-600'
                             }>
-                              {stock.toFixed(2)} {product.unit}
+                              {formatNumber(stock)} {product.unit}
                               {isOutOfStock && ' (Out)'}
                               {isLowStock && !isOutOfStock && ' (Low)'}
                             </span>
@@ -715,13 +923,34 @@ export default function ProductsPage() {
                                 variant="outline" 
                                 onClick={() => openAdjustmentModal(product)} 
                                 size="sm"
-                                className="text-xs"
+                                className="p-2"
+                                title="Adjust Stock"
                               >
-                                Adjust Stock
+                                <Package className="w-4 h-4" />
                               </Button>
                             )}
-                            <Button variant="outline" onClick={() => openEditForm(product)} size="sm">
-                              Edit
+                            <Button 
+                              variant="outline" 
+                              onClick={() => openEditForm(product)} 
+                              size="sm"
+                              className="p-2"
+                              title="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              onClick={() => handleDeleteClick(product)} 
+                              size="sm"
+                              className="p-2 text-red-600 hover:text-red-700 hover:border-red-600"
+                              disabled={deletingProductId === product.id}
+                              title="Delete"
+                            >
+                              {deletingProductId === product.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
                             </Button>
                           </div>
                         </TD>
@@ -773,7 +1002,7 @@ export default function ProductsPage() {
             </p>
             <p className="text-sm text-gray-600 mb-4">
               Current Stock: <span className="font-semibold">
-                {(adjustingProduct.stock ?? 0).toFixed(2)} {adjustingProduct.unit}
+                {formatNumber(adjustingProduct.stock ?? 0)} {adjustingProduct.unit}
               </span>
             </p>
 
@@ -859,6 +1088,42 @@ export default function ProductsPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && productToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Delete Product</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to delete <span className="font-semibold">{productToDelete.name}</span>?
+            </p>
+            <p className="text-sm text-red-600 mb-6">
+              This action cannot be undone. Products that have been used in sales cannot be deleted.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteConfirm(false)
+                  setProductToDelete(null)
+                }}
+                disabled={deletingProductId !== null}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={deletingProductId !== null}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deletingProductId ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

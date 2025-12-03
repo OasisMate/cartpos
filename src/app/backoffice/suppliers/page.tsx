@@ -6,6 +6,7 @@ import Input from '@/components/ui/Input'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
+import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getSuppliersWithCache } from '@/lib/offline/data'
 
@@ -13,6 +14,7 @@ interface Supplier {
   id: string
   name: string
   phone: string | null
+  address: string | null
   notes: string | null
   createdAt: string
   _count: {
@@ -49,10 +51,14 @@ export default function SuppliersPage() {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    address: '',
     notes: '',
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [deletingSupplierId, setDeletingSupplierId] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null)
 
   const fetchSuppliers = useCallback(async () => {
     if (!user?.currentShopId) return
@@ -90,6 +96,7 @@ export default function SuppliersPage() {
         id: s.id,
         name: s.name,
         phone: s.phone,
+        address: (s as any).address || null,
         notes: s.notes,
         createdAt: new Date(s.updatedAt).toISOString(),
         _count: { purchases: 0 }, // Purchase count requires server data
@@ -129,6 +136,7 @@ export default function SuppliersPage() {
     setFormData({
       name: '',
       phone: '',
+      address: '',
       notes: '',
     })
     setError('')
@@ -140,6 +148,7 @@ export default function SuppliersPage() {
     setFormData({
       name: supplier.name,
       phone: supplier.phone || '',
+      address: supplier.address || '',
       notes: supplier.notes || '',
     })
     setError('')
@@ -162,6 +171,7 @@ export default function SuppliersPage() {
       }
 
       if (formData.phone) payload.phone = formData.phone
+      if (formData.address) payload.address = formData.address
       if (formData.notes) payload.notes = formData.notes
 
       const response = await fetch(url, {
@@ -199,6 +209,45 @@ export default function SuppliersPage() {
     fetchSuppliers()
   }
 
+  const handleDeleteClick = (supplier: Supplier) => {
+    setSupplierToDelete(supplier)
+    setShowDeleteConfirm(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!supplierToDelete) return
+
+    setDeletingSupplierId(supplierToDelete.id)
+    try {
+      const response = await fetch(`/api/suppliers/${supplierToDelete.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to delete supplier')
+      }
+
+      show({
+        title: 'Success',
+        message: 'Supplier deleted successfully',
+        variant: 'success',
+      })
+
+      setShowDeleteConfirm(false)
+      setSupplierToDelete(null)
+      await fetchSuppliers()
+    } catch (err: any) {
+      show({
+        title: 'Error',
+        message: err.message || 'Failed to delete supplier',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeletingSupplierId(null)
+    }
+  }
+
   if (!user?.currentShopId) {
     return (
       <div className="p-6">
@@ -222,7 +271,10 @@ export default function SuppliersPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Suppliers</h1>
-        <Button onClick={openCreateForm}>Add Supplier</Button>
+        <Button onClick={openCreateForm} className="flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          <span>Add Supplier</span>
+        </Button>
       </div>
 
       {/* Search */}
@@ -276,6 +328,17 @@ export default function SuppliersPage() {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium mb-1">Address</label>
+                  <textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="w-full input min-h-[80px]"
+                    rows={2}
+                    placeholder="Supplier address"
+                  />
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium mb-1">Notes</label>
                   <textarea
                     value={formData.notes}
@@ -323,6 +386,7 @@ export default function SuppliersPage() {
                 <TR>
                   <TH>Name</TH>
                   <TH>Phone</TH>
+                  <TH>Address</TH>
                   <TH>Notes</TH>
                   <TH className="text-center">Purchases</TH>
                   <TH className="text-center">Actions</TH>
@@ -330,18 +394,41 @@ export default function SuppliersPage() {
               </THead>
               <tbody>
                 {suppliers.length === 0 ? (
-                  <EmptyRow colSpan={5} message="No suppliers" />
+                  <EmptyRow colSpan={6} message="No suppliers" />
                 ) : (
                   suppliers.map((supplier) => (
                     <TR key={supplier.id}>
                       <TD className="font-medium">{supplier.name}</TD>
                       <TD>{supplier.phone || '-'}</TD>
+                      <TD>{supplier.address || '-'}</TD>
                       <TD>{supplier.notes || '-'}</TD>
                       <TD className="text-center">{supplier._count.purchases}</TD>
                       <TD className="text-center">
-                        <Button variant="outline" size="sm" onClick={() => openEditForm(supplier)}>
-                          Edit
-                        </Button>
+                        <div className="flex gap-2 justify-center">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => openEditForm(supplier)}
+                            className="p-2"
+                            title="Edit"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleDeleteClick(supplier)}
+                            className="p-2 text-red-600 hover:text-red-700 hover:border-red-600"
+                            disabled={deletingSupplierId === supplier.id}
+                            title="Delete"
+                          >
+                            {deletingSupplierId === supplier.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
                       </TD>
                     </TR>
                   ))
@@ -378,6 +465,42 @@ export default function SuppliersPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && supplierToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Delete Supplier</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to delete <span className="font-semibold">{supplierToDelete.name}</span>?
+            </p>
+            <p className="text-sm text-red-600 mb-6">
+              This action cannot be undone. Suppliers that have been used in purchases cannot be deleted.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteConfirm(false)
+                  setSupplierToDelete(null)
+                }}
+                disabled={deletingSupplierId !== null}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={deletingSupplierId !== null}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deletingSupplierId ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

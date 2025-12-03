@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 export interface CreateSupplierInput {
   name: string
   phone?: string
+  address?: string
   notes?: string
 }
 
@@ -57,6 +58,7 @@ export async function createSupplier(
       shopId,
       name: input.name.trim(),
       phone: input.phone?.trim() || null,
+      address: input.address?.trim() || null,
       notes: input.notes?.trim() || null,
     },
   })
@@ -95,6 +97,7 @@ export async function updateSupplier(
     data: {
       ...(input.name !== undefined && { name: input.name.trim() }),
       ...(input.phone !== undefined && { phone: input.phone?.trim() || null }),
+      ...(input.address !== undefined && { address: input.address?.trim() || null }),
       ...(input.notes !== undefined && { notes: input.notes?.trim() || null }),
     },
   })
@@ -170,4 +173,37 @@ export async function getSupplier(id: string, userId: string) {
   }
 
   return supplier
+}
+
+export async function deleteSupplier(id: string, userId: string) {
+  // Get supplier to find shop
+  const supplier = await prisma.supplier.findUnique({
+    where: { id },
+  })
+
+  if (!supplier) {
+    throw new Error('Supplier not found')
+  }
+
+  // Check permission
+  const hasPermission = await checkSupplierPermission(userId, supplier.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to delete this supplier')
+  }
+
+  // Check if supplier has been used in any purchases
+  const purchaseCount = await prisma.purchase.count({
+    where: { supplierId: id },
+  })
+
+  if (purchaseCount > 0) {
+    throw new Error('Cannot delete supplier that has been used in purchases. Consider disabling it instead.')
+  }
+
+  // Delete supplier
+  await prisma.supplier.delete({
+    where: { id },
+  })
+
+  return { success: true }
 }

@@ -23,6 +23,7 @@ export default function Login() {
   const router = useRouter()
   const { refreshUser } = useAuth()
   const [isRedirecting, setIsRedirecting] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
 
   const { values, error, loading, handleChange, handleSubmit, setError } = useForm<LoginFormData>({
     initialValues: {
@@ -34,6 +35,7 @@ export default function Login() {
         await apiPost('/api/auth/login', {
           identifier: formData.identifier,
           password: formData.password,
+          rememberMe,
         })
 
         await refreshUser()
@@ -91,6 +93,9 @@ export default function Login() {
             <label className="flex items-center">
               <input
                 type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isLoading}
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-600">Remember me</span>

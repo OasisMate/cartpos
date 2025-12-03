@@ -20,7 +20,7 @@ function isDatabaseConnectionError(error: unknown): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    const { identifier, password } = await request.json()
+    const { identifier, password, rememberMe } = await request.json()
 
     if (!identifier || !password) {
       return NextResponse.json(
@@ -93,8 +93,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create session
-    await createSession(user.id, user.email, user.role)
+    // Create session with remember me option
+    await createSession(user.id, user.email, user.role, rememberMe)
 
     return NextResponse.json({
       user: {

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getCustomersWithCache } from '@/lib/offline/data'
+import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 
 interface Customer {
   id: string
@@ -129,38 +130,34 @@ export default function CustomersPage() {
         <div className="text-[hsl(var(--muted-foreground))]">No customers found</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[hsl(var(--border))]">
-            <thead className="bg-[hsl(var(--muted))]">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
-                  Phone
-                </th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
-                  Balance
-                </th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-[hsl(var(--card))] divide-y divide-[hsl(var(--border))]">
-              {customers.map((c) => (
-                <tr key={c.id}>
-                  <td className="px-4 py-2 text-sm">{c.name}</td>
-                  <td className="px-4 py-2 text-sm">{c.phone || '—'}</td>
-                  <td className="px-4 py-2 text-sm text-right">{(c.balance ?? 0).toFixed(2)}</td>
-                  <td className="px-4 py-2 text-sm text-right">
-                    <Link href={`/store/customers/${c.id}`} className="btn btn-outline h-8 px-3">
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+          <Table>
+            <THead>
+              <TR>
+                <TH>Name</TH>
+                <TH>Phone</TH>
+                <TH className="text-right">Balance</TH>
+                <TH className="text-right">Actions</TH>
+              </TR>
+            </THead>
+            <tbody>
+              {customers.length === 0 ? (
+                <EmptyRow colSpan={4} message="No customers found" />
+              ) : (
+                customers.map((c) => (
+                  <TR key={c.id}>
+                    <TD>{c.name}</TD>
+                    <TD>{c.phone || '—'}</TD>
+                    <TD className="text-right">{(c.balance ?? 0).toFixed(2)}</TD>
+                    <TD className="text-right">
+                      <Link href={`/store/customers/${c.id}`} className="btn btn-outline h-8 px-3">
+                        View
+                      </Link>
+                    </TD>
+                  </TR>
+                ))
+              )}
             </tbody>
-          </table>
+          </Table>
         </div>
       )}
     </div>

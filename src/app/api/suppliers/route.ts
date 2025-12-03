@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     const input: CreateSupplierInput = {
       name: body.name,
       phone: body.phone,
+      address: body.address,
       notes: body.notes,
     }
 

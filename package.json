@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "create-admin": "tsx scripts/create-admin-user.ts",
-    "cleanup-data": "tsx scripts/cleanup-data.ts"
+    "cleanup-data": "tsx scripts/cleanup-data.ts",
+    "backfill-skus": "tsx scripts/backfill-product-skus.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

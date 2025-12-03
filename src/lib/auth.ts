@@ -19,8 +19,10 @@ export async function verifyPassword(
   return bcrypt.compare(password, hashedPassword)
 }
 
-export async function createSession(userId: string, email: string, role: string) {
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+export async function createSession(userId: string, email: string, role: string, rememberMe: boolean = false) {
+  // If remember me is checked, set expiration to 30 days, otherwise 7 days
+  const expirationDays = rememberMe ? 30 : 7
+  const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000)
 
   const session = await new SignJWT({ userId, email, role })
     .setProtectedHeader({ alg: 'HS256' })

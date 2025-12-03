@@ -106,7 +106,6 @@ export async function POST(
       unit: body.unit,
       price: parseFloat(body.price),
       costPrice: body.costPrice ? parseFloat(body.costPrice) : undefined,
-      category: body.category,
       trackStock: body.trackStock !== undefined ? body.trackStock : true,
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,
     }
