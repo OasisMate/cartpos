@@ -70,6 +70,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(results)
   } catch (error: any) {
+    // Handle aborted connections gracefully (client disconnected)
+    if (error.code === 'ECONNRESET' || error.message?.includes('aborted') || error.name === 'AbortError') {
+      return NextResponse.json(
+        { error: 'Connection aborted', synced: 0, skipped: 0, errors: [] },
+        { status: 499 }
+      )
+    }
+    
     console.error('Batch sync udhaar payments error:', error)
     return NextResponse.json({ error: error.message || 'Failed to sync udhaar payments' }, { status: 500 })
   }

@@ -92,6 +92,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(results)
   } catch (error: any) {
+    // Handle aborted connections gracefully (client disconnected)
+    if (error.code === 'ECONNRESET' || error.message?.includes('aborted') || error.name === 'AbortError') {
+      // Client disconnected - this is normal, don't log as error
+      // Return partial results if available, otherwise empty response
+      return NextResponse.json(
+        { error: 'Connection aborted', synced: 0, skipped: 0, errors: [] },
+        { status: 499 } // 499 Client Closed Request
+      )
+    }
+    
     console.error('Batch sync sales error:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to sync sales' },
