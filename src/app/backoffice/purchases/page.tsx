@@ -704,9 +704,10 @@ export default function PurchasesPage() {
                                     
                                     setOpenDropdowns({ ...openDropdowns, [index]: true })
                                     
-                                    // If exact match found, select it
+                                    // If exact match found by name or barcode, select it
                                     const exactMatch = products.find(
-                                      p => p.name.toLowerCase() === searchTerm.toLowerCase()
+                                      p => p.name.toLowerCase() === searchTerm.toLowerCase() ||
+                                           (p.barcode && p.barcode.toLowerCase() === searchTerm.toLowerCase())
                                     )
                                     if (exactMatch) {
                                       updateLine(index, 'productId', exactMatch.id)
