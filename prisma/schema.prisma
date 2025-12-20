@@ -243,6 +243,8 @@ model StockLedger {
   product     Product        @relation(fields: [productId], references: [id])
 
   @@index([shopId, productId])
+  @@index([shopId, productId, type])
+  @@index([shopId, createdAt])
 }
 
 enum StockMoveType {
@@ -338,6 +340,8 @@ model CustomerLedger {
 
   @@index([shopId])
   @@index([customerId])
+  @@index([customerId, createdAt])
+  @@index([shopId, customerId])
 }
 
 enum CustomerEntryType {
@@ -375,6 +379,9 @@ model Invoice {
   createdBy       User?           @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id])
 
   @@index([shopId, createdAt])
+  @@index([shopId, status])
+  @@index([shopId, paymentStatus])
+  @@index([shopId, paymentStatus, createdAt])
 }
 
 model InvoiceLine {

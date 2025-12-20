@@ -6,6 +6,7 @@ import { ToastProvider } from '@/components/ui/ToastProvider'
 import { LanguageProvider } from '@/contexts/LanguageContext'
 import ConditionalLayout from '@/components/layout/ConditionalLayout'
 import { DirectionSetter } from '@/components/layout/DirectionSetter'
+import { OfflineBanner } from '@/components/OfflineBanner'
 
 export const metadata: Metadata = {
   title: 'CartPOS',
@@ -34,6 +35,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="bg-gray-50">
         <DirectionSetter />
+        <OfflineBanner />
         <ToastProvider>
           <AuthProvider>
             <LanguageProvider>

@@ -2,10 +2,15 @@
   "name": "cartpos",
   "version": "1.0.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "build:electron": "npm run build",
     "start": "next start",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:build": "npm run build:electron && electron-builder",
     "lint": "next lint",
     "create-admin": "tsx scripts/create-admin-user.ts",
     "cleanup-data": "tsx scripts/cleanup-data.ts",
@@ -26,7 +31,8 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "recharts": "3.4.1",
-    "tailwind-merge": "3.4.0"
+    "tailwind-merge": "3.4.0",
+    "electron-serve": "^3.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -38,7 +44,6 @@
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
     "electron-is-dev": "^3.0.1",
-    "electron-serve": "^3.0.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.0",
     "next-pwa": "^5.6.0",

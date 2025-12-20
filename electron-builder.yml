@@ -1,0 +1,35 @@
+appId: com.cartpos.app
+productName: CartPOS
+directories:
+  output: dist
+files:
+  - 'out/**/*'
+  - 'electron/**/*'
+  - 'package.json'
+  - 'node_modules/**/*'
+# Note: Electron builds require admin privileges on Windows for code signing
+# For development, you can skip signing by running as admin or using portable builds
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  icon: 'public/icon-192x192.png'
+  # Portable builds don't require code signing
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: 'public/icon-192x192.png'
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  icon: 'public/icon-192x192.png'
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+

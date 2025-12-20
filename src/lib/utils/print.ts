@@ -9,14 +9,46 @@ export interface PrintOptions {
   debug?: boolean // Show printable area boundaries
 }
 
+// Type declaration for Electron API
+declare global {
+  interface Window {
+    electronAPI?: {
+      printReceipt: (htmlContent: string) => Promise<{ success: boolean }>
+      isElectron: boolean
+    }
+  }
+}
+
 export function printReceipt(elementId: string, options: PrintOptions = {}) {
-  const { debug = false } = options
+  const { debug = false, silent = false } = options
   const element = document.getElementById(elementId)
   if (!element) {
     window.print()
     return
   }
 
+  // Check if running in Electron and silent print is requested
+  if (silent && typeof window !== 'undefined' && window.electronAPI?.isElectron) {
+    // Use Electron's silent print
+    const htmlContent = element.innerHTML
+    window.electronAPI
+      .printReceipt(htmlContent)
+      .then(() => {
+        console.log('Receipt printed silently via Electron')
+      })
+      .catch((err) => {
+        console.error('Electron print failed, falling back to browser print:', err)
+        // Fallback to browser print
+        fallbackBrowserPrint(element, debug)
+      })
+    return
+  }
+
+  // Fallback to browser print
+  fallbackBrowserPrint(element, debug)
+}
+
+function fallbackBrowserPrint(element: HTMLElement, debug: boolean) {
   const iframe = document.createElement('iframe')
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
   document.body.appendChild(iframe)
