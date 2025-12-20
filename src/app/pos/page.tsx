@@ -5,9 +5,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { getProductsWithCache, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
+import { getProductsWithCache, getCachedProducts, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 import { saveSale } from '@/lib/offline/sales'
-import { getCustomers, saveCustomers } from '@/lib/offline/indexedDb'
+import { getCustomers, saveCustomers, saveProducts } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
 import { sumCartLines, calculateTotals, formatNumber, formatCurrency } from '@/lib/utils/money'
 import Button from '@/components/ui/Button'
@@ -93,93 +93,126 @@ export default function POSPage() {
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Load products once on mount from cache
+  // Load all POS data in one optimized call when online, or from cache when offline
   useEffect(() => {
-    async function loadProducts() {
+    async function loadPOSData() {
       if (!user?.currentShopId) return
+      
+      const shopId = user.currentShopId // Store for use in async functions
+      
       try {
         setLoading(true)
-        // Always load from cache first for speed
-        const productsList = await getProductsWithCache(user.currentShopId, isOnline)
-        // Sort products alphabetically by name
-        const sortedProducts = [...productsList].sort((a, b) => 
-          a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-        )
-        setProducts(sortedProducts)
+        
+        if (isOnline) {
+          // Use optimized combined endpoint when online
+          try {
+            const response = await fetch('/api/pos/init')
+            if (response.ok) {
+              const data = await response.json()
+              
+              // Set products (sorted alphabetically)
+              const sortedProducts = [...(data.products || [])].sort((a: Product, b: Product) => 
+                a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+              )
+              setProducts(sortedProducts)
+              
+              // Cache products for offline use
+              await saveProducts(shopId, sortedProducts)
+              
+              // Set stock
+              setProductStock(data.stock || {})
+              
+              // Set customers
+              const customers = (data.customers || []).map((c: any) => ({ 
+                id: c.id, 
+                name: c.name, 
+                phone: c.phone 
+              }))
+              setCustomers(customers)
+              
+              // Cache customers for offline use
+              await saveCustomers(shopId, customers)
+              
+              // Set settings
+              if (data.settings?.allowNegativeStock !== undefined) {
+                setAllowNegativeStock(data.settings.allowNegativeStock)
+              }
+            } else {
+              // Fallback to individual calls if init endpoint fails
+              throw new Error('Init endpoint failed')
+            }
+          } catch (err) {
+            console.warn('Failed to load from init endpoint, falling back to individual calls:', err)
+            // Fallback to individual calls
+            const productsList = await getProductsWithCache(shopId, isOnline)
+            const sortedProducts = [...productsList].sort((a, b) => 
+              a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+            )
+            setProducts(sortedProducts)
+            
+            const cached = await getCustomers(shopId)
+            if (cached.length > 0) {
+              setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
+            } else {
+              const response = await fetch('/api/customers?limit=1000')
+              if (response.ok) {
+                const data = await response.json()
+                const customers = data.customers || []
+                setCustomers(customers)
+                await saveCustomers(shopId, customers)
+              }
+            }
+            
+            const stockResponse = await fetch('/api/stock')
+            if (stockResponse.ok) {
+              const stockData = await stockResponse.json()
+              const stockMap: Record<string, number> = {}
+              if (stockData.stock && Array.isArray(stockData.stock)) {
+                stockData.stock.forEach((item: { productId: string; stock: number }) => {
+                  stockMap[item.productId] = item.stock
+                })
+              }
+              setProductStock(stockMap)
+            }
+            
+            const settingsResponse = await fetch('/api/shop/settings')
+            if (settingsResponse.ok) {
+              const settingsData = await settingsResponse.json()
+              if (settingsData.settings?.allowNegativeStock !== undefined) {
+                setAllowNegativeStock(settingsData.settings.allowNegativeStock)
+              }
+            }
+          }
+        } else {
+          // Offline: use cache only
+          const productsList = await getCachedProducts(user.currentShopId)
+          const sortedProducts = productsList.map((p) => ({
+            id: p.id,
+            name: p.name,
+            barcode: p.barcode,
+            unit: p.unit,
+            price: p.price,
+            cartonPrice: p.cartonPrice,
+            trackStock: p.trackStock,
+            cartonSize: p.cartonSize,
+            cartonBarcode: p.cartonBarcode,
+          })).sort((a, b) => 
+            a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+          )
+          setProducts(sortedProducts)
+          
+          const cached = await getCustomers(user.currentShopId)
+          setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
+        }
       } catch (err) {
-        console.error('Failed to load products:', err)
+        console.error('Failed to load POS data:', err)
       } finally {
         setLoading(false)
       }
     }
 
-    async function loadCustomers() {
-      if (!user?.currentShopId) return
-      try {
-        // Try to load from cache first
-        const cached = await getCustomers(user.currentShopId)
-        if (cached.length > 0) {
-          setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
-        } else if (isOnline) {
-          // Fallback to API if cache is empty
-          const response = await fetch('/api/customers?limit=1000')
-          if (response.ok) {
-            const data = await response.json()
-            const customers = data.customers || []
-            setCustomers(customers)
-            // Cache for next time
-            await saveCustomers(user.currentShopId, customers)
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load customers:', err)
-      }
-    }
-
-    async function loadStock() {
-      if (!user?.currentShopId) return
-      try {
-        if (isOnline) {
-          const response = await fetch('/api/stock')
-          if (response.ok) {
-            const data = await response.json()
-            const stockMap: Record<string, number> = {}
-            if (data.stock && Array.isArray(data.stock)) {
-              data.stock.forEach((item: { productId: string; stock: number }) => {
-                stockMap[item.productId] = item.stock
-              })
-            }
-            setProductStock(stockMap)
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load stock:', err)
-      }
-    }
-
-    async function loadShopSettings() {
-      if (!user?.currentShopId || !isOnline) return
-      try {
-        // Try to fetch shop settings, but don't fail if we can't (for CASHIER role)
-        // Default to allowNegativeStock = true if we can't fetch
-        const response = await fetch('/api/shop/settings')
-        if (response.ok) {
-          const data = await response.json()
-          if (data.settings?.allowNegativeStock !== undefined) {
-            setAllowNegativeStock(data.settings.allowNegativeStock)
-          }
-        }
-      } catch (err) {
-        // Silently fail - use default (allow negative stock)
-        console.warn('Could not load shop settings, using defaults:', err)
-      }
-    }
-
     if (user?.currentShopId) {
-      loadProducts()
-      loadCustomers()
-      loadStock()
-      loadShopSettings()
+      loadPOSData()
     }
   }, [user?.currentShopId, isOnline])
 
@@ -197,48 +230,63 @@ export default function POSPage() {
     }
   }, [])
 
-  // Refresh products and stock when page regains focus (in case products were added in another tab)
+  // Refresh products and stock when page regains focus (debounced to prevent excessive calls)
   useEffect(() => {
-    async function refreshProducts() {
-      if (!user?.currentShopId) return
-      try {
-        const productsList = await getProductsWithCache(user.currentShopId, isOnline)
-        // Sort products alphabetically by name
-        const sortedProducts = [...productsList].sort((a, b) => 
-          a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-        )
-        setProducts(sortedProducts)
-      } catch (err) {
-        console.error('Failed to refresh products:', err)
-      }
-    }
-
-    async function refreshStock() {
+    let debounceTimer: NodeJS.Timeout | null = null
+    
+    async function refreshData() {
       if (!user?.currentShopId || !isOnline) return
-      try {
-        const response = await fetch('/api/stock')
-        if (response.ok) {
-          const data = await response.json()
-          const stockMap: Record<string, number> = {}
-          if (data.stock && Array.isArray(data.stock)) {
-            data.stock.forEach((item: { productId: string; stock: number }) => {
-              stockMap[item.productId] = item.stock
-            })
-          }
-          setProductStock(stockMap)
-        }
-      } catch (err) {
-        console.error('Failed to refresh stock:', err)
+      
+      const shopId = user.currentShopId // Store for use in setTimeout
+      
+      // Debounce: only refresh if 5 seconds have passed since last focus
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
       }
+      
+      debounceTimer = setTimeout(async () => {
+        try {
+          // Use optimized endpoint for refresh
+          const response = await fetch('/api/pos/init')
+          if (response.ok) {
+            const data = await response.json()
+            
+            // Update products
+            const sortedProducts = [...(data.products || [])].sort((a: Product, b: Product) => 
+              a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+            )
+            setProducts(sortedProducts)
+            await saveProducts(shopId, sortedProducts)
+            
+            // Update stock
+            setProductStock(data.stock || {})
+            
+            // Update customers
+            const customers = (data.customers || []).map((c: any) => ({ 
+              id: c.id, 
+              name: c.name, 
+              phone: c.phone 
+            }))
+            setCustomers(customers)
+            await saveCustomers(shopId, customers)
+          }
+        } catch (err) {
+          console.error('Failed to refresh POS data:', err)
+        }
+      }, 5000) // 5 second debounce
     }
 
     function handleFocus() {
-      refreshProducts()
-      refreshStock()
+      refreshData()
     }
 
     window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
+    }
   }, [user?.currentShopId, isOnline])
 
   async function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
@@ -254,29 +302,24 @@ export default function POSPage() {
     if (product.trackStock) {
       let currentStock = productStock[product.id]
       
-      // If stock not loaded yet, try to fetch it
-      if (currentStock === undefined && isOnline) {
-        try {
-          const response = await fetch(`/api/stock?productId=${product.id}`)
-          if (response.ok) {
-            const data = await response.json()
-            currentStock = data.stock ?? 0
-            setProductStock(prev => ({ ...prev, [product.id]: currentStock }))
-          } else {
-            // If fetch fails, default to 0
-            currentStock = 0
-            setProductStock(prev => ({ ...prev, [product.id]: 0 }))
-          }
-        } catch (err) {
-          console.error('Failed to fetch stock:', err)
-          // Default to 0 if fetch fails
-          currentStock = 0
-          setProductStock(prev => ({ ...prev, [product.id]: 0 }))
-        }
-      } else if (currentStock === undefined) {
-        // Offline and stock not cached, default to 0
+      // If stock not loaded yet, default to 0 and fetch in background (non-blocking)
+      if (currentStock === undefined) {
         currentStock = 0
         setProductStock(prev => ({ ...prev, [product.id]: 0 }))
+        
+        // Fetch stock in background (non-blocking) if online
+        if (isOnline) {
+          fetch(`/api/stock?productId=${product.id}`)
+            .then(response => response.ok ? response.json() : null)
+            .then(data => {
+              if (data?.stock !== undefined) {
+                setProductStock(prev => ({ ...prev, [product.id]: data.stock }))
+              }
+            })
+            .catch(() => {
+              // Silently fail - stock already set to 0
+            })
+        }
       }
 
       // Use 0 if still undefined
@@ -483,106 +526,64 @@ export default function POSPage() {
     e.preventDefault()
     if (!barcodeInput.trim() || !user?.currentShopId) return
 
-    try {
-      // Check if input contains quantity (format: "barcode x5" or "barcode*5")
-      const input = barcodeInput.trim()
-      const quantityMatch = input.match(/^(.+?)\s*[x*]\s*(\d+)$/i)
-      const barcodeToSearch = quantityMatch ? quantityMatch[1].trim() : input
-      const requestedQuantity = quantityMatch ? parseInt(quantityMatch[2]) : 1
+    // Check if input contains quantity (format: "barcode x5" or "barcode*5")
+    const input = barcodeInput.trim()
+    const quantityMatch = input.match(/^(.+?)\s*[x*]\s*(\d+)$/i)
+    const barcodeToSearch = quantityMatch ? quantityMatch[1].trim() : input
+    const requestedQuantity = quantityMatch ? parseInt(quantityMatch[2]) : 1
 
-      // Try to find product by barcode, SKU, or code in cache
-      let product = await findProductByBarcode(user.currentShopId, barcodeToSearch)
-      
-      // If not found by barcode, try searching by SKU or name
-      if (!product) {
-        const productsList = await getProductsWithCache(user.currentShopId, isOnline)
-        // First try SKU
-        const skuMatch = productsList.find(
-          (p) => (p as any).sku?.toLowerCase() === barcodeToSearch.toLowerCase()
-        )
-        if (skuMatch) {
-          product = skuMatch as any
+    // FIRST: Try in-memory products array (fastest - no async calls)
+    let foundProduct = products.find(
+      (p) => 
+        (p.barcode && p.barcode.trim() === barcodeToSearch) ||      
+        (p.cartonBarcode && p.cartonBarcode.trim() === barcodeToSearch) ||                                                                          
+        ((p as any).sku && (p as any).sku.toLowerCase() === barcodeToSearch.toLowerCase()) ||                                                                         
+        (p.name && p.name.toLowerCase() === barcodeToSearch.toLowerCase())
+    )
+
+    // If not found in memory, try IndexedDB (async but cached)
+    if (!foundProduct) {
+      try {
+        const cachedProduct = await findProductByBarcode(user.currentShopId, barcodeToSearch)
+        if (cachedProduct) {
+          foundProduct = {
+            id: cachedProduct.id,
+            name: cachedProduct.name,
+            barcode: cachedProduct.barcode,
+            unit: cachedProduct.unit,
+            price: cachedProduct.price,
+            cartonPrice: cachedProduct.cartonPrice,
+            trackStock: cachedProduct.trackStock,
+            cartonSize: cachedProduct.cartonSize,
+            cartonBarcode: cachedProduct.cartonBarcode,
+          } as Product
         }
-        
-        // If not found by SKU, try name - but if multiple products with same name exist, 
-        // we'll need to show selection (for now, take the first one by price)
-        if (!product) {
-          const nameMatches = productsList.filter(
-            (p) => p.name.toLowerCase() === barcodeToSearch.toLowerCase()
-          )
-          if (nameMatches.length === 1) {
-            product = nameMatches[0] as any
-          } else if (nameMatches.length > 1) {
-            // Multiple products with same name - sort by price and take first (cheapest)
-            nameMatches.sort((a, b) => parseFloat(a.price.toString()) - parseFloat(b.price.toString()))
-            product = nameMatches[0] as any
-            // Show message that multiple variants exist
-            if (product) {
-              show({ 
-                message: `Multiple variants found. Added: ${product.name} (${formatCurrency(product.price)})`, 
-                variant: 'default' 
-              })
-            }
-          }
-        }
+      } catch (err) {
+        console.warn('IndexedDB lookup failed:', err)
       }
+    }
 
-      if (product) {
-        // Check if it's a carton barcode match
-        const isCartonMatch = product.cartonBarcode === barcodeToSearch
-        const quantity = isCartonMatch ? (product.cartonSize || 1) : requestedQuantity
-        const isCarton = isCartonMatch && !!product.cartonPrice
+    if (foundProduct) {
+      const isCartonMatch = foundProduct.cartonBarcode === barcodeToSearch
+      const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : requestedQuantity
+      const isCarton = isCartonMatch && !!foundProduct.cartonPrice
 
-        addToCart(
-          {
-            id: product.id,
-            name: product.name,
-            barcode: product.barcode,
-            unit: product.unit,
-            price: product.price,
-            cartonPrice: product.cartonPrice,
-            trackStock: product.trackStock,
-            cartonSize: product.cartonSize,
-            cartonBarcode: product.cartonBarcode,
-          },
-          isCarton ? 1 : quantity,  // If carton, quantity is 1 carton
-          isCarton
-        )
+      addToCart(foundProduct, isCarton ? 1 : quantity, isCarton)
 
-        if (isCartonMatch) {
-          show({ message: `Added 1 carton (${quantity} ${product.unit})`, variant: 'success' })
-        }
-      } else {
-        // Fallback to products array search (in-memory)
-        // Use the same barcodeToSearch and requestedQuantity from above
-        const foundProduct = products.find(
-          (p) => 
-            (p.barcode && p.barcode.trim() === barcodeToSearch) ||      
-            (p.cartonBarcode && p.cartonBarcode.trim() === barcodeToSearch) ||                                                                          
-            ((p as any).sku && (p as any).sku.toLowerCase() === barcodeToSearch.toLowerCase()) ||                                                                         
-            (p.name && p.name.toLowerCase() === barcodeToSearch.toLowerCase())
-        )
-        if (foundProduct) {
-          const isCartonMatch = foundProduct.cartonBarcode === barcodeToSearch
-          const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : requestedQuantity
-
-          const isCarton = isCartonMatch && !!foundProduct.cartonPrice
-          addToCart(foundProduct, isCarton ? 1 : quantity, isCarton)
-
-          if (isCartonMatch) {
-            show({ message: `Added 1 carton (${quantity} ${foundProduct.unit})`, variant: 'success' })
-          } else if (requestedQuantity > 1) {
-            show({ message: `Added ${requestedQuantity} ${foundProduct.unit}`, variant: 'success' })
-          }
-        } else {
-          setError('Product not found. Try searching by name or SKU.')
-          setTimeout(() => setError(''), 3000)
-        }
+      if (isCartonMatch) {
+        show({ message: `Added 1 carton (${quantity} ${foundProduct.unit})`, variant: 'success' })
+      } else if (requestedQuantity > 1) {
+        show({ message: `Added ${requestedQuantity} ${foundProduct.unit}`, variant: 'success' })
       }
-    } catch (err) {
-      console.error('Error finding product by barcode:', err)
-      setError('Error finding product')
+    } else {
+      setError('Product not found. Try searching by name or SKU.')
       setTimeout(() => setError(''), 3000)
+    }
+
+    // Clear barcode input after processing
+    setBarcodeInput('')
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus()
     }
   }
 
@@ -1024,29 +1025,27 @@ export default function POSPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
+                    <button
                       onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
-                      variant="outline"
-                      className="w-8 h-8 p-0 flex items-center justify-center"
+                      className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 text-gray-700 font-semibold text-lg"
                       title="Decrease quantity"
                     >
-                      <Minus className="w-4 h-4" />
-                    </Button>
+                      −
+                    </button>
                     <Input
                       type="number"
                       value={item.quantity}
                       onChange={(e) => updateCartQuantity(item.product.id, parseFloat(e.target.value) || 0)}
-                      className="w-16 text-center p-1 h-8"
+                      className="w-16 text-center p-1 h-8 border-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       step="0.001"
                     />
-                    <Button
+                    <button
                       onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
-                      variant="outline"
-                      className="w-8 h-8 p-0 flex items-center justify-center"
+                      className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 text-gray-700 font-semibold text-lg"
                       title="Increase quantity"
                     >
-                      <Plus className="w-4 h-4" />
-                    </Button>
+                      +
+                    </button>
                     <div className="w-24 text-right font-semibold">
                       {formatCurrency(item.lineTotal)}
                     </div>
@@ -1086,7 +1085,7 @@ export default function POSPage() {
                     const rounded = Math.round(val)
                     setDiscount(Math.max(0, Math.min(Math.floor(subtotal), rounded)))
                   }}
-                  className="w-24 text-right"
+                  className="w-24 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   placeholder="0"
                 />
               </div>

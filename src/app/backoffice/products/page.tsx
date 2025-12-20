@@ -387,10 +387,50 @@ export default function ProductsPage() {
         return
       }
 
-      // Reset form and refresh list
+      // Optimistic update: add/update product in local state immediately
+      const apiProduct = data.product
+      const optimisticProduct: Product = {
+        id: apiProduct.id,
+        name: apiProduct.name,
+        sku: apiProduct.sku || null,
+        barcode: apiProduct.barcode || null,
+        unit: apiProduct.unit,
+        price: apiProduct.price.toString(),
+        costPrice: apiProduct.costPrice ? apiProduct.costPrice.toString() : null,
+        category: null,
+        trackStock: apiProduct.trackStock,
+        reorderLevel: apiProduct.reorderLevel || null,
+        cartonSize: apiProduct.cartonSize || null,
+        cartonBarcode: apiProduct.cartonBarcode || null,
+        stock: null, // Will be loaded on refresh
+        createdAt: apiProduct.createdAt || new Date().toISOString(),
+        updatedAt: apiProduct.updatedAt || new Date().toISOString(),
+      }
+
+      if (editingProduct) {
+        // Update existing product in list
+        setProducts(prev => prev.map(p => p.id === optimisticProduct.id ? optimisticProduct : p))
+      } else {
+        // Add new product to list (optimistic update)
+        setProducts(prev => {
+          const newList = [optimisticProduct, ...prev]
+          // Re-sort to maintain alphabetical order
+          return newList.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+        })
+        // Update pagination
+        setPagination(prev => ({
+          ...prev,
+          total: prev.total + 1,
+        }))
+      }
+
+      // Reset form
       setShowForm(false)
       setEditingProduct(null)
-      await fetchProducts()
+      
+      // Refresh in background to ensure data consistency (non-blocking)
+      fetchProducts().catch(err => console.error('Background refresh failed:', err))
+      
       show({ message: editingProduct ? 'Product updated' : 'Product created', variant: 'success' })
     } catch (err) {
       setError('An error occurred. Please try again.')

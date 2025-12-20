@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { Decimal } from '@prisma/client/runtime/library'
-import { getProductStock } from './purchases'
+import { getProductStock, getProductStockBatch } from './purchases'
 import { formatNumber } from '@/lib/utils/money'
 
 export interface SaleItemInput {
@@ -99,17 +99,26 @@ export async function createSale(
 
   const allowNegativeStock = shopSettings?.allowNegativeStock ?? true // Default: allow
 
-  // Validate quantities and check stock for products that track stock
-  const stockWarnings: Array<{ productName: string; available: number; requested: number }> = []
-  
+  // Validate quantities
   for (const item of input.items) {
     if (!item.quantity || item.quantity <= 0) {
       throw new Error('All items must have a quantity greater than 0')
     }
+  }
 
+  // Batch stock check for all products that track stock
+  const productsThatTrackStock = products.filter(p => p.trackStock)
+  const productIdsToCheck = productsThatTrackStock.map(p => p.id)
+  const stockMap = productIdsToCheck.length > 0 
+    ? await getProductStockBatch(shopId, productIdsToCheck)
+    : new Map<string, number>()
+  
+  const stockWarnings: Array<{ productName: string; available: number; requested: number }> = []
+  
+  for (const item of input.items) {
     const product = products.find((p) => p.id === item.productId)!
     if (product.trackStock) {
-      const currentStock = await getProductStock(shopId, item.productId)
+      const currentStock = stockMap.get(item.productId) || 0
       if (currentStock < item.quantity) {
         // If negative stock not allowed, block the sale
         if (!allowNegativeStock) {
@@ -175,36 +184,43 @@ export async function createSale(
       },
     })
 
-    // Create invoice lines and stock ledger entries
-    for (const itemInput of input.items) {
-      const product = products.find((p) => p.id === itemInput.productId)!
-      const quantity = new Decimal(itemInput.quantity)
-      const unitPrice = new Decimal(itemInput.unitPrice)
-      const lineTotal = new Decimal(itemInput.lineTotal)
+    // Create invoice lines in batch
+    await tx.invoiceLine.createMany({
+      data: input.items.map(itemInput => ({
+        invoiceId: invoice.id,
+        productId: itemInput.productId,
+        quantity: new Decimal(itemInput.quantity),
+        unitPrice: new Decimal(itemInput.unitPrice),
+        lineTotal: new Decimal(itemInput.lineTotal),
+      })),
+    })
 
-      // Create invoice line
-      const invoiceLine = await tx.invoiceLine.create({
-        data: {
-          invoiceId: invoice.id,
-          productId: itemInput.productId,
-          quantity,
-          unitPrice,
-          lineTotal,
-        },
-      })
+    // Query back invoice lines to get their IDs for stock ledger references
+    const invoiceLines = await tx.invoiceLine.findMany({
+      where: { invoiceId: invoice.id },
+      select: { id: true, productId: true, quantity: true },
+    })
 
-      // Create stock ledger entry (SALE type, negative changeQty)
-      await tx.stockLedger.create({
-        data: {
+    // Create a map of productId to invoice line for reliable matching
+    const invoiceLineMap = new Map(invoiceLines.map(line => [line.productId, line]))
+
+    // Create stock ledger entries in batch
+    await tx.stockLedger.createMany({
+      data: input.items.map(itemInput => {
+        const invoiceLine = invoiceLineMap.get(itemInput.productId)
+        if (!invoiceLine) {
+          throw new Error(`Invoice line not found for product ${itemInput.productId}`)
+        }
+        return {
           shopId,
           productId: itemInput.productId,
-          changeQty: quantity.mul(-1), // Negative for sales
-          type: 'SALE',
+          changeQty: new Decimal(itemInput.quantity).mul(-1), // Negative for sales
+          type: 'SALE' as const,
           refType: 'invoice_line',
           refId: invoiceLine.id,
-        },
-      })
-    }
+        }
+      }),
+    })
 
     // Handle payment or udhaar
     if (input.paymentStatus === 'PAID') {
@@ -381,17 +397,17 @@ export async function voidSale(shopId: string, invoiceId: string, userId: string
       data: { status: 'VOID' },
     })
 
-    // Reverse stock for each line (add back quantities)
-    for (const line of invoice.lines) {
-      await tx.stockLedger.create({
-        data: {
+    // Reverse stock for each line (add back quantities) - batch insert for performance
+    if (invoice.lines.length > 0) {
+      await tx.stockLedger.createMany({
+        data: invoice.lines.map(line => ({
           shopId,
           productId: line.productId,
           changeQty: line.quantity, // positive to add back
-          type: 'ADJUSTMENT',
-          refType: 'invoice_void',
+          type: 'ADJUSTMENT' as const,
+          refType: 'invoice_void' as const,
           refId: invoice.id,
-        },
+        })),
       })
     }
 

@@ -71,51 +71,60 @@ body {
   font-family: Arial, sans-serif;
   font-size: 10pt;
   line-height: 1.2;
-  padding: 0 1mm;      /* small, even padding on both sides */
-  width: 60mm;          /* SAFE content width for 80mm paper */
+  padding: 0 1mm;
+  width: 60mm;
   max-width: 60mm;
-  margin: 0;            /* we'll nudge slightly left instead of perfect centering */
-  margin-left: 5.5mm;  /* small nudge left to reduce extra left whitespace */
+  margin: 0;
+  margin-left: 5.5mm;
   position: relative;
+  background: white;
+  color: #111827;
 }
 
 ${debugStyle}
 
-.shop-name { font-size:14pt; font-weight:700; text-align:center; }
-.shop-address, .shop-phone { font-size:9pt; text-align:center; }
-
-.sale-invoice { 
-  font-size:10pt; font-weight:600; text-align:center; 
-  margin:2mm 0; padding:1mm 0; 
-  border-top:1px solid #000; border-bottom:1px solid #000; 
-}
-
-.info-grid { margin:1mm 0; }
-.info-row { display:flex; font-size:9pt; margin:0; }
-.info-col { flex:1; display:flex; gap:2mm; }
-.label { font-weight:600; }
-
-.divider { border-top:1px dashed #000; margin:1mm 0; }
-
-table { width:100%; border-collapse:collapse; font-size:9pt; margin:1mm 0; }
-thead tr { border-top:1px solid #000; border-bottom:1px solid #000; }
-th, td { padding:0.3mm 0.5mm; text-align:left; margin:0; }
-th { font-weight:700; }
-tbody tr { margin:0; }
-td.sn { width:6mm; }
-td.item-name { word-break:break-word; max-width:24mm; }
-td.price, td.qty, td.total { text-align:right; width:8mm; }
-th.price, th.qty, th.total { text-align:right; width:8mm; }
-
-.summary { margin-top:1mm; border-top:1px solid #000; padding-top:1mm; }
-.summary-row { display:flex; justify-content:space-between; font-size:9pt; margin:0; }
-.summary-row.total { font-size:11pt; font-weight:700; }
-
-.footer { margin-top:1mm; padding-top:1mm; border-top:1px dashed #000; font-size:9pt; }
-.footer-row { display:flex; justify-content:space-between; margin:0; }
+/* Tailwind utility classes for print */
+.text-center { text-align: center !important; }
+.mb-4 { margin-bottom: 4mm !important; }
+.mb-1 { margin-bottom: 1mm !important; }
+.mb-0\.5 { margin-bottom: 0.5mm !important; }
+.text-2xl { font-size: 14pt !important; line-height: 1.2 !important; }
+.font-bold { font-weight: 700 !important; }
+.text-gray-900 { color: #111827 !important; }
+.text-sm { font-size: 9pt !important; }
+.text-gray-600 { color: #4b5563 !important; }
+.py-2 { padding-top: 2mm !important; padding-bottom: 2mm !important; }
+.border-y-2 { border-top: 2px solid #111827 !important; border-bottom: 2px solid #111827 !important; }
+.my-3 { margin-top: 3mm !important; margin-bottom: 3mm !important; }
+.text-base { font-size: 10pt !important; }
+.font-semibold { font-weight: 600 !important; }
+.space-y-1\.5 > * + * { margin-top: 1.5mm !important; }
+.mb-3 { margin-bottom: 3mm !important; }
+.flex { display: flex !important; }
+.justify-between { justify-content: space-between !important; }
+.border-t { border-top-width: 1px !important; border-top-style: solid !important; }
+.border-dashed { border-style: dashed !important; }
+.border-gray-400 { border-color: #9ca3af !important; }
+.w-full { width: 100% !important; }
+table { width: 100% !important; border-collapse: collapse !important; font-size: 9pt !important; margin: 1mm 0 !important; }
+.border-b-2 { border-bottom: 2px solid #111827 !important; }
+.text-left { text-align: left !important; }
+.text-right { text-align: right !important; }
+.py-1\.5 { padding-top: 1.5mm !important; padding-bottom: 1.5mm !important; }
+th { font-weight: 700 !important; }
+.border-b { border-bottom-width: 1px !important; border-bottom-style: solid !important; }
+.border-gray-200 { border-color: #e5e7eb !important; }
+.text-gray-700 { color: #374151 !important; }
+.font-medium { font-weight: 500 !important; }
+.text-red-600 { color: #dc2626 !important; }
+.pt-1 { padding-top: 1mm !important; }
+.border-gray-300 { border-color: #d1d5db !important; }
+.text-green-600 { color: #16a34a !important; }
+.pt-2 { padding-top: 2mm !important; }
+.mt-2 { margin-top: 2mm !important; }
 
 @media print { 
-  @page { margin:0; }
+  @page { margin: 0; }
 }
 </style></head><body>${debug ? '<div class="debug-text">DEBUG: Red lines show printable area boundaries. Content should stay within.</div>' : ''}${element.innerHTML}</body></html>`)
   doc.close()

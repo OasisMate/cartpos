@@ -45,6 +45,9 @@ export default function BackofficeSalesPage() {
     totalPages: 1,
   })
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'UDHAAR'>('ALL')
+  const [voidModalOpen, setVoidModalOpen] = useState(false)
+  const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null)
+  const [voiding, setVoiding] = useState(false)
 
   const fetchSales = useCallback(async () => {
     if (!user?.currentShopId) return
@@ -129,19 +132,55 @@ export default function BackofficeSalesPage() {
     fetchSales()
   }, [fetchSales])
 
-  async function voidSale(id: string) {
-    const agreed = await confirm('Are you sure you want to VOID this sale? This will reverse stock and ledger entries.')
-    if (!agreed) return
+  function openVoidModal(sale: Sale) {
+    setSaleToVoid(sale)
+    setVoidModalOpen(true)
+  }
+
+  async function handleVoid(alsoDelete: boolean = false) {
+    if (!saleToVoid || voiding) return
+    
     try {
       setError('')
-      const resp = await fetch(`/api/sales/${id}/void`, { method: 'POST' })
+      setVoiding(true)
+      
+      // Void the sale
+      const resp = await fetch(`/api/sales/${saleToVoid.id}/void`, { method: 'POST' })
       const data = await resp.json()
       if (!resp.ok) {
         throw new Error(data.error || 'Failed to void sale')
       }
-      await fetchSales()
+      
+      // If also delete, delete it immediately after voiding
+      if (alsoDelete) {
+        const deleteResp = await fetch(`/api/sales/${saleToVoid.id}`, { method: 'DELETE' })
+        const deleteData = await deleteResp.json()
+        if (!deleteResp.ok) {
+          throw new Error(deleteData.error || 'Failed to delete sale')
+        }
+      }
+      
+      // Close modal only after operation completes
+      setVoidModalOpen(false)
+      
+      // Optimistic update: update local state immediately
+      if (alsoDelete) {
+        setSales(prev => prev.filter(s => s.id !== saleToVoid.id))
+        setPagination(prev => ({ ...prev, total: prev.total - 1 }))
+      } else {
+        setSales(prev => prev.map(s => 
+          s.id === saleToVoid.id ? { ...s, status: 'VOID' as const } : s
+        ))
+      }
+      
+      // Refresh in background to ensure consistency
+      fetchSales().catch(err => console.error('Background refresh failed:', err))
+      
+      setSaleToVoid(null)
     } catch (err: any) {
       setError(err.message || 'Failed to void sale')
+    } finally {
+      setVoiding(false)
     }
   }
 
@@ -155,7 +194,13 @@ export default function BackofficeSalesPage() {
       if (!resp.ok) {
         throw new Error(data.error || 'Failed to delete sale')
       }
-      await fetchSales()
+      
+      // Optimistic update
+      setSales(prev => prev.filter(s => s.id !== id))
+      setPagination(prev => ({ ...prev, total: prev.total - 1 }))
+      
+      // Refresh in background
+      fetchSales().catch(err => console.error('Background refresh failed:', err))
     } catch (err: any) {
       setError(err.message || 'Failed to delete sale')
     }
@@ -286,20 +331,23 @@ export default function BackofficeSalesPage() {
                         >
                           Print
                         </button>
-                        <button
-                          disabled={s.status === 'VOID'}
-                          onClick={() => voidSale(s.id)}
-                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 hover:bg-gray-50"
-                          title={s.status === 'VOID' ? 'Already voided' : 'Void sale'}
-                        >
-                          Void
-                        </button>
-                        <button
-                          onClick={() => deleteSale(s.id)}
-                          className="px-3 py-1 text-sm border border-red-200 text-red-600 rounded hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
+                        {s.status === 'VOID' ? (
+                          <button
+                            onClick={() => deleteSale(s.id)}
+                            className="px-3 py-1 text-sm border border-red-200 text-red-600 rounded hover:bg-red-50"
+                            title="Delete voided sale"
+                          >
+                            Delete
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openVoidModal(s)}
+                            className="px-3 py-1 text-sm border border-red-600 text-red-600 rounded hover:bg-red-50 font-semibold"
+                            title="Void sale"
+                          >
+                            Void
+                          </button>
+                        )}
                       </div>
                       </TD>
                     </TR>
@@ -336,6 +384,61 @@ export default function BackofficeSalesPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Void Modal */}
+      {voidModalOpen && saleToVoid && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/40" 
+            onClick={() => {
+              if (!voiding) {
+                setVoidModalOpen(false)
+                setSaleToVoid(null)
+              }
+            }} 
+          />
+          <div className="relative bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-red-600">Void Sale</h2>
+            {voiding ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mb-4"></div>
+                <p className="text-gray-700 text-center">
+                  Processing... Please wait
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-gray-700 mb-6">
+                  Are you sure you want to void this sale? This will reverse stock and ledger entries.
+                </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => handleVoid(true)}
+                    disabled={voiding}
+                    className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Void and Delete
+                  </button>
+                  <button
+                    onClick={() => handleVoid(false)}
+                    disabled={voiding}
+                    className="w-full px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Only Void
+                  </button>
+                  <button
+                    onClick={() => { setVoidModalOpen(false); setSaleToVoid(null) }}
+                    disabled={voiding}
+                    className="w-full px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

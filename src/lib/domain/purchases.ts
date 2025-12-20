@@ -297,8 +297,19 @@ export async function getPurchase(id: string, userId: string) {
   return purchase
 }
 
-// Get stock for all products in a shop (naive approach - sums all StockLedger entries)
+// Get stock for all products in a shop (optimized with single aggregation query)
 export async function getShopStock(shopId: string) {
+  // Single query to get all stock at once using groupBy
+  const stockAggregates = await prisma.stockLedger.groupBy({
+    by: ['productId'],
+    where: { shopId },
+    _sum: { changeQty: true },
+  })
+  
+  const stockMap = new Map(
+    stockAggregates.map(s => [s.productId, parseFloat(s._sum.changeQty?.toString() || '0')])
+  )
+  
   const products = await prisma.product.findMany({
     where: { shopId },
     select: {
@@ -308,21 +319,34 @@ export async function getShopStock(shopId: string) {
       trackStock: true,
     },
   })
+  
+  return products.map(p => ({
+    productId: p.id,
+    productName: p.name,
+    unit: p.unit,
+    trackStock: p.trackStock,
+    stock: stockMap.get(p.id) || 0,
+  }))
+}
 
-  const stock = await Promise.all(
-    products.map(async (product) => {
-      const currentStock = await getProductStock(shopId, product.id)
-      return {
-        productId: product.id,
-        productName: product.name,
-        unit: product.unit,
-        trackStock: product.trackStock,
-        stock: currentStock,
-      }
-    })
+// Batch stock lookup for multiple products (optimized)
+export async function getProductStockBatch(
+  shopId: string, 
+  productIds: string[]
+): Promise<Map<string, number>> {
+  if (productIds.length === 0) {
+    return new Map()
+  }
+  
+  const aggregates = await prisma.stockLedger.groupBy({
+    by: ['productId'],
+    where: { shopId, productId: { in: productIds } },
+    _sum: { changeQty: true },
+  })
+  
+  return new Map(
+    aggregates.map(s => [s.productId, parseFloat(s._sum.changeQty?.toString() || '0')])
   )
-
-  return stock
 }
 
 export async function updatePurchase(
