@@ -28,7 +28,16 @@ export async function GET(
           },
         },
         payments: true,
-        shop: true,
+        shop: {
+          include: {
+            settings: {
+              select: {
+                logoUrl: true,
+                receiptHeaderDisplay: true,
+              },
+            },
+          },
+        },
       },
     })
 

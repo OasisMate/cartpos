@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
           languageMode: 'EN_BILINGUAL' as const,
           printerName: null,
           autoPrint: false,
+          logoUrl: null,
+          receiptHeaderDisplay: 'NAME_ONLY' as const,
         }),
       
       // Customers (limit to 1000 for POS)
@@ -73,7 +75,8 @@ export async function GET(request: NextRequest) {
       stock: stockMap,
       settings: {
         allowNegativeStock: settings.allowNegativeStock,
-        // Include other settings if needed
+        logoUrl: settings.logoUrl,
+        receiptHeaderDisplay: settings.receiptHeaderDisplay,
       },
       customers,
     })

@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
           languageMode: 'EN_BILINGUAL',
           printerName: null,
           autoPrint: false,
+          logoUrl: null,
+          receiptHeaderDisplay: 'NAME_ONLY',
         },
       })
     }
@@ -83,6 +85,8 @@ export async function PUT(request: NextRequest) {
       allowCustomUnits,
       allowNegativeStock,
       languageMode,
+      logoUrl,
+      receiptHeaderDisplay,
     } = body
 
     // Update or create settings
@@ -96,6 +100,8 @@ export async function PUT(request: NextRequest) {
         ...(allowCustomUnits !== undefined && { allowCustomUnits }),
         ...(allowNegativeStock !== undefined && { allowNegativeStock }),
         ...(languageMode !== undefined && { languageMode }),
+        ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
+        ...(receiptHeaderDisplay !== undefined && { receiptHeaderDisplay }),
       },
       create: {
         shopId: user.currentShopId,
@@ -106,6 +112,8 @@ export async function PUT(request: NextRequest) {
         allowCustomUnits: allowCustomUnits ?? true,
         allowNegativeStock: allowNegativeStock ?? true,
         languageMode: languageMode || 'EN_BILINGUAL',
+        logoUrl: logoUrl || null,
+        receiptHeaderDisplay: receiptHeaderDisplay || 'NAME_ONLY',
       },
     })
 

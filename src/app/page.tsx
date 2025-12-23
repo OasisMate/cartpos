@@ -4,6 +4,9 @@ import { prisma } from '@/lib/db/prisma'
 import { isDatabaseConnectionError } from '@/lib/db/db-utils'
 import { withRetry } from '@/lib/db/connection-retry'
 
+// Force dynamic rendering - this page requires authentication
+export const dynamic = 'force-dynamic'
+
 export default async function Home() {
   try {
     const user = await getCurrentUser()

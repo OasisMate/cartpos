@@ -25,8 +25,9 @@
       "url": "/pos",
       "icons": [
         {
-          "src": "/icon-192x192.png",
-          "sizes": "192x192"
+          "src": "/icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
         }
       ]
     }

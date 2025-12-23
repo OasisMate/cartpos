@@ -41,5 +41,8 @@ next-env.d.ts
 # SSL certificates should not be committed
 prisma/prod-ca-2021.crt
 
-# generated files
+# generated PWA files (created by next-pwa)
 public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map

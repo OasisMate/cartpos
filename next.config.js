@@ -2,7 +2,7 @@ const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
   skipWaiting: true,
-  disable: false, // Enable in dev for testing offline functionality
+  disable: process.env.NODE_ENV === 'development', // Disable in dev to avoid file generation and warnings
   runtimeCaching: [
     {
       urlPattern: /^https?.*/,

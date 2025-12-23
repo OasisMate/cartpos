@@ -190,6 +190,8 @@ model ShopSettings {
   languageMode                    LanguageMode  @default(EN_BILINGUAL)
   printerName                     String?       // Preferred printer name (for reference, actual selection handled by browser)
   autoPrint                       Boolean       @default(false)  // Auto-print receipts after sale completion
+  logoUrl                         String?       // Store logo image URL (PNG format)
+  receiptHeaderDisplay            ReceiptHeaderDisplay @default(NAME_ONLY)  // What to show on receipt header
   shop                            Shop          @relation(fields: [shopId], references: [id])
 }
 
@@ -197,6 +199,12 @@ enum LanguageMode {
   EN_ONLY
   EN_BILINGUAL    // v1
   URDU_EN         // future
+}
+
+enum ReceiptHeaderDisplay {
+  NAME_ONLY       // Show only store name
+  LOGO_ONLY       // Show only logo
+  BOTH            // Show both name and logo
 }
 
 // -----------------------------------------------------

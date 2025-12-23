@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { useAuth } from '@/contexts/AuthContext'
 import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
@@ -31,7 +32,12 @@ export default function SettingsPage() {
   const [shopSettings, setShopSettings] = useState({
     printerName: '',
     autoPrint: false,
+    logoUrl: null as string | null,
+    receiptHeaderDisplay: 'NAME_ONLY' as 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH',
   })
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsError, setSettingsError] = useState('')
@@ -65,7 +71,12 @@ export default function SettingsPage() {
           setShopSettings({
             printerName: data.settings?.printerName || '',
             autoPrint: data.settings?.autoPrint || false,
+            logoUrl: data.settings?.logoUrl || null,
+            receiptHeaderDisplay: data.settings?.receiptHeaderDisplay || 'NAME_ONLY',
           })
+          if (data.settings?.logoUrl) {
+            setLogoPreview(data.settings.logoUrl)
+          }
         }
       } catch (err) {
         console.error('Failed to load shop settings:', err)
@@ -175,6 +186,83 @@ export default function SettingsPage() {
     }
   }
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (!file.type.includes('png')) {
+        setSettingsError('Only PNG images are allowed')
+        return
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        setSettingsError('File size must be less than 2MB')
+        return
+      }
+      setLogoFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+      setSettingsError('')
+    }
+  }
+
+  const handleLogoUpload = async () => {
+    if (!logoFile) return
+
+    setUploadingLogo(true)
+    setSettingsError('')
+    try {
+      const formData = new FormData()
+      formData.append('logo', logoFile)
+
+      const response = await fetch('/api/shop/logo', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload logo')
+      }
+
+      setShopSettings({ ...shopSettings, logoUrl: data.logoUrl })
+      setLogoFile(null)
+      setSettingsSuccess('Logo uploaded successfully')
+      setTimeout(() => setSettingsSuccess(''), 3000)
+    } catch (err: any) {
+      setSettingsError(err.message || 'Failed to upload logo')
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  const handleLogoRemove = async () => {
+    setUploadingLogo(true)
+    setSettingsError('')
+    try {
+      const response = await fetch('/api/shop/logo', {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to remove logo')
+      }
+
+      setShopSettings({ ...shopSettings, logoUrl: null })
+      setLogoPreview(null)
+      setLogoFile(null)
+      setSettingsSuccess('Logo removed successfully')
+      setTimeout(() => setSettingsSuccess(''), 3000)
+    } catch (err: any) {
+      setSettingsError(err.message || 'Failed to remove logo')
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
   const handleShopSettingsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSavingSettings(true)
@@ -185,7 +273,11 @@ export default function SettingsPage() {
       const response = await fetch('/api/shop/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(shopSettings),
+        body: JSON.stringify({
+          printerName: shopSettings.printerName,
+          autoPrint: shopSettings.autoPrint,
+          receiptHeaderDisplay: shopSettings.receiptHeaderDisplay,
+        }),
       })
 
       const data = await response.json()
@@ -194,7 +286,7 @@ export default function SettingsPage() {
         throw new Error(data.error || 'Failed to update shop settings')
       }
 
-      setSettingsSuccess('Printer settings updated successfully')
+      setSettingsSuccess('Settings updated successfully')
       setTimeout(() => setSettingsSuccess(''), 3000)
     } catch (err: any) {
       setSettingsError(err.message || 'Failed to update shop settings')
@@ -348,7 +440,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Password Change */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Lock className="h-5 w-5 text-blue-600" />
@@ -450,60 +542,161 @@ export default function SettingsPage() {
 
       {/* Shop Settings - Only for STORE_MANAGER */}
       {isStoreManager && (
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Printer className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">Printer Settings</h2>
+        <>
+          {/* Receipt Header Settings */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <SettingsIcon className="h-5 w-5 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Receipt Header Settings</h2>
+            </div>
+
+            {loadingSettings ? (
+              <div className="text-gray-600">Loading settings...</div>
+            ) : (
+              <div className="space-y-6">
+                {/* Logo Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Store Logo (PNG format, max 2MB)
+                  </label>
+                  <div className="flex items-start gap-4">
+                    {logoPreview && (
+                      <div className="relative">
+                        <Image
+                          src={logoPreview}
+                          alt="Store logo preview"
+                          width={128}
+                          height={128}
+                          className="w-32 h-32 object-contain border border-gray-300 rounded-lg bg-gray-50"
+                        />
+                        {shopSettings.logoUrl && (
+                          <button
+                            type="button"
+                            onClick={handleLogoRemove}
+                            disabled={uploadingLogo}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 disabled:opacity-50"
+                            title="Remove logo"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <input
+                        type="file"
+                        accept="image/png"
+                        onChange={handleLogoChange}
+                        disabled={uploadingLogo || savingSettings}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      {logoFile && !shopSettings.logoUrl && (
+                        <button
+                          type="button"
+                          onClick={handleLogoUpload}
+                          disabled={uploadingLogo}
+                          className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                        </button>
+                      )}
+                      <p className="mt-1 text-xs text-gray-500">
+                        Upload a PNG image to display on receipts. Recommended size: 200x200px or smaller.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Receipt Header Display Option */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Receipt Header Display
+                  </label>
+                  <select
+                    value={shopSettings.receiptHeaderDisplay}
+                    onChange={(e) => setShopSettings({ ...shopSettings, receiptHeaderDisplay: e.target.value as any })}
+                    disabled={savingSettings}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="NAME_ONLY">Show Store Name Only</option>
+                    <option value="LOGO_ONLY">Show Logo Only</option>
+                    <option value="BOTH">Show Both Name and Logo</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Choose what to display at the top of receipts.
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={handleShopSettingsSubmit}
+                    disabled={savingSettings}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingSettings ? 'Saving...' : 'Save Receipt Settings'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {loadingSettings ? (
-            <div className="text-gray-600">Loading printer settings...</div>
-          ) : (
-            <form onSubmit={handleShopSettingsSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="printerName" className="block text-sm font-medium text-gray-700 mb-2">
-                  Printer Name
-                </label>
-                <input
-                  type="text"
-                  id="printerName"
-                  value={shopSettings.printerName}
-                  onChange={(e) => setShopSettings({ ...shopSettings, printerName: e.target.value })}
-                  placeholder="Enter printer name (e.g., Thermal Printer, HP LaserJet)"
-                  disabled={savingSettings}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Enter the name of your default printer. This will be used as a preference when printing receipts.
-                </p>
-              </div>
+          {/* Printer Settings */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Printer className="h-5 w-5 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Printer Settings</h2>
+            </div>
 
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="autoPrint"
-                  checked={shopSettings.autoPrint}
-                  onChange={(e) => setShopSettings({ ...shopSettings, autoPrint: e.target.checked })}
-                  disabled={savingSettings}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
-                />
-                <label htmlFor="autoPrint" className="ml-2 text-sm text-gray-700">
-                  Auto-print receipts after sale completion
-                </label>
-              </div>
+            {loadingSettings ? (
+              <div className="text-gray-600">Loading printer settings...</div>
+            ) : (
+              <form onSubmit={handleShopSettingsSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="printerName" className="block text-sm font-medium text-gray-700 mb-2">
+                    Printer Name
+                  </label>
+                  <input
+                    type="text"
+                    id="printerName"
+                    value={shopSettings.printerName}
+                    onChange={(e) => setShopSettings({ ...shopSettings, printerName: e.target.value })}
+                    placeholder="Enter printer name (e.g., Thermal Printer, HP LaserJet)"
+                    disabled={savingSettings}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Enter the name of your default printer. This will be used as a preference when printing receipts.
+                  </p>
+                </div>
 
-              <div className="pt-4">
-                <button
-                  type="submit"
-                  disabled={savingSettings}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {savingSettings ? 'Saving...' : 'Save Printer Settings'}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="autoPrint"
+                    checked={shopSettings.autoPrint}
+                    onChange={(e) => setShopSettings({ ...shopSettings, autoPrint: e.target.checked })}
+                    disabled={savingSettings}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+                  />
+                  <label htmlFor="autoPrint" className="ml-2 text-sm text-gray-700">
+                    Auto-print receipts after sale completion
+                  </label>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={savingSettings}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingSettings ? 'Saving...' : 'Save Printer Settings'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </>
       )}
     </div>
   )

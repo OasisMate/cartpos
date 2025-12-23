@@ -7,6 +7,7 @@ import { LanguageProvider } from '@/contexts/LanguageContext'
 import ConditionalLayout from '@/components/layout/ConditionalLayout'
 import { DirectionSetter } from '@/components/layout/DirectionSetter'
 import { OfflineBanner } from '@/components/OfflineBanner'
+import { ServiceWorkerCleanup } from '@/components/ServiceWorkerCleanup'
 
 export const metadata: Metadata = {
   title: 'CartPOS',
@@ -18,7 +19,13 @@ export const metadata: Metadata = {
     title: 'CartPOS',
   },
   icons: {
-    apple: '/icon-192x192.png',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
   },
 }
 
@@ -34,6 +41,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="bg-gray-50">
+        <ServiceWorkerCleanup />
         <DirectionSetter />
         <OfflineBanner />
         <ToastProvider>

@@ -25,6 +25,16 @@ export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('session')?.value
   const { pathname } = request.nextUrl
 
+  // Handle missing icon requests to prevent 404 spam
+  if (pathname === '/icon-192x192.png') {
+    return new NextResponse(null, { status: 204 })
+  }
+
+  // Allow static icon files to be served without authentication
+  if (pathname === '/icon.svg' || pathname.startsWith('/icon')) {
+    return NextResponse.next()
+  }
+
   // Public routes that don't require authentication
   const publicRoutes = ['/login', '/signup', '/api/health']
   const isPublicRoute = publicRoutes.includes(pathname)
@@ -65,8 +75,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - icon.svg and other icon files (static assets)
+     * - files in public directory (handled by Next.js static file serving)
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon).*)',
   ],
 }
 

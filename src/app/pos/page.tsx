@@ -14,6 +14,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { useToast } from '@/components/ui/ToastProvider'
 import { Minus, Plus, X, ShoppingCart, Package } from 'lucide-react'
+import ReceiptModal from '@/components/receipt/ReceiptModal'
 
 // Product interface is imported from lib/offline/products
 
@@ -46,6 +47,10 @@ interface ReceiptData {
   shopName: string
   shopCity?: string | null
   shopPhone?: string | null
+  shopAddressLine1?: string | null
+  shopAddressLine2?: string | null
+  shopLogoUrl?: string | null
+  receiptHeaderDisplay?: 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH'
   items: ReceiptItem[]
   subtotal: number
   discount: number
@@ -85,6 +90,7 @@ export default function POSPage() {
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
   const [productStock, setProductStock] = useState<Record<string, number>>({})
   const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(true) // Default: allow
+  const [shopSettings, setShopSettings] = useState<{ logoUrl?: string | null; receiptHeaderDisplay?: 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH' } | null>(null)
 
   // Edit Item State
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
@@ -181,6 +187,11 @@ export default function POSPage() {
               if (settingsData.settings?.allowNegativeStock !== undefined) {
                 setAllowNegativeStock(settingsData.settings.allowNegativeStock)
               }
+              // Set shop settings for receipt
+              setShopSettings({
+                logoUrl: settingsData.settings?.logoUrl || null,
+                receiptHeaderDisplay: settingsData.settings?.receiptHeaderDisplay || 'NAME_ONLY',
+              })
             }
           }
         } else {
@@ -717,6 +728,10 @@ export default function POSPage() {
         shopName: shopInfo?.shop.name || 'CartPOS Shop',
         shopCity: shopInfo?.shop.city || '',
         shopPhone: shopInfo?.shop.phone || '',
+        shopAddressLine1: (shopInfo?.shop as any)?.addressLine1 || null,
+        shopAddressLine2: (shopInfo?.shop as any)?.addressLine2 || null,
+        shopLogoUrl: shopSettings?.logoUrl || null,
+        receiptHeaderDisplay: shopSettings?.receiptHeaderDisplay || 'NAME_ONLY',
         items: cart.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
@@ -769,18 +784,41 @@ export default function POSPage() {
     paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
       ? parseFloat(amountReceived) - total
       : 0
-  async function handlePrintReceipt() {
-    // Use print utility - keep it as fast as possible (no extra API calls)
-    const { printReceipt } = await import('@/lib/utils/print')
-    await printReceipt('pos-print-receipt', {
-      silent: true, // Browser will still show dialog but we keep our side instant
-    })
-  }
-
   function closeReceiptModal() {
     setShowReceiptModal(false)
     setReceiptData(null)
   }
+
+  // Convert ReceiptData to invoice format for ReceiptModal
+  const receiptInvoice = receiptData ? {
+    id: receiptData.id,
+    number: receiptData.invoiceNumber,
+    createdAt: receiptData.timestamp,
+    shop: {
+      name: receiptData.shopName,
+      city: receiptData.shopCity,
+      phone: receiptData.shopPhone,
+      addressLine1: receiptData.shopAddressLine1,
+      addressLine2: receiptData.shopAddressLine2,
+      settings: {
+        logoUrl: receiptData.shopLogoUrl,
+        receiptHeaderDisplay: receiptData.receiptHeaderDisplay,
+      },
+    },
+    lines: receiptData.items.map((item, idx) => ({
+      id: `line-${idx}`,
+      product: { name: item.name },
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: item.lineTotal,
+    })),
+    subtotal: receiptData.subtotal,
+    discount: receiptData.discount,
+    total: receiptData.total,
+    paymentStatus: receiptData.paymentStatus,
+    paymentMethod: receiptData.paymentMethod,
+    payments: receiptData.amountReceived ? [{ amount: receiptData.amountReceived }] : undefined,
+  } : null
 
   // Use cached search when offline, or filter products array when online
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
@@ -1284,158 +1322,13 @@ export default function POSPage() {
       )}
 
       {/* Receipt Modal */}
-      {showReceiptModal && receiptData && (
-        <>
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
-              {/* Modal Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
-                <h2 className="text-xl font-bold text-white">Receipt</h2>
-              </div>
-              
-              {/* Receipt Content */}
-              <div className="flex-1 overflow-y-auto p-6">
-                <div id="pos-print-receipt" className="bg-white text-gray-900 mx-auto" style={{ maxWidth: '80mm' }}>
-                  {/* Store Header */}
-                  <div className="text-center mb-4">
-                    <div className="text-2xl font-bold text-gray-900 mb-1">{receiptData.shopName}</div>
-                    {receiptData.shopCity && (
-                      <div className="text-sm text-gray-600 mb-0.5">{receiptData.shopCity}</div>
-                    )}
-                    {receiptData.shopPhone && (
-                      <div className="text-sm text-gray-600">{receiptData.shopPhone}</div>
-                    )}
-                  </div>
-                  
-                  {/* Sale Invoice Label */}
-                  <div className="text-center py-2 border-y-2 border-gray-900 my-3">
-                    <div className="text-base font-semibold">Sale Invoice</div>
-                  </div>
-                  
-                  {/* Invoice Info */}
-                  <div className="space-y-1.5 mb-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="font-semibold">Inv #:</span>
-                      <span>{receiptData.invoiceNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold">Date:</span>
-                      <span>{new Date(receiptData.timestamp).toLocaleDateString('en-GB').replace(/\//g, '-')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold">M.O.P:</span>
-                      <span>{receiptData.paymentStatus === 'PAID' ? (receiptData.paymentMethod || 'CASH') : 'UDHAAR'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold">Time:</span>
-                      <span>{new Date(receiptData.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                    </div>
-                  </div>
-                  
-                  {/* Divider */}
-                  <div className="border-t border-dashed border-gray-400 my-3"></div>
-                  
-                  {/* Items Table */}
-                  <div className="mb-3">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b-2 border-gray-900">
-                          <th className="text-left py-1.5 font-bold">Sr#</th>
-                          <th className="text-left py-1.5 font-bold">Item Details</th>
-                          <th className="text-right py-1.5 font-bold">Price</th>
-                          <th className="text-right py-1.5 font-bold">Qty</th>
-                          <th className="text-right py-1.5 font-bold">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {receiptData.items.map((item, idx) => (
-                          <tr key={`${item.name}-${idx}`} className="border-b border-gray-200">
-                            <td className="py-1.5 text-gray-700">{idx + 1}</td>
-                            <td className="py-1.5 text-gray-900 font-medium">{item.name}</td>
-                            <td className="py-1.5 text-right text-gray-700">{formatNumber(item.unitPrice)}</td>
-                            <td className="py-1.5 text-right text-gray-700">{formatNumber(item.quantity)}</td>
-                            <td className="py-1.5 text-right text-gray-900 font-semibold">{formatNumber(item.lineTotal)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  
-                  {/* Divider */}
-                  <div className="border-t border-dashed border-gray-400 my-3"></div>
-                  
-                  {/* Summary */}
-                  <div className="space-y-1.5 mb-3">
-                    {receiptData.discount > 0 && (
-                      <>
-                        <div className="flex justify-between text-sm">
-                          <span>Subtotal:</span>
-                          <span>{formatNumber(receiptData.subtotal)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm text-red-600">
-                          <span>Discount:</span>
-                          <span>-{formatNumber(receiptData.discount)}</span>
-                        </div>
-                      </>
-                    )}
-                    <div className="flex justify-between text-base font-bold pt-1 border-t border-gray-300">
-                      <span>Grand Total:</span>
-                      <span>{formatNumber(receiptData.total)}</span>
-                    </div>
-                    {receiptData.paymentStatus === 'PAID' && receiptData.paymentMethod === 'CASH' && typeof receiptData.amountReceived === 'number' && (
-                      <>
-                        <div className="flex justify-between text-sm pt-1">
-                          <span>Cash Paid:</span>
-                          <span>{formatNumber(receiptData.amountReceived)}</span>
-                        </div>
-                        {typeof receiptData.change === 'number' && receiptData.change > 0 && (
-                          <div className="flex justify-between text-sm text-green-600">
-                            <span>Change:</span>
-                            <span>{formatNumber(receiptData.change)}</span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  
-                  {/* Footer */}
-                  <div className="text-center text-sm text-gray-600 pt-2 border-t border-dashed border-gray-400">
-                    <div className="mt-2">Shukriya! Visit again.</div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Modal Footer Buttons */}
-              <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={closeReceiptModal}>
-                  Close
-                </Button>
-                <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={handlePrintReceipt}>
-                  Print
-                </Button>
-              </div>
-            </div>
-          </div>
-          <style jsx global>{`
-            @media print {
-              body * {
-                visibility: hidden;
-              }
-              #pos-print-receipt,
-              #pos-print-receipt * {
-                visibility: visible;
-              }
-              #pos-print-receipt {
-                position: absolute;
-                left: 0;
-                right: 0;
-                margin: 0 auto;
-                width: 80mm;
-                top: 0;
-              }
-            }
-          `}</style>
-        </>
+      {showReceiptModal && receiptInvoice && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={closeReceiptModal}
+          invoice={receiptInvoice}
+          printElementId="pos-print-receipt"
+        />
       )}
 
       {/* Quick Add Quantity Modal */}
