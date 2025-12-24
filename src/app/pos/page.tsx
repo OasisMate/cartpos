@@ -143,6 +143,11 @@ export default function POSPage() {
               if (data.settings?.allowNegativeStock !== undefined) {
                 setAllowNegativeStock(data.settings.allowNegativeStock)
               }
+              // Set shop settings for receipt
+              setShopSettings({
+                logoUrl: data.settings?.logoUrl || null,
+                receiptHeaderDisplay: data.settings?.receiptHeaderDisplay || 'NAME_ONLY',
+              })
             } else {
               // Fallback to individual calls if init endpoint fails
               throw new Error('Init endpoint failed')
@@ -280,6 +285,14 @@ export default function POSPage() {
             }))
             setCustomers(customers)
             await saveCustomers(shopId, customers)
+            
+            // Update shop settings for receipt
+            if (data.settings) {
+              setShopSettings({
+                logoUrl: data.settings.logoUrl || null,
+                receiptHeaderDisplay: data.settings.receiptHeaderDisplay || 'NAME_ONLY',
+              })
+            }
           }
         } catch (err) {
           console.error('Failed to refresh POS data:', err)

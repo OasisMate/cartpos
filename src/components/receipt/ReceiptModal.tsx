@@ -193,9 +193,9 @@ export default function ReceiptModal({ isOpen, onClose, invoice, printElementId 
                 )}
                 {/* Show discount only if it's greater than 0 */}
                 {discount > 0 && (
-                  <div className="flex justify-between text-red-600">
-                    <span style={{ fontWeight: '500' }}>Discount:</span>
-                    <span style={{ fontWeight: '500' }}>-{formatNumber(discount)}</span>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Discount:</span>
+                    <span className="font-medium">-{formatNumber(discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold pt-1 border-t border-gray-400" style={{ fontSize: '10pt', fontWeight: 'bold', paddingTop: '2mm' }}>
@@ -205,13 +205,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, printElementId 
                 {invoice.paymentStatus === 'PAID' && invoice.paymentMethod === 'CASH' && amountReceived !== undefined && (
                   <>
                     <div className="flex justify-between pt-1" style={{ fontSize: '9pt', paddingTop: '1mm' }}>
-                      <span style={{ fontWeight: '500' }}>Cash Paid:</span>
-                      <span style={{ fontWeight: '500' }}>{formatNumber(amountReceived)}</span>
+                      <span className="font-medium">Cash Paid:</span>
+                      <span className="font-medium">{formatNumber(amountReceived)}</span>
                     </div>
                     {change !== undefined && change > 0 && (
-                      <div className="flex justify-between text-green-600" style={{ fontSize: '9pt' }}>
-                        <span style={{ fontWeight: '500' }}>Change:</span>
-                        <span style={{ fontWeight: '500' }}>{formatNumber(change)}</span>
+                      <div className="flex justify-between" style={{ fontSize: '9pt' }}>
+                        <span className="font-medium">Change:</span>
+                        <span className="font-medium">{formatNumber(change)}</span>
                       </div>
                     )}
                   </>
