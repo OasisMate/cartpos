@@ -6,6 +6,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getCustomersWithCache } from '@/lib/offline/data'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
+import Button from '@/components/ui/Button'
+import Input from '@/components/ui/Input'
 
 interface Customer {
   id: string
@@ -22,6 +24,9 @@ export default function CustomersPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [onlyWithBalance, setOnlyWithBalance] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [formData, setFormData] = useState({ name: '', phone: '', notes: '', openingBalance: '' })
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (user?.currentShopId) {
@@ -98,15 +103,25 @@ export default function CustomersPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Customers</h1>
         <div className="flex gap-2">
-          <input
+          <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or phone"
-            className="input h-9 w-72"
+            className="h-9 w-72"
           />
-          <button className="btn btn-primary h-9 px-4" onClick={load}>
+          <Button className="h-9 px-4" variant="outline" onClick={load}>
             Search
-          </button>
+          </Button>
+          <Button
+            className="h-9 px-4"
+            onClick={() => {
+              setFormData({ name: '', phone: '', notes: '', openingBalance: '' })
+              setError('')
+              setShowForm(true)
+            }}
+          >
+            Add Customer
+          </Button>
         </div>
       </div>
 
@@ -123,6 +138,102 @@ export default function CustomersPage() {
       </div>
 
       {error && <div className="mb-3 p-3 bg-red-100 text-red-700 rounded">{error}</div>}
+
+      {/* Add/Edit Customer Modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg border border-gray-200">
+            <h2 className="text-xl font-bold mb-4">Add Customer</h2>
+            {error && (
+              <div className="mb-3 p-2 bg-red-100 text-red-700 rounded text-sm">
+                {error}
+              </div>
+            )}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                setSubmitting(true)
+                setError('')
+                try {
+                  const res = await fetch('/api/customers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData),
+                  })
+                  const data = await res.json()
+                  if (!res.ok) {
+                    throw new Error(data.error || 'Failed to create customer')
+                  }
+                  const created = data.customer as Customer
+                  setCustomers((prev) => [created, ...prev])
+                  setShowForm(false)
+                  setFormData({ name: '', phone: '', notes: '', openingBalance: '' })
+                } catch (err: any) {
+                  setError(err.message || 'Failed to create customer')
+                } finally {
+                  setSubmitting(false)
+                }
+              }}
+            >
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Phone</label>
+                  <Input
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Notes</label>
+                  <Input
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Opening Balance</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.openingBalance}
+                    onChange={(e) => setFormData({ ...formData, openingBalance: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowForm(false)
+                    setError('')
+                  }}
+                  disabled={submitting}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-[hsl(var(--muted-foreground))]">Loading...</div>

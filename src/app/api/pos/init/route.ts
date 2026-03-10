@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       // Settings (with default fallback)
       prisma.shopSettings.findUnique({
         where: { shopId: user.currentShopId },
-      }).then(s => s || {
+      }).then((s: any) => s || {
           shopId: user.currentShopId,
           requireCostPriceForStockItems: false,
           requireBarcodeForProducts: false,
@@ -48,6 +48,8 @@ export async function GET(request: NextRequest) {
           autoPrint: false,
           logoUrl: null,
           receiptHeaderDisplay: 'NAME_ONLY' as const,
+          cardFeePercent: 0,
+          allowCardFeeOverride: false,
         }),
       
       // Customers (limit to 1000 for POS)
@@ -77,6 +79,8 @@ export async function GET(request: NextRequest) {
         allowNegativeStock: settings.allowNegativeStock,
         logoUrl: settings.logoUrl,
         receiptHeaderDisplay: settings.receiptHeaderDisplay,
+        cardFeePercent: settings.cardFeePercent,
+        allowCardFeeOverride: settings.allowCardFeeOverride,
       },
       customers,
     })

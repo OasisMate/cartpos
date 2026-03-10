@@ -9,11 +9,12 @@ import { getProductsWithCache, getCachedProducts, findProductByBarcode, searchCa
 import { saveSale } from '@/lib/offline/sales'
 import { getCustomers, saveCustomers, saveProducts } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
-import { sumCartLines, calculateTotals, formatNumber, formatCurrency } from '@/lib/utils/money'
+import { sumCartLines, calculateTotals, formatNumber, formatCurrency, roundToTwo } from '@/lib/utils/money'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import Select from '@/components/ui/Select'
 import { useToast } from '@/components/ui/ToastProvider'
-import { Minus, Plus, X, ShoppingCart, Package } from 'lucide-react'
+import { Minus, Plus, X, ShoppingCart, Package, Trash2, Edit3 } from 'lucide-react'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
 
 // Product interface is imported from lib/offline/products
@@ -74,7 +75,6 @@ export default function POSPage() {
   const [loading, setLoading] = useState(true)
   const [cart, setCart] = useState<CartItem[]>([])
   const [barcodeInput, setBarcodeInput] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
   const [discount, setDiscount] = useState(0)
   const [quickAddProduct, setQuickAddProduct] = useState<Product | null>(null)
   const [quickAddQuantity, setQuickAddQuantity] = useState('1')
@@ -90,16 +90,58 @@ export default function POSPage() {
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
   const [productStock, setProductStock] = useState<Record<string, number>>({})
   const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(true) // Default: allow
-  const [shopSettings, setShopSettings] = useState<{ logoUrl?: string | null; receiptHeaderDisplay?: 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH' } | null>(null)
+  const [shopSettings, setShopSettings] = useState<{
+    logoUrl?: string | null
+    receiptHeaderDisplay?: 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH'
+    cardFeePercent?: number | null
+    allowCardFeeOverride?: boolean
+  } | null>(null)
 
   // Edit Item State
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
   const [editForm, setEditForm] = useState({ quantity: 0, price: 0 })
+  const [cardFeePercentOverride, setCardFeePercentOverride] = useState<number | null>(null)
+
+  // Held sales (parked carts)
+  interface HeldSale {
+    id: string
+    createdAt: string
+    note: string
+    cart: CartItem[]
+    discount: number
+    paymentStatus: 'PAID' | 'UDHAAR'
+    paymentMethod: 'CASH' | 'CARD' | 'OTHER'
+    customerId: string
+  }
+  const [heldSales, setHeldSales] = useState<HeldSale[]>([])
+  const [showHeldSalesModal, setShowHeldSalesModal] = useState(false)
+  const [showHoldNoteModal, setShowHoldNoteModal] = useState(false)
+  const [holdNoteDraft, setHoldNoteDraft] = useState('')
+  const [showNewCustomerModal, setShowNewCustomerModal] = useState(false)
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '', notes: '', openingBalance: '' })
+  const cartScrollRef = useRef<HTMLDivElement | null>(null)
+  const [creatingCustomer, setCreatingCustomer] = useState(false)
+  const [unfoundBarcode, setUnfoundBarcode] = useState<string | null>(null)
+  const [showQuickAddProductModal, setShowQuickAddProductModal] = useState(false)
+  const [quickAddProductForm, setQuickAddProductForm] = useState({ name: '', barcode: '', price: '', unit: 'pcs' })
+  const [creatingProduct, setCreatingProduct] = useState(false)
+
+  const canManageProducts =
+    user?.role === 'PLATFORM_ADMIN' ||
+    (user?.shops?.some(
+      (s: { shopId: string; shopRole: string }) =>
+        s.shopId === user?.currentShopId && s.shopRole === 'STORE_MANAGER'
+    ) ?? false)
 
   const barcodeInputRef = useRef<HTMLInputElement>(null)
-  const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Load all POS data in one optimized call when online, or from cache when offline
+  // Fast lookup maps for barcode -> product
+  const [productIndex, setProductIndex] = useState<{
+    byBarcode: Record<string, Product>
+    byCartonBarcode: Record<string, Product>
+  }>({ byBarcode: {}, byCartonBarcode: {} })
+
+  // Load POS data: cache-first, then background refresh from API
   useEffect(() => {
     async function loadPOSData() {
       if (!user?.currentShopId) return
@@ -108,121 +150,143 @@ export default function POSPage() {
       
       try {
         setLoading(true)
-        
-        if (isOnline) {
-          // Use optimized combined endpoint when online
-          try {
-            const response = await fetch('/api/pos/init')
-            if (response.ok) {
-              const data = await response.json()
-              
-              // Set products (sorted alphabetically)
-              const sortedProducts = [...(data.products || [])].sort((a: Product, b: Product) => 
-                a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-              )
-              setProducts(sortedProducts)
-              
-              // Cache products for offline use
-              await saveProducts(shopId, sortedProducts)
-              
-              // Set stock
-              setProductStock(data.stock || {})
-              
-              // Set customers
-              const customers = (data.customers || []).map((c: any) => ({ 
-                id: c.id, 
-                name: c.name, 
-                phone: c.phone 
-              }))
-              setCustomers(customers)
-              
-              // Cache customers for offline use
-              await saveCustomers(shopId, customers)
-              
-              // Set settings
-              if (data.settings?.allowNegativeStock !== undefined) {
-                setAllowNegativeStock(data.settings.allowNegativeStock)
-              }
-              // Set shop settings for receipt
-              setShopSettings({
-                logoUrl: data.settings?.logoUrl || null,
-                receiptHeaderDisplay: data.settings?.receiptHeaderDisplay || 'NAME_ONLY',
-              })
-            } else {
-              // Fallback to individual calls if init endpoint fails
-              throw new Error('Init endpoint failed')
-            }
-          } catch (err) {
-            console.warn('Failed to load from init endpoint, falling back to individual calls:', err)
-            // Fallback to individual calls
-            const productsList = await getProductsWithCache(shopId, isOnline)
-            const sortedProducts = [...productsList].sort((a, b) => 
+
+        // 1) Load from local cache first (fast path)
+        let hasLocalData = false
+
+        const cachedProducts = await getCachedProducts(shopId)
+        if (cachedProducts.length > 0) {
+          const sortedProducts = cachedProducts
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              barcode: p.barcode,
+              unit: p.unit,
+              price: p.price,
+              cartonPrice: p.cartonPrice,
+              trackStock: p.trackStock,
+              cartonSize: p.cartonSize,
+              cartonBarcode: p.cartonBarcode,
+            }))
+            .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+          setProducts(sortedProducts)
+          hasLocalData = true
+        }
+
+        const cachedCustomers = await getCustomers(shopId)
+        if (cachedCustomers.length > 0) {
+          setCustomers(cachedCustomers.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
+          hasLocalData = true
+        }
+
+        // If offline or we already have local data, UI can render without waiting for network
+        if (!isOnline || hasLocalData) {
+          setLoading(false)
+        }
+
+        if (!isOnline) {
+          // Offline: nothing more to do
+          return
+        }
+
+        // 2) Online: refresh from server in background and update cache
+        try {
+          const response = await fetch('/api/pos/init')
+          if (response.ok) {
+            const data = await response.json()
+
+            // Products
+            const sortedProducts = [...(data.products || [])].sort((a: Product, b: Product) =>
               a.name.toLowerCase().localeCompare(b.name.toLowerCase())
             )
             setProducts(sortedProducts)
-            
-            const cached = await getCustomers(shopId)
-            if (cached.length > 0) {
-              setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
-            } else {
-              const response = await fetch('/api/customers?limit=1000')
-              if (response.ok) {
-                const data = await response.json()
-                const customers = data.customers || []
-                setCustomers(customers)
-                await saveCustomers(shopId, customers)
-              }
+            await saveProducts(shopId, sortedProducts)
+
+            // Stock
+            setProductStock(data.stock || {})
+
+            // Customers
+            const customers = (data.customers || []).map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              phone: c.phone,
+            }))
+            setCustomers(customers)
+            await saveCustomers(shopId, customers)
+
+            // Settings
+            if (data.settings?.allowNegativeStock !== undefined) {
+              setAllowNegativeStock(data.settings.allowNegativeStock)
             }
-            
-            const stockResponse = await fetch('/api/stock')
-            if (stockResponse.ok) {
-              const stockData = await stockResponse.json()
-              const stockMap: Record<string, number> = {}
-              if (stockData.stock && Array.isArray(stockData.stock)) {
-                stockData.stock.forEach((item: { productId: string; stock: number }) => {
-                  stockMap[item.productId] = item.stock
-                })
-              }
-              setProductStock(stockMap)
-            }
-            
-            const settingsResponse = await fetch('/api/shop/settings')
-            if (settingsResponse.ok) {
-              const settingsData = await settingsResponse.json()
-              if (settingsData.settings?.allowNegativeStock !== undefined) {
-                setAllowNegativeStock(settingsData.settings.allowNegativeStock)
-              }
-              // Set shop settings for receipt
               setShopSettings({
-                logoUrl: settingsData.settings?.logoUrl || null,
-                receiptHeaderDisplay: settingsData.settings?.receiptHeaderDisplay || 'NAME_ONLY',
+                logoUrl: data.settings?.logoUrl || null,
+                receiptHeaderDisplay: data.settings?.receiptHeaderDisplay || 'NAME_ONLY',
+                cardFeePercent: typeof data.settings?.cardFeePercent === 'number'
+                  ? data.settings.cardFeePercent
+                  : data.settings?.cardFeePercent
+                  ? Number(data.settings.cardFeePercent)
+                  : 0,
+                allowCardFeeOverride: Boolean(data.settings?.allowCardFeeOverride || false),
               })
-            }
+          } else {
+            throw new Error('Init endpoint failed')
           }
-        } else {
-          // Offline: use cache only
-          const productsList = await getCachedProducts(user.currentShopId)
-          const sortedProducts = productsList.map((p) => ({
-            id: p.id,
-            name: p.name,
-            barcode: p.barcode,
-            unit: p.unit,
-            price: p.price,
-            cartonPrice: p.cartonPrice,
-            trackStock: p.trackStock,
-            cartonSize: p.cartonSize,
-            cartonBarcode: p.cartonBarcode,
-          })).sort((a, b) => 
+        } catch (err) {
+          console.warn('Failed to refresh POS data from init endpoint, falling back to individual calls:', err)
+
+          const productsList = await getProductsWithCache(shopId, isOnline)
+          const sortedProducts = [...productsList].sort((a, b) =>
             a.name.toLowerCase().localeCompare(b.name.toLowerCase())
           )
           setProducts(sortedProducts)
-          
-          const cached = await getCustomers(user.currentShopId)
-          setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
+
+          const cached = await getCustomers(shopId)
+          if (cached.length > 0) {
+            setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
+          } else {
+            const response = await fetch('/api/customers?limit=1000')
+            if (response.ok) {
+              const data = await response.json()
+              const customers = data.customers || []
+              setCustomers(customers)
+              await saveCustomers(shopId, customers)
+            }
+          }
+
+          const stockResponse = await fetch('/api/stock')
+          if (stockResponse.ok) {
+            const stockData = await stockResponse.json()
+            const stockMap: Record<string, number> = {}
+            if (stockData.stock && Array.isArray(stockData.stock)) {
+              stockData.stock.forEach((item: { productId: string; stock: number }) => {
+                stockMap[item.productId] = item.stock
+              })
+            }
+            setProductStock(stockMap)
+          }
+
+          const settingsResponse = await fetch('/api/shop/settings')
+          if (settingsResponse.ok) {
+            const settingsData = await settingsResponse.json()
+            if (settingsData.settings?.allowNegativeStock !== undefined) {
+              setAllowNegativeStock(settingsData.settings.allowNegativeStock)
+            }
+            setShopSettings({
+              logoUrl: settingsData.settings?.logoUrl || null,
+              receiptHeaderDisplay: settingsData.settings?.receiptHeaderDisplay || 'NAME_ONLY',
+              cardFeePercent: typeof settingsData.settings?.cardFeePercent === 'number'
+                ? settingsData.settings.cardFeePercent
+                : settingsData.settings?.cardFeePercent
+                ? Number(settingsData.settings.cardFeePercent)
+                : 0,
+              allowCardFeeOverride: Boolean(settingsData.settings?.allowCardFeeOverride || false),
+            })
+          }
         }
       } catch (err) {
         console.error('Failed to load POS data:', err)
       } finally {
+        // Ensure loading is turned off after the first load (when there was no cache)
         setLoading(false)
       }
     }
@@ -313,6 +377,50 @@ export default function POSPage() {
     }
   }, [user?.currentShopId, isOnline])
 
+  // Load held sales for current user + shop from localStorage
+  useEffect(() => {
+    if (!user?.id || !user.currentShopId) return
+    const key = `held_sales_${user.id}_${user.currentShopId}`
+    try {
+      const raw = localStorage.getItem(key)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          setHeldSales(parsed)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load held sales from storage:', err)
+    }
+  }, [user?.id, user?.currentShopId])
+
+  function persistHeldSales(next: HeldSale[]) {
+    if (!user?.id || !user.currentShopId) return
+    const key = `held_sales_${user.id}_${user.currentShopId}`
+    try {
+      localStorage.setItem(key, JSON.stringify(next))
+    } catch (err) {
+      console.error('Failed to save held sales to storage:', err)
+    }
+  }
+
+  // Rebuild product lookup index whenever products list changes
+  useEffect(() => {
+    const byBarcode: Record<string, Product> = {}
+    const byCartonBarcode: Record<string, Product> = {}
+
+    products.forEach((p) => {
+      if (p.barcode) {
+        byBarcode[p.barcode.trim()] = p
+      }
+      if (p.cartonBarcode) {
+        byCartonBarcode[p.cartonBarcode.trim()] = p
+      }
+    })
+
+    setProductIndex({ byBarcode, byCartonBarcode })
+  }, [products])
+
   async function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
     // Determine price based on carton vs piece
     const unitPrice = isCarton && product.cartonPrice 
@@ -322,32 +430,13 @@ export default function POSPage() {
     // If adding carton, quantity should be in cartons, not pieces
     const finalQuantity = isCarton ? quantity : quantity
 
-    // Check stock if product tracks stock
+    // Check stock if product tracks stock (purely client-side, no per-product network calls)
     if (product.trackStock) {
+      // If stock is unknown, treat as very high (no blocking) but still allow warnings when it becomes known
       let currentStock = productStock[product.id]
-      
-      // If stock not loaded yet, default to 0 and fetch in background (non-blocking)
-      if (currentStock === undefined) {
-        currentStock = 0
-        setProductStock(prev => ({ ...prev, [product.id]: 0 }))
-        
-        // Fetch stock in background (non-blocking) if online
-        if (isOnline) {
-          fetch(`/api/stock?productId=${product.id}`)
-            .then(response => response.ok ? response.json() : null)
-            .then(data => {
-              if (data?.stock !== undefined) {
-                setProductStock(prev => ({ ...prev, [product.id]: data.stock }))
-              }
-            })
-            .catch(() => {
-              // Silently fail - stock already set to 0
-            })
-        }
+      if (currentStock === undefined || currentStock === null) {
+        currentStock = Number.POSITIVE_INFINITY
       }
-
-      // Use 0 if still undefined
-      currentStock = currentStock ?? 0
 
       // Calculate total quantity in cart (including what we're about to add)
       // Need to sum all items for this product (both pieces and cartons) and convert to pieces
@@ -372,9 +461,8 @@ export default function POSPage() {
       const piecesToAdd = isCarton ? finalQuantity * cartonSize : finalQuantity
       const totalPiecesAfterAdd = totalPiecesInCart + piecesToAdd
 
-      // Check if we exceed available stock
-      // If stock is 0 or negative, prevent adding unless allowNegativeStock is true
-      if (currentStock <= 0 && totalPiecesAfterAdd > 0) {
+      // Check if we exceed available stock (only if stock is finite)
+      if (Number.isFinite(currentStock) && currentStock <= 0 && totalPiecesAfterAdd > 0) {
         if (!allowNegativeStock) {
           show({ 
             message: `Out of stock. Available: ${formatNumber(currentStock)} ${product.unit}`, 
@@ -388,7 +476,7 @@ export default function POSPage() {
             variant: 'warning' 
           })
         }
-      } else if (currentStock < totalPiecesAfterAdd) {
+      } else if (Number.isFinite(currentStock) && currentStock < totalPiecesAfterAdd) {
         if (!allowNegativeStock) {
           show({ 
             message: `Insufficient stock. Available: ${formatNumber(currentStock)} ${product.unit}, Requested: ${formatNumber(totalPiecesAfterAdd)} ${product.unit}`, 
@@ -434,9 +522,8 @@ export default function POSPage() {
       ])
     }
 
-    // Clear inputs
+    // Clear input
     setBarcodeInput('')
-    setSearchTerm('')
     if (barcodeInputRef.current) {
       barcodeInputRef.current.focus()
     }
@@ -455,22 +542,11 @@ export default function POSPage() {
     const cartItem = cart.find(item => item.product.id === productId)
     if (!cartItem) return
 
-    // Check stock if product tracks stock
+    // Check stock if product tracks stock (client-side only)
     if (cartItem.product.trackStock) {
-      let currentStock = productStock[productId] ?? 0
-      
-      // If stock not loaded yet, try to fetch it
-      if (currentStock === 0 && isOnline && !productStock[productId]) {
-        try {
-          const response = await fetch(`/api/stock?productId=${productId}`)
-          if (response.ok) {
-            const data = await response.json()
-            currentStock = data.stock ?? 0
-            setProductStock(prev => ({ ...prev, [productId]: currentStock }))
-          }
-        } catch (err) {
-          console.error('Failed to fetch stock:', err)
-        }
+      let currentStock = productStock[productId]
+      if (currentStock === undefined || currentStock === null) {
+        currentStock = Number.POSITIVE_INFINITY
       }
 
       // Calculate total pieces in cart for this product (including other items)
@@ -495,8 +571,8 @@ export default function POSPage() {
         : quantity
       const totalPiecesAfterUpdate = totalPiecesInCart - currentItemPieces + newItemPieces
 
-      // Check if we exceed available stock
-      if (currentStock < totalPiecesAfterUpdate) {
+      // Check if we exceed available stock (only if stock is finite)
+      if (Number.isFinite(currentStock) && currentStock < totalPiecesAfterUpdate) {
         if (!allowNegativeStock) {
           show({ 
             message: `Insufficient stock. Available: ${formatNumber(currentStock)} ${cartItem.product.unit}`, 
@@ -556,14 +632,15 @@ export default function POSPage() {
     const barcodeToSearch = quantityMatch ? quantityMatch[1].trim() : input
     const requestedQuantity = quantityMatch ? parseInt(quantityMatch[2]) : 1
 
-    // FIRST: Try in-memory products array (fastest - no async calls)
-    let foundProduct = products.find(
-      (p) => 
-        (p.barcode && p.barcode.trim() === barcodeToSearch) ||      
-        (p.cartonBarcode && p.cartonBarcode.trim() === barcodeToSearch) ||                                                                          
-        ((p as any).sku && (p as any).sku.toLowerCase() === barcodeToSearch.toLowerCase()) ||                                                                         
-        (p.name && p.name.toLowerCase() === barcodeToSearch.toLowerCase())
-    )
+    // FIRST: Try in-memory indexed maps (fastest - no async calls)
+    let foundProduct =
+      productIndex.byBarcode[barcodeToSearch] ||
+      productIndex.byCartonBarcode[barcodeToSearch] ||
+      products.find(
+        (p) =>
+          ((p as any).sku && (p as any).sku.toLowerCase() === barcodeToSearch.toLowerCase()) ||
+          (p.name && p.name.toLowerCase() === barcodeToSearch.toLowerCase())
+      )
 
     // If not found in memory, try IndexedDB (async but cached)
     if (!foundProduct) {
@@ -588,6 +665,7 @@ export default function POSPage() {
     }
 
     if (foundProduct) {
+      setUnfoundBarcode(null)
       const isCartonMatch = foundProduct.cartonBarcode === barcodeToSearch
       const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : requestedQuantity
       const isCarton = isCartonMatch && !!foundProduct.cartonPrice
@@ -600,14 +678,23 @@ export default function POSPage() {
         show({ message: `Added ${requestedQuantity} ${foundProduct.unit}`, variant: 'success' })
       }
     } else {
-      setError('Product not found. Try searching by name or SKU.')
-      setTimeout(() => setError(''), 3000)
+      const message = `Product not added. No match found for "${barcodeToSearch}".`
+      setError(message)
+      setUnfoundBarcode(barcodeToSearch)
+      show({ message, variant: 'destructive' })
+      if (barcodeInputRef.current) {
+        barcodeInputRef.current.focus()
+        barcodeInputRef.current.select()
+      }
+      setTimeout(() => setError(''), 4000)
     }
 
-    // Clear barcode input after processing
-    setBarcodeInput('')
-    if (barcodeInputRef.current) {
-      barcodeInputRef.current.focus()
+    // Clear barcode input after successful processing
+    if (foundProduct) {
+      setBarcodeInput('')
+      if (barcodeInputRef.current) {
+        barcodeInputRef.current.focus()
+      }
     }
   }
 
@@ -615,7 +702,6 @@ export default function POSPage() {
     // Show quick add modal for quantity input
     setQuickAddProduct(product)
     setQuickAddQuantity('1')
-    setSearchTerm('')
   }
 
   function handleQuickAdd() {
@@ -630,9 +716,65 @@ export default function POSPage() {
     addToCart(quickAddProduct, quantity, false)
     setQuickAddProduct(null)
     setQuickAddQuantity('1')
-    
-    if (searchInputRef.current) {
-      searchInputRef.current.focus()
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus()
+    }
+  }
+
+  async function handleQuickAddProductSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user?.currentShopId) return
+    const name = quickAddProductForm.name.trim()
+    const price = parseFloat(quickAddProductForm.price)
+    if (!name || isNaN(price) || price <= 0) {
+      show({ message: 'Name and price are required. Price must be > 0.', variant: 'destructive' })
+      return
+    }
+    setCreatingProduct(true)
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.toUpperCase(),
+          barcode: quickAddProductForm.barcode.trim() || undefined,
+          unit: quickAddProductForm.unit || 'pcs',
+          price,
+          trackStock: false,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create product')
+      const created = data.product as { id: string; name: string; barcode: string | null; unit: string; price: number; trackStock?: boolean }
+      const newProduct: Product = {
+        id: created.id,
+        name: created.name,
+        barcode: created.barcode,
+        unit: created.unit,
+        price: Number(created.price),
+        trackStock: created.trackStock ?? false,
+      }
+      const shopId = user.currentShopId
+      const list = await getProductsWithCache(shopId, true)
+      const sorted = [...list].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+      if (!sorted.some((p) => p.id === newProduct.id)) {
+        sorted.push(newProduct)
+        sorted.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+      }
+      setProducts(sorted)
+      await saveProducts(shopId, sorted)
+      addToCart(newProduct, 1, false)
+      setShowQuickAddProductModal(false)
+      setUnfoundBarcode(null)
+      setError('')
+      setQuickAddProductForm({ name: '', barcode: '', price: '', unit: 'pcs' })
+      setBarcodeInput('')
+      show({ message: 'Product added and in cart', variant: 'success' })
+      if (barcodeInputRef.current) barcodeInputRef.current.focus()
+    } catch (err: any) {
+      show({ message: err.message || 'Failed to add product', variant: 'destructive' })
+    } finally {
+      setCreatingProduct(false)
     }
   }
 
@@ -647,7 +789,114 @@ export default function POSPage() {
       return
     }
 
+    // Initialize card fee percent override with shop default when opening modal
+    const defaultCardFee = Number(shopSettings?.cardFeePercent ?? 0)
+    setCardFeePercentOverride(defaultCardFee)
+
     setShowPaymentModal(true)
+  }
+
+  function handleHoldSale() {
+    if (cart.length === 0) {
+      setError('Cart is empty')
+      return
+    }
+
+    // Open modal to capture optional note
+    setHoldNoteDraft('')
+    setShowHoldNoteModal(true)
+  }
+
+  function handleClearCart() {
+    if (cart.length === 0) {
+      return
+    }
+    setCart([])
+    setDiscount(0)
+    setPaymentStatus('PAID')
+    setPaymentMethod('CASH')
+    setCustomerId('')
+    setAmountReceived('')
+    setError('')
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus()
+    }
+  }
+
+  useEffect(() => {
+    if (!cartScrollRef.current) return
+    if (cart.length === 0) return
+    cartScrollRef.current.scrollTop = cartScrollRef.current.scrollHeight
+  }, [cart.length])
+
+  function confirmHoldSale() {
+    if (cart.length === 0) {
+      setShowHoldNoteModal(false)
+      return
+    }
+
+    const holdId = cuid()
+    const timestamp = new Date()
+    const timeLabel = timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    const userNote = holdNoteDraft || ''
+    const shortId = holdId.slice(-4).toUpperCase()
+    const defaultLabel = `Hold ${timeLabel} (${shortId})`
+    const note = userNote.trim() ? userNote.trim() : defaultLabel
+
+    const held: HeldSale = {
+      id: holdId,
+      createdAt: timestamp.toISOString(),
+      note,
+      cart,
+      discount,
+      paymentStatus,
+      paymentMethod,
+      customerId,
+    }
+
+    const next = [...heldSales, held]
+    setHeldSales(next)
+    persistHeldSales(next)
+
+    setShowHoldNoteModal(false)
+    setHoldNoteDraft('')
+
+    // Reset current sale so cashier can continue with next customer
+    setCart([])
+    setDiscount(0)
+    setPaymentStatus('PAID')
+    setPaymentMethod('CASH')
+    setCustomerId('')
+    setAmountReceived('')
+    setError('')
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus()
+    }
+    show({ message: 'Sale held successfully', variant: 'success' })
+  }
+
+  function resumeHeldSale(held: HeldSale) {
+    setCart(held.cart)
+    setDiscount(held.discount)
+    setPaymentStatus(held.paymentStatus)
+    setPaymentMethod(held.paymentMethod)
+    setCustomerId(held.customerId)
+    setAmountReceived('')
+
+    const remaining = heldSales.filter((h) => h.id !== held.id)
+    setHeldSales(remaining)
+    persistHeldSales(remaining)
+    setShowHeldSalesModal(false)
+
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus()
+    }
+  }
+
+  function removeHeldSale(id: string) {
+    const remaining = heldSales.filter((h) => h.id !== id)
+    setHeldSales(remaining)
+    persistHeldSales(remaining)
   }
 
   async function submitSale() {
@@ -662,7 +911,22 @@ export default function POSPage() {
       }
 
       const subtotal = sumCartLines(cart)
-      const { total } = calculateTotals(subtotal, discount)
+      const { total: baseTotal } = calculateTotals(subtotal, discount)
+
+      // Determine card fee for this sale (applied on total after discount)
+      const effectiveCardFeePercent =
+        paymentStatus === 'PAID' && paymentMethod === 'CARD'
+          ? (shopSettings?.allowCardFeeOverride
+              ? Number(cardFeePercentOverride ?? shopSettings?.cardFeePercent ?? 0)
+              : Number(shopSettings?.cardFeePercent ?? 0))
+          : 0
+
+      const cardFee =
+        effectiveCardFeePercent > 0
+          ? roundToTwo((baseTotal * effectiveCardFeePercent) / 100)
+          : 0
+
+      const total = roundToTwo(baseTotal + cardFee)
 
       if (paymentStatus === 'PAID' && paymentMethod === 'CASH') {
         if (!amountReceived) {
@@ -781,7 +1045,6 @@ export default function POSPage() {
       if (barcodeInputRef.current) {
         barcodeInputRef.current.focus()
       }
-      router.refresh()
     } catch (err: any) {
       setError(err.message || t('error_occurred'))
       show({ title: 'Error', message: err.message || 'Failed to complete sale', variant: 'destructive' })
@@ -792,7 +1055,18 @@ export default function POSPage() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0)
-  const total = subtotal - discount
+  const baseTotal = subtotal - discount
+  const effectiveCardFeePercentForDisplay =
+    paymentStatus === 'PAID' && paymentMethod === 'CARD'
+      ? (shopSettings?.allowCardFeeOverride
+          ? Number(cardFeePercentOverride ?? shopSettings?.cardFeePercent ?? 0)
+          : Number(shopSettings?.cardFeePercent ?? 0))
+      : 0
+  const cardFeeForDisplay =
+    effectiveCardFeePercentForDisplay > 0
+      ? roundToTwo((baseTotal * effectiveCardFeePercentForDisplay) / 100)
+      : 0
+  const total = roundToTwo(baseTotal + cardFeeForDisplay)
   const change =
     paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
       ? parseFloat(amountReceived) - total
@@ -831,13 +1105,14 @@ export default function POSPage() {
     paymentStatus: receiptData.paymentStatus,
     paymentMethod: receiptData.paymentMethod,
     payments: receiptData.amountReceived ? [{ amount: receiptData.amountReceived }] : undefined,
+    customerName: receiptData.customerName,
   } : null
 
   // Use cached search when offline, or filter products array when online
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
 
   useEffect(() => {
-    if (!searchTerm.trim()) {
+    if (!barcodeInput.trim()) {
       setFilteredProducts(products)
       return
     }
@@ -848,7 +1123,7 @@ export default function POSPage() {
       if (!isOnline) {
         // Offline: use IndexedDB search
         try {
-          const results = await searchCachedProducts(user.currentShopId, searchTerm)
+          const results = await searchCachedProducts(user.currentShopId, barcodeInput)
           const mapped = results.map((p) => ({
             id: p.id,
             name: p.name,
@@ -874,8 +1149,8 @@ export default function POSPage() {
         // Online: filter products array
         const filtered = products.filter(
           (p) =>
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (p.barcode && p.barcode.includes(searchTerm))
+            p.name.toLowerCase().includes(barcodeInput.toLowerCase()) ||
+            (p.barcode && p.barcode.includes(barcodeInput))
         )
         // Sort: first by name alphabetically, then by price (ascending) for same names
         filtered.sort((a, b) => {
@@ -888,7 +1163,7 @@ export default function POSPage() {
     }
 
     performSearch()
-  }, [searchTerm, products, user?.currentShopId, isOnline])
+  }, [barcodeInput, products, user?.currentShopId, isOnline])
 
   if (!user?.currentShopId) {
     return (
@@ -920,28 +1195,22 @@ export default function POSPage() {
           <form onSubmit={handleBarcodeSubmit} className="mb-4">
             <Input
               ref={barcodeInputRef}
-              placeholder={t('scan_barcode') + ' or enter SKU/name (e.g., "candy x5")'}
+              placeholder={t('scan_barcode') + ' or search by name/SKU (e.g., "candy x5")'}
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
+              maxLength={64}
               className="w-full text-lg h-11"
               autoFocus
             />
             <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              Tip: Enter product name or SKU followed by &quot;x&quot; and quantity (e.g., &quot;candy x5&quot;)
+              Tip: Scan barcode or type name/SKU. Use &quot;x&quot; for quantity (e.g., &quot;candy x5&quot;).
             </p>
           </form>
 
-          {/* Product Search */}
+          {/* Unified Search Suggestions (driven by barcodeInput) */}
           <div className="relative mb-4">
-            <Input
-              ref={searchInputRef}
-              placeholder={t('search_products')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full"
-            />
-            {searchTerm && filteredProducts.length > 0 && (
-              <div className="absolute z-20 w-full mt-1 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {barcodeInput && filteredProducts.length > 0 && (
+              <div className="absolute z-20 w-full bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-60 overflow-y-auto">
                 {filteredProducts.slice(0, 15).map((product, index) => {
                   // Check if there are other products with the same name
                   const sameNameProducts = filteredProducts.filter(p => p.name === product.name)
@@ -990,8 +1259,26 @@ export default function POSPage() {
 
           {/* Error/Success Messages */}
           {error && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-              {error}
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded flex flex-col gap-2">
+              <span>{error}</span>
+              {canManageProducts && unfoundBarcode && (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="self-start bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => {
+                    setQuickAddProductForm({
+                      name: '',
+                      barcode: unfoundBarcode,
+                      price: '',
+                      unit: 'pcs',
+                    })
+                    setShowQuickAddProductModal(true)
+                  }}
+                >
+                  Add as new product
+                </Button>
+              )}
             </div>
           )}
           {success && (
@@ -1054,9 +1341,19 @@ export default function POSPage() {
       </div>
 
       {/* Right Panel - Cart */}
-      <div className="w-1/2 bg-[hsl(var(--card))] overflow-y-auto">
+      <div className="w-1/2 bg-[hsl(var(--card))] overflow-y-auto" ref={cartScrollRef}>
         <div className="p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10">
-          <h2 className="text-xl font-bold mb-4">{t('cart')}</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xl font-bold">{t('cart')}</h2>
+            <Button
+              variant="outline"
+              className="h-8 px-3 text-sm"
+              onClick={() => setShowHeldSalesModal(true)}
+              disabled={heldSales.length === 0}
+            >
+              Held Sales ({heldSales.length})
+            </Button>
+          </div>
         </div>
 
         <div className="p-4">
@@ -1140,15 +1437,43 @@ export default function POSPage() {
                   placeholder="0"
                 />
               </div>
+              <div className="flex justify-between">
+                <span>{t('total')}:</span>
+                <span>{formatCurrency(baseTotal)}</span>
+              </div>
+              {effectiveCardFeePercentForDisplay > 0 && (
+                <div className="flex justify-between text-sm text-[hsl(var(--muted-foreground))]">
+                  <span>Card Charges ({formatNumber(effectiveCardFeePercentForDisplay)}%):</span>
+                  <span>{formatCurrency(cardFeeForDisplay)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-lg border-t pt-2">
                 <span>{t('total')}:</span>
                 <span>{formatCurrency(total)}</span>
               </div>
             </div>
 
-            <Button onClick={handleCompleteSale} className="w-full h-12 text-lg font-semibold">
-              {t('complete_sale')}
-            </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 h-12 text-lg font-semibold"
+                  onClick={handleClearCart}
+                >
+                  Clear Cart
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 h-12 text-lg font-semibold bg-yellow-400 hover:bg-yellow-500 text-black border-yellow-500"
+                  onClick={handleHoldSale}
+                >
+                  Hold Sale
+                </Button>
+                <Button onClick={handleCompleteSale} className="flex-1 h-12 text-lg font-semibold">
+                  {t('complete_sale')}
+                </Button>
+              </div>
           </div>
         )}
       </div>
@@ -1239,19 +1564,32 @@ export default function POSPage() {
                   <label className="block text-sm font-medium mb-1">
                     {t('customers')} <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={customerId}
-                    onChange={(e) => setCustomerId(e.target.value)}
-                    required
-                    className="input"
-                  >
-                    <option value="">Select customer</option>
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name} {customer.phone && `(${customer.phone})`}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex gap-2">
+                    <select
+                      value={customerId}
+                      onChange={(e) => setCustomerId(e.target.value)}
+                      required
+                      className="input flex-1"
+                    >
+                      <option value="">Select customer</option>
+                      {customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name} {customer.phone && `(${customer.phone})`}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="whitespace-nowrap"
+                      onClick={() => {
+                        setNewCustomerForm({ name: '', phone: '', notes: '', openingBalance: '' })
+                        setShowNewCustomerModal(true)
+                      }}
+                    >
+                      + {t('add')}
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -1263,7 +1601,15 @@ export default function POSPage() {
                     </label>
                     <select
                       value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'CARD' | 'OTHER')}
+                      onChange={(e) => {
+                        const method = e.target.value as 'CASH' | 'CARD' | 'OTHER'
+                        setPaymentMethod(method)
+                        if (method === 'CARD') {
+                          // When switching to CARD, initialize override from shop default if allowed
+                          const defaultCardFee = Number(shopSettings?.cardFeePercent ?? 0)
+                          setCardFeePercentOverride(defaultCardFee)
+                        }
+                      }}
                       className="input"
                     >
                       <option value="CASH">{t('cash')}</option>
@@ -1271,6 +1617,38 @@ export default function POSPage() {
                       <option value="OTHER">{t('other')}</option>
                     </select>
                   </div>
+
+                  {/* Card fee override (if enabled and payment method is CARD) */}
+                  {paymentMethod === 'CARD' && (
+                    <div className="mt-2">
+                      <label className="block text-sm font-medium mb-1">
+                        Card Charges (%)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          max={100}
+                          value={
+                            shopSettings?.allowCardFeeOverride
+                              ? (cardFeePercentOverride ?? shopSettings?.cardFeePercent ?? 0)
+                              : (shopSettings?.cardFeePercent ?? 0)
+                          }
+                          onChange={(e) => {
+                            if (!shopSettings?.allowCardFeeOverride) return
+                            const val = parseFloat(e.target.value)
+                            setCardFeePercentOverride(Number.isNaN(val) ? 0 : val)
+                          }}
+                          disabled={!shopSettings?.allowCardFeeOverride}
+                          className="w-24 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                          Applied on total after discount
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {paymentMethod === 'CASH' && (
                     <div>
@@ -1395,6 +1773,278 @@ export default function POSPage() {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Held Sales Modal */}
+      {showHeldSalesModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-md border border-[hsl(var(--border))] max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">Held Sales</h2>
+            {heldSales.length === 0 ? (
+              <div className="text-sm text-[hsl(var(--muted-foreground))] mb-4">
+                No held sales.
+              </div>
+            ) : (
+              <div className="space-y-3 mb-4">
+                {heldSales
+                  .slice()
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .map((held) => (
+                    <div
+                      key={held.id}
+                      className="border border-[hsl(var(--border))] rounded-md p-3 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{held.note}</div>
+                        <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                          {new Date(held.createdAt).toLocaleString()}
+                          {' • '}
+                          {held.cart.length} items
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="px-3 py-1 flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+                          onClick={() => resumeHeldSale(held)}
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="px-3 py-1 flex items-center gap-1 text-red-600 border-red-300 hover:bg-red-50 rounded-md"
+                          onClick={() => removeHeldSale(held.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => setShowHeldSalesModal(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hold Sale Note Modal */}
+      {showHoldNoteModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-sm border border-[hsl(var(--border))]">
+            <h2 className="text-xl font-bold mb-4">Hold Sale</h2>
+            <div className="space-y-3 mb-4">
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                Add a short note to identify this held sale (optional). If left blank, it will be named automatically.
+              </p>
+              <Input
+                placeholder="e.g. Customer in aisle 3"
+                value={holdNoteDraft}
+                onChange={(e) => setHoldNoteDraft(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowHoldNoteModal(false)
+                  setHoldNoteDraft('')
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="bg-yellow-400 hover:bg-yellow-500 text-black"
+                onClick={confirmHoldSale}
+              >
+                Hold
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Customer Modal (POS) */}
+      {showNewCustomerModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-sm border border-[hsl(var(--border))]">
+            <h2 className="text-xl font-bold mb-4">{t('add')} {t('customers')}</h2>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                setCreatingCustomer(true)
+                try {
+                  const res = await fetch('/api/customers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newCustomerForm),
+                  })
+                  const data = await res.json()
+                  if (!res.ok) {
+                    throw new Error(data.error || 'Failed to create customer')
+                  }
+                  const created = data.customer as { id: string; name: string; phone: string | null }
+                  // Update local customers list and select new customer
+                  setCustomers((prev) => [
+                    ...prev,
+                    { id: created.id, name: created.name, phone: created.phone },
+                  ])
+                  setCustomerId(created.id)
+                  setShowNewCustomerModal(false)
+                  setNewCustomerForm({ name: '', phone: '', notes: '', openingBalance: '' })
+                } catch (err: any) {
+                  show({
+                    title: 'Error',
+                    message: err.message || 'Failed to create customer',
+                    variant: 'destructive',
+                  })
+                } finally {
+                  setCreatingCustomer(false)
+                }
+              }}
+            >
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    {t('name')} <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={newCustomerForm.name}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })}
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t('phone')}</label>
+                  <Input
+                    value={newCustomerForm.phone}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Notes</label>
+                  <Input
+                    value={newCustomerForm.notes}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, notes: e.target.value })}
+                    placeholder="Optional (e.g. shop name, reference)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Opening Balance</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newCustomerForm.openingBalance}
+                    onChange={(e) =>
+                      setNewCustomerForm({ ...newCustomerForm, openingBalance: e.target.value })
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowNewCustomerModal(false)
+                    setNewCustomerForm({ name: '', phone: '', notes: '', openingBalance: '' })
+                  }}
+                  disabled={creatingCustomer}
+                >
+                  {t('cancel')}
+                </Button>
+                <Button type="submit" disabled={creatingCustomer}>
+                  {creatingCustomer ? t('processing') : t('save')}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Product (from unfound barcode) - Store Manager only */}
+      {showQuickAddProductModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-sm border border-[hsl(var(--border))]">
+            <h2 className="text-xl font-bold mb-4">Add product</h2>
+            <form onSubmit={handleQuickAddProductSubmit} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Name <span className="text-red-500">*</span></label>
+                <Input
+                  value={quickAddProductForm.name}
+                  onChange={(e) => setQuickAddProductForm({ ...quickAddProductForm, name: e.target.value })}
+                  placeholder="Product name (saved in CAPS)"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Barcode</label>
+                <Input
+                  value={quickAddProductForm.barcode}
+                  onChange={(e) => setQuickAddProductForm({ ...quickAddProductForm, barcode: e.target.value })}
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-1">Price <span className="text-red-500">*</span></label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={quickAddProductForm.price}
+                    onChange={(e) => setQuickAddProductForm({ ...quickAddProductForm, price: e.target.value })}
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                <div className="w-28">
+                  <label className="block text-sm font-medium mb-1">Unit</label>
+                  <Select
+                    value={quickAddProductForm.unit}
+                    onChange={(e) =>
+                      setQuickAddProductForm({ ...quickAddProductForm, unit: e.target.value })
+                    }
+                  >
+                    <option value="pcs">pcs</option>
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="L">L</option>
+                    <option value="mL">mL</option>
+                    <option value="pack">pack</option>
+                    <option value="box">box</option>
+                    <option value="dozen">dozen</option>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowQuickAddProductModal(false)
+                    setQuickAddProductForm({ name: '', barcode: '', price: '', unit: 'pcs' })
+                  }}
+                  disabled={creatingProduct}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={creatingProduct}>
+                  {creatingProduct ? 'Adding…' : 'Add & put in cart'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

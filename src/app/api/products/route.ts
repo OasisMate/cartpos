@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       unit: body.unit,
       price: price,
       costPrice: costPrice,
-      trackStock: body.trackStock !== undefined ? body.trackStock : true,
+      trackStock: body.trackStock !== undefined ? body.trackStock : false,
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,
       cartonPrice: cartonPrice,
       cartonSize: body.cartonSize ? parseInt(body.cartonSize) : undefined,

@@ -97,8 +97,9 @@ export async function createProduct(
     throw new Error('You do not have permission to create products in this shop')
   }
 
-  // Validate required fields
-  if (!input.name || !input.unit || !input.price) {
+  // Normalize name to uppercase for consistency
+  const name = (input.name || '').trim().toUpperCase()
+  if (!name || !input.unit || !input.price) {
     throw new Error('Name, unit, and price are required')
   }
 
@@ -128,7 +129,7 @@ export async function createProduct(
     const newProduct = await tx.product.create({
       data: {
         shopId,
-        name: input.name,
+        name,
         sku: finalSKU,
         barcode: input.barcode || null,
         unit: input.unit,
@@ -218,11 +219,17 @@ export async function updateProduct(
     }
   }
 
+  // Normalize name to uppercase when updating
+  const nameUpdate =
+    input.name !== undefined && input.name !== null
+      ? { name: (String(input.name).trim() || product.name).toUpperCase() }
+      : {}
+
   // Update product
   const updated = await prisma.product.update({
     where: { id },
     data: {
-      ...(input.name && { name: input.name }),
+      ...nameUpdate,
       ...(finalSKU && { sku: finalSKU }),
       ...(input.barcode !== undefined && { barcode: input.barcode || null }),
       ...(input.unit && { unit: input.unit }),

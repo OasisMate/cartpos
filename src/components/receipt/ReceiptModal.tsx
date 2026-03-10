@@ -44,6 +44,11 @@ interface ReceiptModalProps {
     paymentStatus: 'PAID' | 'UDHAAR'
     paymentMethod?: 'CASH' | 'CARD' | 'OTHER' | null
     payments?: Array<{ amount: string | number }>
+    // Optional customer info for Udhaar receipts
+    customerName?: string | null
+    customer?: {
+      name?: string | null
+    } | null
   }
   printElementId?: string
 }
@@ -82,6 +87,7 @@ export default function ReceiptModal({ isOpen, onClose, invoice, printElementId 
   const logoUrl = invoice.shop?.settings?.logoUrl
   const showName = receiptHeaderDisplay === 'NAME_ONLY' || receiptHeaderDisplay === 'BOTH'
   const showLogo = receiptHeaderDisplay === 'LOGO_ONLY' || receiptHeaderDisplay === 'BOTH'
+  const customerName = invoice.customerName || invoice.customer?.name || null
 
   return (
     <>
@@ -148,6 +154,12 @@ export default function ReceiptModal({ isOpen, onClose, invoice, printElementId 
                   <span className="font-semibold">M.O.P: <span className="font-normal">{paymentMethod}</span></span>
                   <span className="font-semibold">Time: <span className="font-normal">{timeStr}</span></span>
                 </div>
+                {invoice.paymentStatus === 'UDHAAR' && customerName && (
+                  <div className="mt-1">
+                    <span className="font-semibold">Customer: </span>
+                    <span className="font-normal">{customerName}</span>
+                  </div>
+                )}
               </div>
               
               {/* Simple Dotted Divider */}

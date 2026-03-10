@@ -34,6 +34,8 @@ export default function SettingsPage() {
     autoPrint: false,
     logoUrl: null as string | null,
     receiptHeaderDisplay: 'NAME_ONLY' as 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH',
+    cardFeePercent: 0,
+    allowCardFeeOverride: false,
   })
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -73,6 +75,8 @@ export default function SettingsPage() {
             autoPrint: data.settings?.autoPrint || false,
             logoUrl: data.settings?.logoUrl || null,
             receiptHeaderDisplay: data.settings?.receiptHeaderDisplay || 'NAME_ONLY',
+            cardFeePercent: Number(data.settings?.cardFeePercent || 0),
+            allowCardFeeOverride: Boolean(data.settings?.allowCardFeeOverride || false),
           })
           if (data.settings?.logoUrl) {
             setLogoPreview(data.settings.logoUrl)
@@ -277,6 +281,8 @@ export default function SettingsPage() {
           printerName: shopSettings.printerName,
           autoPrint: shopSettings.autoPrint,
           receiptHeaderDisplay: shopSettings.receiptHeaderDisplay,
+          cardFeePercent: shopSettings.cardFeePercent,
+          allowCardFeeOverride: shopSettings.allowCardFeeOverride,
         }),
       })
 
@@ -625,6 +631,52 @@ export default function SettingsPage() {
                   <p className="mt-1 text-xs text-gray-500">
                     Choose what to display at the top of receipts.
                   </p>
+                </div>
+
+                {/* Card Payment Fee Settings */}
+                <div className="mt-4 space-y-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Card Payment Fee (%)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      value={shopSettings.cardFeePercent}
+                      onChange={(e) =>
+                        setShopSettings({
+                          ...shopSettings,
+                          cardFeePercent: Number(e.target.value) || 0,
+                        })
+                      }
+                      disabled={savingSettings}
+                      className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed text-right"
+                    />
+                    <span className="text-sm text-gray-600">
+                      Applied on total after discount when payment method is CARD. 0 = no fee.
+                    </span>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="allowCardFeeOverride"
+                      checked={shopSettings.allowCardFeeOverride}
+                      onChange={(e) =>
+                        setShopSettings({
+                          ...shopSettings,
+                          allowCardFeeOverride: e.target.checked,
+                        })
+                      }
+                      disabled={savingSettings}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+                    />
+                    <label htmlFor="allowCardFeeOverride" className="ml-2 text-sm text-gray-700">
+                      Allow cashier to change card fee % per sale
+                    </label>
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-gray-200">

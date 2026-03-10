@@ -297,7 +297,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const orgIndex = adminLinks.findIndex((link) => link.href === '/admin/organizations')
         adminLinks.splice(orgIndex + 1, 0, ...orgChildren)
 
-        if (contextStoreId) {
+          if (contextStoreId) {
           // Store dashboard link stays in main nav
           const storeDashboardLink: NavLink = {
             label: `${storeMeta?.name || 'Store'} · Dashboard`,
@@ -383,11 +383,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               href: `/org/${contextOrgId}/stores/${contextStoreId}/suppliers`,
               icon: <></>,
             },
-            {
-              label: t('udhaar'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/customers?balance=true`,
-              icon: <></>,
-            },
+            // Udhaar view is handled via customers/ledger, no separate menu item
             {
               label: t('reports'),
               href: `/org/${contextOrgId}/stores/${contextStoreId}/reports`,
@@ -476,11 +472,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               href: `/org/${user.currentOrgId}/stores/${activeStoreId}/suppliers`,
               icon: <></>,
             },
-            {
-              label: t('udhaar'),
-              href: `/org/${user.currentOrgId}/stores/${activeStoreId}/customers?balance=true`,
-              icon: <></>,
-            },
+            // Udhaar view is handled via customers/ledger, no separate menu item
             {
               label: t('reports'),
               href: `/org/${user.currentOrgId}/stores/${activeStoreId}/reports`,
@@ -502,11 +494,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             href: '/store',
             icon: <LayoutDashboard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
+          // Sales workflow cluster
           {
             label: t('pos'),
             href: '/store/pos',
             icon: <ShoppingCart className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
+          {
+            label: t('sales'),
+            href: '/store/sales',
+            icon: <TrendingUp className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: t('customers'),
+            href: '/store/customers',
+            icon: <UserCircle className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          },
+          // Inventory cluster
           {
             label: t('products'),
             href: '/store/products',
@@ -517,31 +521,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             href: '/store/stock-adjustments',
             icon: <Repeat className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
-          {
-            label: t('sales'),
-            href: '/store/sales',
-            icon: <TrendingUp className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
+          // Purchasing / supplier cluster
           {
             label: t('purchases'),
             href: '/store/purchases',
             icon: <ShoppingBag className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
           {
-            label: t('customers'),
-            href: '/store/customers',
-            icon: <UserCircle className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          {
             label: t('suppliers'),
             href: '/store/suppliers',
             icon: <Factory className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
-          {
-            label: t('udhaar'),
-            href: '/backoffice/customers?balance=true',
-            icon: <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
+          // Analysis & settings
           {
             label: t('reports'),
             href: '/store/reports',

@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { canManageProducts, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
 
 // POST: Upload shop logo
 export async function POST(request: NextRequest) {
@@ -52,24 +49,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), 'public', 'uploads', 'logos')
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true })
-    }
-
-    // Generate unique filename
-    const timestamp = Date.now()
-    const filename = `shop-${user.currentShopId}-${timestamp}.png`
-    const filepath = join(uploadsDir, filename)
-
-    // Save file
+    // Read file into buffer
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    await writeFile(filepath, buffer)
 
-    // Update shop settings with logo URL
-    const logoUrl = `/uploads/logos/${filename}`
+    // Store logo directly in DB as a data URL (no filesystem dependency)
+    const base64 = buffer.toString('base64')
+    const mimeType = file.type || 'image/png'
+    const logoUrl = `data:${mimeType};base64,${base64}`
+
+    // Update shop settings with logo data URL
     await prisma.shopSettings.upsert({
       where: { shopId: user.currentShopId },
       update: { logoUrl },

@@ -107,16 +107,22 @@ export async function saveSale(sale: SaleInput, isOnline: boolean): Promise<{ sa
   // Always save locally first (offline-first)
   await saveSaleLocally(sale)
 
-  // Try to sync if online
+  // Try to sync in the background if online (non-blocking for POS flow)
   if (isOnline) {
-    const cachedSale = await getPendingSales(sale.shopId).then((sales) =>
-      sales.find((s) => s.id === sale.id)
-    )
-    if (cachedSale) {
-      const synced = await syncSaleToServer(cachedSale)
-      return { saved: true, synced }
-    }
+    getPendingSales(sale.shopId)
+      .then((sales) => sales.find((s) => s.id === sale.id))
+      .then((cachedSale) => {
+        if (cachedSale) {
+          // Fire-and-forget sync; errors are logged inside syncSaleToServer
+          void syncSaleToServer(cachedSale)
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to queue sale sync:', error)
+      })
   }
 
+  // From the caller's perspective, the sale is saved instantly;
+  // sync happens asynchronously when online.
   return { saved: true, synced: false }
 }

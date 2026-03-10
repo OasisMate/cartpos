@@ -63,7 +63,7 @@ export default function ProductsPage() {
     price: '',
     cartonPrice: '',
     costPrice: '',
-    trackStock: true,
+    trackStock: false,
     reorderLevel: '',
     cartonSize: '',
     cartonBarcode: '',
@@ -161,8 +161,9 @@ export default function ProductsPage() {
       : <ArrowDown className="w-3 h-3 ml-1 text-blue-600" />
   }
 
-  // Refs for form inputs to support barcode scanning and navigation
+  // Refs for form inputs to support barcode scanning and fast entry
   const barcodeInputRef = useRef<HTMLInputElement>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
   const cartonBarcodeInputRef = useRef<HTMLInputElement>(null)
   const unitSelectRef = useRef<HTMLSelectElement>(null)
   const priceInputRef = useRef<HTMLInputElement>(null)
@@ -258,7 +259,7 @@ export default function ProductsPage() {
       price: '',
       cartonPrice: '',
       costPrice: '',
-      trackStock: true,
+      trackStock: false,
       reorderLevel: '',
       cartonSize: '',
       cartonBarcode: '',
@@ -615,31 +616,10 @@ export default function ProductsPage() {
 
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-2 gap-4">
+                {/* First row: Barcode + Name (fast tab flow) */}
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Name <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    SKU <span className="text-xs text-gray-500 font-normal">(Optional - auto-generated if empty)</span>
-                  </label>
-                  <Input
-                    value={formData.sku}
-                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                    placeholder="Leave empty to auto-generate"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Barcode <span className="text-xs text-gray-500">(Scan or type)</span>
+                    Barcode
                   </label>
                   <Input
                     ref={barcodeInputRef}
@@ -647,18 +627,53 @@ export default function ProductsPage() {
                     onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
                     placeholder="Scan barcode or type manually"
                     onKeyDown={(e) => {
-                      // When Enter is pressed (typical barcode scanner behavior), move to price field
-                      // This minimizes manual work - barcode is scanned, then user just enters price
+                      // When Enter is pressed (typical barcode scanner behavior), jump to Name
                       if (e.key === 'Enter') {
                         e.preventDefault()
-                        // Move focus to price field (most important field after barcode)
-                        if (priceInputRef.current) {
-                          priceInputRef.current.focus()
-                          priceInputRef.current.select() // Select existing value for easy replacement
+                        if (nameInputRef.current) {
+                          nameInputRef.current.focus()
+                          nameInputRef.current.select()
                         }
                       }
                     }}
                     autoFocus={!editingProduct}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    ref={nameInputRef}
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onKeyDown={(e) => {
+                      // Enter from name goes straight to price
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (priceInputRef.current) {
+                          priceInputRef.current.focus()
+                          priceInputRef.current.select()
+                        }
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Second row: Price + Unit */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Price <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    ref={priceInputRef}
+                    type="number"
+                    step="0.01"
+                    required
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   />
                 </div>
 
@@ -680,17 +695,15 @@ export default function ProductsPage() {
                   </Select>
                 </div>
 
+                {/* Remaining less-frequent fields */}
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Price <span className="text-red-500">*</span>
+                    SKU <span className="text-xs text-gray-500 font-normal">(optional)</span>
                   </label>
                   <Input
-                    ref={priceInputRef}
-                    type="number"
-                    step="0.01"
-                    required
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    placeholder="Leave empty to auto-generate"
                   />
                 </div>
 
@@ -716,19 +729,16 @@ export default function ProductsPage() {
                 {!editingProduct && (
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Initial Stock Quantity
-                      <span className="text-xs text-gray-500 ml-2">(Optional - for products that track stock)</span>
+                      Initial Stock
+                      <span className="text-xs text-gray-500 ml-2">(only if tracking stock)</span>
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       value={formData.initialStock}
                       onChange={(e) => setFormData({ ...formData, initialStock: e.target.value })}
-                      placeholder="Enter initial stock quantity"
+                      placeholder="e.g. 24"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Leave empty if you don&apos;t want to set initial stock now
-                    </p>
                   </div>
                 )}
               </div>
@@ -745,18 +755,16 @@ export default function ProductsPage() {
                       value={formData.cartonSize}
                       onChange={(e) => setFormData({ ...formData, cartonSize: e.target.value })}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Leave empty if not applicable</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Carton Price</label>
                     <Input
                       type="number"
                       step="0.01"
-                      placeholder="Price for full carton"
+                      placeholder="Carton price"
                       value={formData.cartonPrice}
                       onChange={(e) => setFormData({ ...formData, cartonPrice: e.target.value })}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Price when selling whole carton</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Carton Barcode</label>

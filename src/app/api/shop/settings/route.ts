@@ -42,6 +42,8 @@ export async function GET(request: NextRequest) {
           autoPrint: false,
           logoUrl: null,
           receiptHeaderDisplay: 'NAME_ONLY',
+          cardFeePercent: 0 as any,
+          allowCardFeeOverride: false,
         },
       })
     }
@@ -87,6 +89,8 @@ export async function PUT(request: NextRequest) {
       languageMode,
       logoUrl,
       receiptHeaderDisplay,
+      cardFeePercent,
+      allowCardFeeOverride,
     } = body
 
     // Update or create settings
@@ -102,6 +106,8 @@ export async function PUT(request: NextRequest) {
         ...(languageMode !== undefined && { languageMode }),
         ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
         ...(receiptHeaderDisplay !== undefined && { receiptHeaderDisplay }),
+        ...(cardFeePercent !== undefined && { cardFeePercent }),
+        ...(allowCardFeeOverride !== undefined && { allowCardFeeOverride }),
       },
       create: {
         shopId: user.currentShopId,
@@ -114,6 +120,8 @@ export async function PUT(request: NextRequest) {
         languageMode: languageMode || 'EN_BILINGUAL',
         logoUrl: logoUrl || null,
         receiptHeaderDisplay: receiptHeaderDisplay || 'NAME_ONLY',
+        cardFeePercent: (cardFeePercent ?? 0) as any,
+        allowCardFeeOverride: allowCardFeeOverride ?? false,
       },
     })
 

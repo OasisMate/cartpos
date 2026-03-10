@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import Button from '@/components/ui/Button'
@@ -178,9 +179,15 @@ export default function StockAdjustmentsPage() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Stock Adjustments</h1>
+        <Link href="/backoffice/products/adjustments/new">
+          <Button className="w-full sm:w-auto">New Adjustment</Button>
+        </Link>
       </div>
+      <p className="text-sm text-gray-600 mb-4">
+        Record damage, expiry, returns, self-use, or general stock corrections. Use <strong>New Adjustment</strong> to update quantities.
+      </p>
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">

@@ -192,6 +192,8 @@ model ShopSettings {
   autoPrint                       Boolean       @default(false)  // Auto-print receipts after sale completion
   logoUrl                         String?       // Store logo image URL (PNG format)
   receiptHeaderDisplay            ReceiptHeaderDisplay @default(NAME_ONLY)  // What to show on receipt header
+  cardFeePercent                  Decimal?      @db.Decimal(5, 2) // Percentage card fee applied on card payments (0 = no fee)
+  allowCardFeeOverride            Boolean       @default(false)   // Allow per-sale override of card fee percent
   shop                            Shop          @relation(fields: [shopId], references: [id])
 }
 
@@ -222,7 +224,7 @@ model Product {
   cartonPrice  Decimal?       @db.Decimal(10, 2)  // Price for full carton
   costPrice    Decimal?       @db.Decimal(10, 2)
   category     String?
-  trackStock   Boolean        @default(true)
+  trackStock   Boolean        @default(false)
   reorderLevel Int?
   cartonSize   Int?           // Number of pieces in a carton
   cartonBarcode String?
