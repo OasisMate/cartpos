@@ -1,11 +1,13 @@
 /**
  * Print utility for 80mm thermal receipts
  * Includes debug mode to visualize printable area
+ * Supports WebUSB for silent printing without browser dialog
  */
 
 export interface PrintOptions {
   silent?: boolean
   debug?: boolean // Show printable area boundaries
+  useWebUSB?: boolean // Try WebUSB first if available
 }
 
 // Type declaration for Electron API
@@ -18,33 +20,346 @@ declare global {
   }
 }
 
+// WebUSB types
+interface USBDevice {
+  open(): Promise<void>
+  selectConfiguration(configurationValue: number): Promise<void>
+  claimInterface(interfaceNumber: number): Promise<void>
+  transferOut(endpointNumber: number, data: BufferSource): Promise<USBOutTransferResult>
+  close(): Promise<void>
+  vendorId: number
+  productId: number
+  productName?: string
+  manufacturerName?: string
+}
+
+interface USB extends EventTarget {
+  requestDevice(options: USBDeviceRequestOptions): Promise<USBDevice>
+  getDevices(): Promise<USBDevice[]>
+}
+
+interface USBDeviceRequestOptions {
+  filters: USBDeviceFilter[]
+}
+
+interface USBDeviceFilter {
+  vendorId?: number
+  productId?: number
+  classCode?: number
+  subclassCode?: number
+  protocolCode?: number
+}
+
+interface USBOutTransferResult {
+  status: 'ok' | 'stall' | 'babble'
+  bytesWritten: number
+}
+
+declare global {
+  interface Navigator {
+    usb?: USB
+  }
+}
+
+// ESC/POS command constants
+const ESC = '\x1B'
+const GS = '\x1D'
+
+// Common thermal printer vendor IDs (add your printer's VID if needed)
+const COMMON_PRINTER_VENDORS = [
+  0x04f9, // Brother
+  0x0483, // STMicroelectronics (common for generic thermal printers)
+  0x20d1, // Xprinter
+  0x154f, // Bixolon
+  0x04e8, // Samsung (some thermal printers)
+]
+
+// Store connected printer device
+let connectedPrinter: USBDevice | null = null
+
 export async function printReceipt(elementId: string, options: PrintOptions = {}) {
-  const { debug = false, silent = false } = options
+  const { debug = false, silent = false, useWebUSB = false } = options
   const element = document.getElementById(elementId)
   if (!element) {
     window.print()
     return
   }
 
-  // Check if running in Electron and silent print is requested
+  // Priority 1: Electron silent print (if available and silent requested)
   if (silent && typeof window !== 'undefined' && window.electronAPI?.isElectron) {
-    // Use Electron's silent print
     const htmlContent = element.innerHTML
-    window.electronAPI
-      .printReceipt(htmlContent)
-      .then(() => {
-        console.log('Receipt printed silently via Electron')
-      })
-      .catch((err) => {
-        console.error('Electron print failed, falling back to browser print:', err)
-        // Fallback to browser print
-        fallbackBrowserPrint(element, debug)
-      })
-    return
+    try {
+      await window.electronAPI.printReceipt(htmlContent)
+      console.log('Receipt printed silently via Electron')
+      return
+    } catch (err) {
+      console.error('Electron print failed, falling back:', err)
+      // Continue to next method
+    }
   }
 
-  // Use browser print (works well with thermal printers)
+  // Priority 2: WebUSB silent print (if requested and available)
+  if ((silent || useWebUSB) && isWebUSBAvailable()) {
+    try {
+      const htmlContent = element.innerHTML
+      const textContent = extractTextFromHTML(htmlContent)
+      const escposCommands = convertToESCPOS(textContent)
+      
+      await printViaWebUSB(escposCommands)
+      console.log('Receipt printed silently via WebUSB')
+      return
+    } catch (err) {
+      console.error('WebUSB print failed, falling back to browser print:', err)
+      // Continue to browser print fallback
+    }
+  }
+
+  // Priority 3: Browser print (works well with thermal printers)
   fallbackBrowserPrint(element, debug)
+}
+
+/**
+ * Check if WebUSB API is available in the browser
+ */
+function isWebUSBAvailable(): boolean {
+  return typeof navigator !== 'undefined' && 'usb' in navigator && navigator.usb !== undefined
+}
+
+/**
+ * Connect to a USB thermal printer via WebUSB
+ * User will be prompted to select the device on first use
+ */
+export async function connectWebUSBPrinter(): Promise<USBDevice | null> {
+  if (!isWebUSBAvailable()) {
+    throw new Error('WebUSB API is not available in this browser. Use Chrome or Edge.')
+  }
+
+  try {
+    // First, try to get already authorized devices
+    const devices = await navigator.usb!.getDevices()
+    if (devices.length > 0) {
+      connectedPrinter = devices[0]
+      return connectedPrinter
+    }
+
+    // If no authorized devices, request access
+    // Common USB printer class code is 7 (Printer)
+    const device = await navigator.usb!.requestDevice({
+      filters: [
+        { classCode: 7 }, // Printer class
+        ...COMMON_PRINTER_VENDORS.map(vid => ({ vendorId: vid })),
+      ],
+    })
+
+    connectedPrinter = device
+    return device
+  } catch (err: any) {
+    if (err.name === 'NotFoundError') {
+      throw new Error('No USB printer found. Please connect a printer and try again.')
+    }
+    throw err
+  }
+}
+
+/**
+ * Print ESC/POS commands via WebUSB
+ */
+async function printViaWebUSB(commands: Uint8Array): Promise<void> {
+  if (!connectedPrinter) {
+    // Try to connect if not already connected
+    await connectWebUSBPrinter()
+  }
+
+  if (!connectedPrinter) {
+    throw new Error('No printer connected')
+  }
+
+  try {
+    // Open device
+    await connectedPrinter.open()
+
+    // Most thermal printers use configuration 1, interface 0
+    try {
+      await connectedPrinter.selectConfiguration(1)
+    } catch {
+      // Some devices don't need explicit configuration
+    }
+
+    try {
+      await connectedPrinter.claimInterface(0)
+    } catch {
+      // Interface might already be claimed
+    }
+
+    // Send data to endpoint 1 (usually the bulk out endpoint for printers)
+    // Some printers use endpoint 2, you may need to adjust based on your printer
+    const endpointNumber = 1
+    const result = await connectedPrinter.transferOut(endpointNumber, commands)
+
+    if (result.status !== 'ok') {
+      throw new Error(`Print failed with status: ${result.status}`)
+    }
+
+    // Release interface and close (optional, can keep connection open for faster subsequent prints)
+    // await connectedPrinter.releaseInterface(0)
+    // await connectedPrinter.close()
+  } catch (err) {
+    // Reset connection on error
+    connectedPrinter = null
+    throw err
+  }
+}
+
+/**
+ * Extract plain text from HTML content
+ */
+function extractTextFromHTML(html: string): string {
+  const tempDiv = document.createElement('div')
+  tempDiv.innerHTML = html
+
+  // Remove script and style elements
+  const scripts = tempDiv.querySelectorAll('script, style')
+  scripts.forEach(el => el.remove())
+
+  // Get text content and clean it up
+  let text = tempDiv.textContent || tempDiv.innerText || ''
+  
+  // Clean up whitespace
+  text = text
+    .replace(/\s+/g, ' ')
+    .replace(/\n\s*\n/g, '\n')
+    .trim()
+
+  return text
+}
+
+/**
+ * Convert text content to ESC/POS commands for thermal printers
+ */
+function convertToESCPOS(text: string): Uint8Array {
+  const commands: number[] = []
+
+  // Initialize printer
+  commands.push(...encodeString(ESC + '@')) // Reset printer
+
+  // Set character encoding (UTF-8)
+  commands.push(...encodeString(ESC + '\x74\x10')) // Select character code table 16 (UTF-8)
+
+  // Set 80mm paper width
+  commands.push(...encodeString(GS + 'W' + String.fromCharCode(0x50, 0x00))) // 80mm = 0x50
+
+  // Set left margin (5.5mm for 80mm paper)
+  commands.push(...encodeString(GS + 'L' + String.fromCharCode(0x44, 0x01))) // ~340 dots at 203 DPI
+
+  // Split text into lines and process
+  const lines = text.split('\n')
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    
+    if (!line) {
+      // Empty line - add small spacing
+      commands.push(...encodeString('\n'))
+      continue
+    }
+
+    // Check for common formatting patterns
+    if (line.match(/^[A-Z\s]+$/) && line.length < 30) {
+      // Likely a header (all caps, short) - make it bold and centered
+      commands.push(...encodeString(ESC + 'a' + '\x01')) // Center align
+      commands.push(...encodeString(ESC + 'E' + '\x01')) // Bold on
+      commands.push(...encodeString(line + '\n'))
+      commands.push(...encodeString(ESC + 'E' + '\x00')) // Bold off
+      commands.push(...encodeString(ESC + 'a' + '\x00')) // Left align
+    } else if (line.includes('---') || line.includes('===')) {
+      // Separator line
+      commands.push(...encodeString('─'.repeat(32) + '\n'))
+    } else {
+      // Regular line
+      // Handle text that might be too long (wrap at ~32 chars for 80mm)
+      const wrappedLines = wrapText(line, 32)
+      wrappedLines.forEach(wrappedLine => {
+        commands.push(...encodeString(wrappedLine + '\n'))
+      })
+    }
+  }
+
+  // Add some feed lines at the end
+  commands.push(...encodeString('\n\n\n'))
+
+  // Cut paper (partial cut)
+  commands.push(...encodeString(GS + 'V' + '\x41' + '\x03'))
+
+  return new Uint8Array(commands)
+}
+
+/**
+ * Encode string to UTF-8 bytes
+ */
+function encodeString(str: string): number[] {
+  const encoder = new TextEncoder()
+  return Array.from(encoder.encode(str))
+}
+
+/**
+ * Wrap text to fit within specified width
+ */
+function wrapText(text: string, width: number): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let currentLine = ''
+
+  for (const word of words) {
+    if ((currentLine + word).length <= width) {
+      currentLine += (currentLine ? ' ' : '') + word
+    } else {
+      if (currentLine) {
+        lines.push(currentLine)
+      }
+      // If word itself is longer than width, split it
+      if (word.length > width) {
+        for (let i = 0; i < word.length; i += width) {
+          lines.push(word.substring(i, i + width))
+        }
+        currentLine = ''
+      } else {
+        currentLine = word
+      }
+    }
+  }
+  
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+
+  return lines.length > 0 ? lines : [text]
+}
+
+/**
+ * Get currently connected WebUSB printer info
+ */
+export function getConnectedPrinterInfo(): { vendorId?: number; productId?: number; name?: string } | null {
+  if (!connectedPrinter) return null
+  
+  return {
+    vendorId: connectedPrinter.vendorId,
+    productId: connectedPrinter.productId,
+    name: connectedPrinter.productName || connectedPrinter.manufacturerName,
+  }
+}
+
+/**
+ * Disconnect WebUSB printer
+ */
+export async function disconnectWebUSBPrinter(): Promise<void> {
+  if (connectedPrinter) {
+    try {
+      await connectedPrinter.close()
+    } catch (err) {
+      console.error('Error closing printer connection:', err)
+    }
+    connectedPrinter = null
+  }
 }
 
 function fallbackBrowserPrint(element: HTMLElement, debug: boolean) {
