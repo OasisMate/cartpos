@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Button from '@/components/ui/Button'
 import { formatNumber } from '@/lib/utils/money'
+import { printReceipt } from '@/lib/utils/print'
 
 interface ReceiptItem {
   name: string
@@ -51,24 +52,54 @@ interface ReceiptModalProps {
     } | null
   }
   printElementId?: string
+  /** When true, opens the print flow as soon as the receipt is visible (shop setting on POS). */
+  autoPrint?: boolean
 }
 
-export default function ReceiptModal({ isOpen, onClose, invoice, printElementId = 'receipt-print-content' }: ReceiptModalProps) {
+export default function ReceiptModal({
+  isOpen,
+  onClose,
+  invoice,
+  printElementId = 'receipt-print-content',
+  autoPrint = false,
+}: ReceiptModalProps) {
   const [isPrinting, setIsPrinting] = useState(false)
 
   async function handlePrint() {
     setIsPrinting(true)
     try {
-      const { printReceipt } = await import('@/lib/utils/print')
-      await printReceipt(printElementId, {
-        silent: true,
-      })
+      await printReceipt(printElementId, { silent: true })
     } catch (err) {
       console.error('Print failed:', err)
     } finally {
       setIsPrinting(false)
     }
   }
+
+  useEffect(() => {
+    if (!isOpen || !autoPrint) return
+    let raf1 = 0
+    let raf2 = 0
+    let cancelled = false
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(async () => {
+        if (cancelled) return
+        setIsPrinting(true)
+        try {
+          await printReceipt(printElementId, { silent: true })
+        } catch (err) {
+          console.error('Auto print failed:', err)
+        } finally {
+          if (!cancelled) setIsPrinting(false)
+        }
+      })
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
+  }, [isOpen, autoPrint, printElementId, invoice.id])
 
   if (!isOpen) return null
 

@@ -45,18 +45,16 @@ export async function POST(request: NextRequest) {
     const results = {
       synced: 0,
       skipped: 0,
+      /** Only genuinely failed sales appear here; skips (idempotent dups) do not. */
       errors: [] as Array<{ id: string; error: string }>,
+      /** Client sale IDs that were already on the server (idempotent duplicates). */
+      skippedIds: [] as string[],
     }
 
-    // Process each sale
     for (const sale of sales) {
       try {
-        // Check if invoice with this ID already exists (idempotency)
-        // Note: Since we're using server-generated IDs, we need to check by client ID
-        // For now, we'll just try to create it and handle duplicates at the DB level
-        // In a real implementation, you might want to store clientId mapping
-
         const input: CreateSaleInput = {
+          clientSaleId: sale.id,
           customerId: sale.customerId || undefined,
           items: sale.items.map((item) => ({
             productId: item.productId,
@@ -72,15 +70,12 @@ export async function POST(request: NextRequest) {
           amountReceived: sale.amountReceived,
         }
 
-        // Create sale
-        const result = await createSale(user.currentShopId, input, user.id)
-        // Note: stockWarnings are ignored in batch sync
-
+        await createSale(user.currentShopId, input, user.id)
         results.synced++
       } catch (error: any) {
-        // If it's a duplicate, skip it
         if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
           results.skipped++
+          results.skippedIds.push(sale.id)
         } else {
           results.errors.push({
             id: sale.id,

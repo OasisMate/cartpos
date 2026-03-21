@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
         receiptHeaderDisplay: settings.receiptHeaderDisplay,
         cardFeePercent: settings.cardFeePercent,
         allowCardFeeOverride: settings.allowCardFeeOverride,
+        autoPrint: Boolean(settings.autoPrint),
       },
       customers,
     })

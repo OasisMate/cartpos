@@ -1,17 +1,17 @@
 'use client'
 
-import { useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBackgroundSync } from '@/hooks/useBackgroundSync'
+import { SyncStatusBanner } from '@/components/SyncStatusBanner'
 import '@/lib/offline/registerSyncTasks'
 
 export function SyncBootstrapper() {
   const { user } = useAuth()
-  // Runs global background sync for the active shop
-  useBackgroundSync(user?.currentShopId || undefined, 45000)
+  const shopId = user?.currentShopId || undefined
 
-  // No UI
-  useEffect(() => {}, [])
-  return null
+  // When online: on reconnect + every 45s, push pending sales/purchases/customers/payments
+  useBackgroundSync(shopId, 45000)
+
+  return <SyncStatusBanner shopId={shopId} />
 }
 

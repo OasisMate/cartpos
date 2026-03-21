@@ -374,6 +374,8 @@ model Invoice {
   shopId          String
   customerId      String?
   number          String?         // human-readable invoice no., optional
+  /// Set from POS offline client id (cuid) so duplicate sync paths cannot double-post the same sale
+  clientSaleId    String?
   status          InvoiceStatus   @default(COMPLETED)
   paymentStatus   PaymentStatus
   paymentMethod   PaymentMethod?  // null for UDHAAR
@@ -388,6 +390,7 @@ model Invoice {
   payments        Payment[]
   createdBy       User?           @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id])
 
+  @@unique([shopId, clientSaleId])
   @@index([shopId, createdAt])
   @@index([shopId, status])
   @@index([shopId, paymentStatus])

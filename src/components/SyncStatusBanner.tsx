@@ -1,0 +1,108 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { getPendingSyncSummary, formatPendingSyncLabel } from '@/lib/offline/pendingSyncSummary'
+import { runAllSyncTasks } from '@/lib/offline/orchestrator'
+import { CloudUpload, Loader2 } from 'lucide-react'
+
+type Props = {
+  shopId: string | undefined
+}
+
+export function SyncStatusBanner({ shopId }: Props) {
+  const isOnline = useOnlineStatus()
+  const [summary, setSummary] = useState({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0 })
+  const [syncing, setSyncing] = useState(false)
+  const [lastError, setLastError] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    if (!shopId) {
+      setSummary({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0 })
+      return
+    }
+    try {
+      const next = await getPendingSyncSummary(shopId)
+      setSummary(next)
+      if (next.total === 0) setLastError(null)
+    } catch {
+      /* IndexedDB unavailable — ignore */
+    }
+  }, [shopId])
+
+  useEffect(() => {
+    void refresh()
+    const id = window.setInterval(() => void refresh(), 8000)
+    return () => window.clearInterval(id)
+  }, [refresh])
+
+  useEffect(() => {
+    const onOnline = () => void refresh()
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [refresh])
+
+  if (!shopId || summary.total === 0) {
+    return null
+  }
+
+  const detail = formatPendingSyncLabel(summary)
+  const topClass = isOnline ? 'top-0' : 'top-[42px]'
+
+  async function handleSyncNow() {
+    if (!shopId || !isOnline || syncing) return
+    setSyncing(true)
+    setLastError(null)
+    try {
+      await runAllSyncTasks(shopId)
+      await refresh()
+    } catch (e: unknown) {
+      setLastError(e instanceof Error ? e.message : 'Sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <div
+      className={`fixed ${topClass} left-0 right-0 z-[45] border-b border-amber-200 bg-amber-50 text-amber-950 shadow-sm`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 items-start gap-2 text-sm">
+          <CloudUpload className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
+          <div className="min-w-0">
+            <span className="font-medium">
+              {summary.total} item{summary.total === 1 ? '' : 's'} waiting to sync
+            </span>
+            {detail ? (
+              <span className="block text-amber-900/80 sm:inline sm:before:content-['—_']">{detail}</span>
+            ) : null}
+            {!isOnline ? (
+              <span className="mt-0.5 block text-xs text-amber-800/90">Reconnect to upload to the server.</span>
+            ) : null}
+            {lastError ? <span className="mt-0.5 block text-xs text-red-700">{lastError}</span> : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-primary h-9 px-4 text-sm disabled:opacity-50"
+            disabled={!isOnline || syncing}
+            onClick={() => void handleSyncNow()}
+          >
+            {syncing ? (
+              <>
+                <Loader2 className="mr-2 inline h-4 w-4 animate-spin" aria-hidden />
+                Syncing…
+              </>
+            ) : (
+              'Sync now'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

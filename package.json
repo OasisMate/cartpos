@@ -14,7 +14,9 @@
     "lint": "next lint",
     "create-admin": "tsx scripts/create-admin-user.ts",
     "cleanup-data": "tsx scripts/cleanup-data.ts",
-    "backfill-skus": "tsx scripts/backfill-product-skus.ts"
+    "backfill-skus": "tsx scripts/backfill-product-skus.ts",
+    "dedupe-invoices": "tsx scripts/remove-duplicate-invoices.ts",
+    "dedupe-invoices-fingerprint": "tsx scripts/remove-fingerprint-duplicate-invoices.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

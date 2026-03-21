@@ -4,21 +4,24 @@ type SyncTask = {
 }
 
 const tasks: SyncTask[] = []
-let isRunning = false
+
+/** Serializes sync runs so "Sync now" waits for an in-flight background pass instead of being dropped */
+let syncChain: Promise<void> = Promise.resolve()
 
 export function registerSyncTask(task: SyncTask) {
   if (tasks.find((t) => t.name === task.name)) return
   tasks.push(task)
 }
 
-export async function runAllSyncTasks(shopId: string) {
+export async function runAllSyncTasks(shopId: string): Promise<void> {
   if (!shopId) return
-  if (isRunning) return
-  isRunning = true
-  try {
+
+  const run = async () => {
     await Promise.all(tasks.map((t) => t.run(shopId)))
-  } finally {
-    isRunning = false
   }
+
+  const next = syncChain.then(run, run)
+  syncChain = next.catch(() => {})
+  await next
 }
 

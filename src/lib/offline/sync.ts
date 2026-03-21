@@ -33,9 +33,10 @@ export async function syncPendingBatch<LocalRecord, Payload>(
       }
       return await response.json()
     })
+    const skippedSet = new Set<string>(data.skippedIds || [])
     for (const rec of pending as any[]) {
       const error = data.errors?.find((e: any) => e.id === rec.id)
-      if (!error) {
+      if (!error || skippedSet.has(rec.id)) {
         await markSynced(rec.id)
       } else {
         await markError(rec.id, error.error)

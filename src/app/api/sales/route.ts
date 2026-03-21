@@ -78,6 +78,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const input: CreateSaleInput = {
+      clientSaleId:
+        typeof body.clientSaleId === 'string' && body.clientSaleId.trim() !== ''
+          ? body.clientSaleId.trim()
+          : undefined,
       customerId: body.customerId || undefined,
       items: body.items.map((item: any) => ({
         productId: item.productId,

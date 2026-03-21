@@ -36,6 +36,7 @@ export async function syncSaleToServer(sale: CachedSale): Promise<boolean> {
     await fetchJSON('/api/sales', {
       method: 'POST',
       body: JSON.stringify({
+        clientSaleId: sale.id,
         customerId: sale.customerId || undefined,
         items: sale.items,
         subtotal: sale.subtotal,
@@ -101,28 +102,24 @@ export async function syncPendingSalesBatch(shopId: string): Promise<{ synced: n
 }
 
 /**
- * Save sale locally and sync if online
+ * Save sale locally and sync if online.
+ * Online sync is deferred (queueMicrotask) so the POS UI can show the receipt without waiting on the network.
+ * Duplicates are still impossible: server uses clientSaleId + unique index + idempotent createSale; batch sync
+ * marks skippedIds as SYNCED; submit lock prevents double checkout.
  */
 export async function saveSale(sale: SaleInput, isOnline: boolean): Promise<{ saved: boolean; synced: boolean }> {
-  // Always save locally first (offline-first)
   await saveSaleLocally(sale)
 
-  // Try to sync in the background if online (non-blocking for POS flow)
   if (isOnline) {
-    getPendingSales(sale.shopId)
-      .then((sales) => sales.find((s) => s.id === sale.id))
-      .then((cachedSale) => {
-        if (cachedSale) {
-          // Fire-and-forget sync; errors are logged inside syncSaleToServer
-          void syncSaleToServer(cachedSale)
-        }
-      })
-      .catch((error) => {
-        console.error('Failed to queue sale sync:', error)
-      })
+    const cachedLike: CachedSale = {
+      ...sale,
+      createdAt: Date.now(),
+      syncStatus: 'PENDING',
+    }
+    queueMicrotask(() => {
+      void syncSaleToServer(cachedLike)
+    })
   }
 
-  // From the caller's perspective, the sale is saved instantly;
-  // sync happens asynchronously when online.
   return { saved: true, synced: false }
 }

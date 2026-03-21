@@ -95,6 +95,7 @@ export default function POSPage() {
     receiptHeaderDisplay?: 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH'
     cardFeePercent?: number | null
     allowCardFeeOverride?: boolean
+    autoPrint?: boolean
   } | null>(null)
 
   // Edit Item State
@@ -134,6 +135,7 @@ export default function POSPage() {
     ) ?? false)
 
   const barcodeInputRef = useRef<HTMLInputElement>(null)
+  const submitLockRef = useRef(false)
 
   // Fast lookup maps for barcode -> product
   const [productIndex, setProductIndex] = useState<{
@@ -227,6 +229,7 @@ export default function POSPage() {
                   ? Number(data.settings.cardFeePercent)
                   : 0,
                 allowCardFeeOverride: Boolean(data.settings?.allowCardFeeOverride || false),
+                autoPrint: Boolean(data.settings?.autoPrint),
               })
           } else {
             throw new Error('Init endpoint failed')
@@ -280,6 +283,7 @@ export default function POSPage() {
                 ? Number(settingsData.settings.cardFeePercent)
                 : 0,
               allowCardFeeOverride: Boolean(settingsData.settings?.allowCardFeeOverride || false),
+              autoPrint: Boolean(settingsData.settings?.autoPrint),
             })
           }
         }
@@ -900,6 +904,8 @@ export default function POSPage() {
   }
 
   async function submitSale() {
+    if (submitLockRef.current) return
+    submitLockRef.current = true
     setError('')
     setSubmitting(true)
 
@@ -1051,6 +1057,7 @@ export default function POSPage() {
       console.error('Sale submission error:', err)
     } finally {
       setSubmitting(false)
+      submitLockRef.current = false
     }
   }
 
@@ -1719,6 +1726,7 @@ export default function POSPage() {
           onClose={closeReceiptModal}
           invoice={receiptInvoice}
           printElementId="pos-print-receipt"
+          autoPrint={Boolean(shopSettings?.autoPrint)}
         />
       )}
 

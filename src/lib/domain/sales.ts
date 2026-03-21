@@ -1,7 +1,24 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { Decimal } from '@prisma/client/runtime/library'
 import { getProductStock, getProductStockBatch } from './purchases'
 import { formatNumber } from '@/lib/utils/money'
+
+const invoiceDetailInclude = {
+  lines: {
+    include: {
+      product: true,
+    },
+  },
+  customer: true,
+  payments: true,
+  createdBy: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+} satisfies Prisma.InvoiceInclude
 
 export interface SaleItemInput {
   productId: string
@@ -11,6 +28,8 @@ export interface SaleItemInput {
 }
 
 export interface CreateSaleInput {
+  /** POS offline sale id (cuid); prevents duplicate invoices if sync runs twice */
+  clientSaleId?: string
   customerId?: string
   items: SaleItemInput[]
   subtotal: number
@@ -52,6 +71,8 @@ export async function createSale(
   if (!hasPermission) {
     throw new Error('You do not have permission to create sales in this shop')
   }
+
+  // Idempotent lookup runs inside the transaction below (avoids an extra round-trip on every new sale)
 
   // Validate items
   if (!input.items || input.items.length === 0) {
@@ -151,7 +172,18 @@ export async function createSale(
   }
 
   // Create sale (invoice) and lines in a transaction
-  const invoice = await prisma.$transaction(async (tx) => {
+  try {
+    const invoice = await prisma.$transaction(async (tx) => {
+    if (input.clientSaleId) {
+      const existing = await tx.invoice.findFirst({
+        where: { shopId, clientSaleId: input.clientSaleId },
+        include: invoiceDetailInclude,
+      })
+      if (existing) {
+        return { invoice: existing, stockWarnings: undefined }
+      }
+    }
+
     // Generate sequential invoice number for this shop
     const lastInvoice = await tx.invoice.findFirst({
       where: { shopId },
@@ -173,6 +205,7 @@ export async function createSale(
       data: {
         shopId,
         customerId: input.customerId || null,
+        clientSaleId: input.clientSaleId || null,
         number: invoiceNumber,
         paymentStatus: input.paymentStatus,
         paymentMethod:
@@ -280,7 +313,23 @@ export async function createSale(
     timeout: 30000, // 30 seconds timeout
   })
 
-  return invoice
+    return invoice
+  } catch (e) {
+    if (
+      input.clientSaleId &&
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === 'P2002'
+    ) {
+      const existing = await prisma.invoice.findFirst({
+        where: { shopId, clientSaleId: input.clientSaleId },
+        include: invoiceDetailInclude,
+      })
+      if (existing) {
+        return { invoice: existing, stockWarnings: undefined }
+      }
+    }
+    throw e
+  }
 }
 
 export async function listSales(shopId: string, filters: {
