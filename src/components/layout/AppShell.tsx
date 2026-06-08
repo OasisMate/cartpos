@@ -589,7 +589,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-gray-50">
       <Sidebar open={open} setOpen={setOpen}>
         <SidebarBody className="justify-between gap-3 bg-gradient-to-b from-blue-50 to-white border-r border-blue-200">
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden hide-scrollbar">

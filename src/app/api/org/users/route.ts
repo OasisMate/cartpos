@@ -18,38 +18,62 @@ export async function GET() {
     return ForbiddenResponse('Only Org Admins can manage organization users')
   }
 
-  const orgUsers = await prisma.organizationUser.findMany({
-    where: { orgId },
-    include: {
-      user: {
-        select: { id: true, name: true, email: true, phone: true, cnic: true, role: true },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  // Users belong to an org two ways: an org-level role (OrganizationUser, i.e. ORG_ADMIN)
+  // and/or a shop-level role (UserShop on a shop in this org, i.e. STORE_MANAGER / CASHIER).
+  // We must union BOTH — otherwise store managers and cashiers (created with only a shop
+  // assignment, no OrganizationUser row) never appear in the list.
+  const userSelect = { id: true, name: true, email: true, phone: true, cnic: true, role: true }
 
-  const userIds = orgUsers.map((ou) => ou.userId)
-  const userShops = await prisma.userShop.findMany({
-    where: { userId: { in: userIds } },
-    include: {
-      shop: { select: { id: true, name: true } },
-    },
-  })
+  const orgShops = await prisma.shop.findMany({ where: { orgId }, select: { id: true } })
+  const shopIds = orgShops.map((s) => s.id)
 
-  const users = orgUsers.map((ou) => ({
-    id: ou.user.id,
-    name: ou.user.name,
-    email: ou.user.email,
-    phone: ou.user.phone,
-    cnic: ou.user.cnic,
-    platformRole: ou.user.role,
-    orgRole: ou.orgRole,
-    shops: userShops
-      .filter((us) => us.userId === ou.userId)
-      .map((us) => ({ shopId: us.shopId, shopRole: us.shopRole, shop: us.shop })),
-  }))
+  const [orgUsers, shopUsers] = await Promise.all([
+    prisma.organizationUser.findMany({
+      where: { orgId },
+      include: { user: { select: userSelect } },
+      orderBy: { createdAt: 'desc' },
+    }),
+    shopIds.length
+      ? prisma.userShop.findMany({
+          where: { shopId: { in: shopIds } },
+          include: { user: { select: userSelect }, shop: { select: { id: true, name: true } } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : Promise.resolve([] as any[]),
+  ])
 
-  return NextResponse.json({ users })
+  const byId = new Map<string, any>()
+  for (const ou of orgUsers) {
+    byId.set(ou.user.id, {
+      id: ou.user.id,
+      name: ou.user.name,
+      email: ou.user.email,
+      phone: ou.user.phone,
+      cnic: ou.user.cnic,
+      platformRole: ou.user.role,
+      orgRole: ou.orgRole,
+      shops: [],
+    })
+  }
+  for (const us of shopUsers) {
+    let entry = byId.get(us.user.id)
+    if (!entry) {
+      entry = {
+        id: us.user.id,
+        name: us.user.name,
+        email: us.user.email,
+        phone: us.user.phone,
+        cnic: us.user.cnic,
+        platformRole: us.user.role,
+        orgRole: null,
+        shops: [],
+      }
+      byId.set(us.user.id, entry)
+    }
+    entry.shops.push({ shopId: us.shopId, shopRole: us.shopRole, shop: us.shop })
+  }
+
+  return NextResponse.json({ users: Array.from(byId.values()) })
 }
 
 export async function POST(request: Request) {

@@ -97,7 +97,7 @@ export async function createProduct(
     throw new Error('You do not have permission to create products in this shop')
   }
 
-  // Normalize name to uppercase for consistency
+  // Force uppercase for consistent product naming across the system (intentional UX choice).
   const name = (input.name || '').trim().toUpperCase()
   if (!name || !input.unit || !input.price) {
     throw new Error('Name, unit, and price are required')
@@ -219,7 +219,7 @@ export async function updateProduct(
     }
   }
 
-  // Normalize name to uppercase when updating
+  // Force uppercase for consistent product naming (intentional UX choice).
   const nameUpdate =
     input.name !== undefined && input.name !== null
       ? { name: (String(input.name).trim() || product.name).toUpperCase() }

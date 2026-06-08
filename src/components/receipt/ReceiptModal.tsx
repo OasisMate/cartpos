@@ -112,6 +112,8 @@ export default function ReceiptModal({
   const paymentMethod = invoice.paymentStatus === 'PAID' ? (invoice.paymentMethod || 'CASH') : 'UDHAAR'
   const amountReceived = invoice.payments && invoice.payments.length > 0 ? Number(invoice.payments[0].amount) : undefined
   const change = amountReceived ? amountReceived - total : undefined
+  // Card fee is implicit in the total (total = subtotal - discount + fee). Derive it for display.
+  const cardFee = paymentMethod === 'CARD' ? Math.max(0, total - (subtotal - discount)) : 0
   
   // Receipt header display settings
   const receiptHeaderDisplay = invoice.shop?.settings?.receiptHeaderDisplay || 'NAME_ONLY'
@@ -239,6 +241,13 @@ export default function ReceiptModal({
                   <div className="flex justify-between">
                     <span className="font-medium">Discount:</span>
                     <span className="font-medium">-{formatNumber(discount)}</span>
+                  </div>
+                )}
+                {/* Show card fee if applied (kept transparent for the customer) */}
+                {cardFee > 0.01 && (
+                  <div className="flex justify-between">
+                    <span className="font-medium">Card Fee:</span>
+                    <span className="font-medium">+{formatNumber(cardFee)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold pt-1 border-t border-gray-400" style={{ fontSize: '10pt', fontWeight: 'bold', paddingTop: '2mm' }}>

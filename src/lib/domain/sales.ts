@@ -160,14 +160,34 @@ export async function createSale(
   // If there are stock warnings and negative stock is allowed, we'll include them in the response
   // but still proceed with the sale
 
-  // Validate totals (basic validation)
+  // Validate totals. The client's `total` INCLUDES the card fee for PAID+CARD sales,
+  // so we must account for it here or card sales get wrongly rejected (was bug C8).
   const calculatedSubtotal = input.items.reduce(
     (sum, item) => sum + item.lineTotal,
     0
   )
-  const calculatedTotal = calculatedSubtotal - input.discount
+  const baseTotal = calculatedSubtotal - input.discount
 
-  if (Math.abs(calculatedTotal - input.total) > 0.01) {
+  let expectedTotal = baseTotal
+  if (input.paymentStatus === 'PAID' && input.paymentMethod === 'CARD') {
+    const shopPct = Number(shopSettings?.cardFeePercent ?? 0)
+    const allowOverride = shopSettings?.allowCardFeeOverride ?? false
+    if (allowOverride) {
+      // Per-sale override is enabled: trust the client's fee but bound it to a sane
+      // range (0 .. 100% of the base) so it can't be abused.
+      const impliedFee = input.total - baseTotal
+      if (impliedFee < -0.01 || impliedFee > baseTotal + 0.01) {
+        throw new Error('Total calculation mismatch')
+      }
+      expectedTotal = input.total
+    } else {
+      // Recompute the fee from the shop's configured percent (source of truth).
+      const fee = Math.round(baseTotal * shopPct) / 100
+      expectedTotal = baseTotal + fee
+    }
+  }
+
+  if (Math.abs(expectedTotal - input.total) > 0.01) {
     throw new Error('Total calculation mismatch')
   }
 

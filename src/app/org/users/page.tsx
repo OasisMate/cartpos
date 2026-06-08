@@ -147,11 +147,16 @@ export default function OrgUsersPage() {
     }
   }
 
+  // Show everyone INCLUDING the current user (tagged "You"), so a single-owner
+  // shop can see themselves. Self is sorted first; delete is disabled on self below.
   const sorted = useMemo(
     () => users
-      .filter((u) => u.id !== user?.id) // Filter out the current Org Admin
       .slice()
-      .sort((a, b) => a.name.localeCompare(b.name)),
+      .sort((a, b) => {
+        if (a.id === user?.id) return -1
+        if (b.id === user?.id) return 1
+        return a.name.localeCompare(b.name)
+      }),
     [users, user?.id]
   )
 
@@ -410,7 +415,14 @@ export default function OrgUsersPage() {
                     className="hover:bg-gray-50 transition-colors border-b border-gray-100"
                   >
                     <td className="px-4 py-4">
-                      <div className="font-semibold text-base text-gray-900">{u.name}</div>
+                      <div className="font-semibold text-base text-gray-900">
+                        {u.name}
+                        {u.id === user?.id && (
+                          <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium align-middle">
+                            You
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="text-gray-700 flex items-center gap-1.5 mb-1">

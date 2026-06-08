@@ -76,6 +76,18 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [barcodeInput, setBarcodeInput] = useState('')
   const [discount, setDiscount] = useState(0)
+  // Discount can be entered as a fixed amount (Rs) or a percentage of subtotal.
+  // `discount` always holds the resolved rupee amount used everywhere downstream.
+  const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount')
+  const [discountPercent, setDiscountPercent] = useState(0)
+
+  // When in percent mode, keep the rupee discount in sync with subtotal × percent.
+  useEffect(() => {
+    if (discountMode !== 'percent') return
+    const sub = cart.reduce((s, it) => s + it.lineTotal, 0)
+    const amt = Math.max(0, Math.min(sub, Math.round((sub * discountPercent) / 100)))
+    setDiscount(amt)
+  }, [cart, discountPercent, discountMode])
   const [quickAddProduct, setQuickAddProduct] = useState<Product | null>(null)
   const [quickAddQuantity, setQuickAddQuantity] = useState('1')
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'UDHAAR'>('PAID')
@@ -1041,6 +1053,8 @@ export default function POSPage() {
       show({ message: t('sale_completed'), variant: 'success' })
       setCart([])
       setDiscount(0)
+      setDiscountMode('amount')
+      setDiscountPercent(0)
       setPaymentStatus('PAID')
       setPaymentMethod('CASH')
       setCustomerId('')
@@ -1182,7 +1196,7 @@ export default function POSPage() {
   }
 
   return (
-    <div className="flex h-screen bg-[hsl(var(--background))]" dir={language === 'ur' ? 'rtl' : 'ltr'}>
+    <div className="flex flex-col lg:flex-row lg:h-screen min-h-screen bg-[hsl(var(--background))]" dir={language === 'ur' ? 'rtl' : 'ltr'}>
       {/* Offline Banner */}
       {!isOnline && (
         <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white text-center py-2 z-50">
@@ -1194,7 +1208,7 @@ export default function POSPage() {
       )}
 
       {/* Left Panel - Product Selection */}
-      <div className="w-1/2 border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-y-auto">
+      <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] lg:overflow-y-auto">
         <div className={`p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10 ${!isOnline ? 'mt-8' : ''}`}>
           <h1 className="text-2xl font-bold mb-4">{t('pos')}</h1>
 
@@ -1304,7 +1318,7 @@ export default function POSPage() {
               No products available
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-1.5 p-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 p-3">
               {products.map((product) => {
                 const hasCarton = product.cartonSize && product.cartonSize > 0 && product.cartonPrice
                 const stock = productStock[product.id] ?? null
@@ -1322,20 +1336,20 @@ export default function POSPage() {
                         addToCart(product, 1, false)
                       }
                     }}
-                    className="p-1.5 border border-[hsl(var(--border))] rounded-md hover:bg-[hsl(var(--muted))] hover:border-blue-400 transition-colors text-left cursor-pointer active:scale-95"
+                    className="flex flex-col min-h-[84px] p-3 border border-[hsl(var(--border))] rounded-lg hover:bg-[hsl(var(--muted))] hover:border-blue-400 hover:shadow-sm transition-all text-left cursor-pointer active:scale-95"
                     title={hasCarton ? "Click to add (piece or carton)" : "Click to add to cart"}
                   >
-                    <div className="font-medium text-xs leading-tight mb-0.5 truncate">{product.name}</div>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <div className="font-semibold text-xs">{formatCurrency(product.price)}</div>
+                    <div className="font-medium text-sm leading-snug mb-1 line-clamp-2">{product.name}</div>
+                    <div className="mt-auto flex items-center justify-between gap-1">
+                      <div className="font-bold text-base">{formatCurrency(product.price)}</div>
                       {showStock && (
-                        <div className={`text-[10px] ${stock <= 0 ? 'text-red-600 font-semibold' : stock <= ((product as any).reorderLevel || 0) ? 'text-orange-600' : 'text-gray-500'}`}>
+                        <div className={`text-xs shrink-0 ${stock <= 0 ? 'text-red-600 font-semibold' : stock <= ((product as any).reorderLevel || 0) ? 'text-orange-600' : 'text-gray-500'}`}>
                           {formatNumber(stock)} {product.unit}
                         </div>
                       )}
                     </div>
                     {hasCarton && (
-                      <div className="text-[10px] text-[hsl(var(--muted-foreground))] truncate">
+                      <div className="text-xs text-[hsl(var(--muted-foreground))] truncate mt-0.5">
                         Carton: {formatCurrency(product.cartonPrice!)}
                       </div>
                     )}
@@ -1348,7 +1362,7 @@ export default function POSPage() {
       </div>
 
       {/* Right Panel - Cart */}
-      <div className="w-1/2 bg-[hsl(var(--card))] overflow-y-auto" ref={cartScrollRef}>
+      <div className="w-full lg:w-1/2 bg-[hsl(var(--card))] lg:overflow-y-auto" ref={cartScrollRef}>
         <div className="p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xl font-bold">{t('cart')}</h2>
@@ -1427,22 +1441,62 @@ export default function POSPage() {
                 <span>{t('subtotal')}:</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center gap-2">
                 <span>{t('discount')}:</span>
-                <Input
-                  type="number"
-                  step="1"
-                  min={0}
-                  max={Math.floor(subtotal)}
-                  value={Math.round(discount).toString()}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value) || 0
-                    const rounded = Math.round(val)
-                    setDiscount(Math.max(0, Math.min(Math.floor(subtotal), rounded)))
-                  }}
-                  className="w-24 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="0"
-                />
+                <div className="flex items-center gap-1.5">
+                  {/* Rs / % toggle */}
+                  <div className="flex rounded-md border border-[hsl(var(--border))] overflow-hidden text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountMode('amount')}
+                      className={`px-2 py-1 ${discountMode === 'amount' ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Rs
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountMode('percent')}
+                      className={`px-2 py-1 ${discountMode === 'percent' ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      %
+                    </button>
+                  </div>
+                  {discountMode === 'amount' ? (
+                    <Input
+                      type="number"
+                      step="1"
+                      min={0}
+                      max={Math.floor(subtotal)}
+                      value={Math.round(discount).toString()}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0
+                        const rounded = Math.round(val)
+                        setDiscount(Math.max(0, Math.min(Math.floor(subtotal), rounded)))
+                      }}
+                      className="w-20 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      placeholder="0"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        step="1"
+                        min={0}
+                        max={100}
+                        value={Math.round(discountPercent).toString()}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0
+                          setDiscountPercent(Math.max(0, Math.min(100, Math.round(val))))
+                        }}
+                        className="w-16 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="0"
+                      />
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] w-16 text-right">
+                        -{formatCurrency(discount)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex justify-between">
                 <span>{t('total')}:</span>
