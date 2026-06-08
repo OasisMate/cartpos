@@ -248,7 +248,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     // PLATFORM ADMIN: Context-aware navigation
     if (user?.role === 'PLATFORM_ADMIN') {
-      const adminLinks: NavLink[] = [
+      // Platform-level links stay at the top.
+      const topLinks: NavLink[] = [
         {
           label: t('dashboard'),
           href: '/admin',
@@ -259,6 +260,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           href: '/admin/organizations',
           icon: <Building2 className="h-4 w-4 flex-shrink-0 text-gray-700" />,
         },
+      ]
+      // Users + Settings go in a bottom group so they never split the store section.
+      const bottomLinks: NavLink[] = [
         {
           label: t('users'),
           href: '/admin/users',
@@ -271,22 +275,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         },
       ]
 
-      // When a platform admin is viewing a specific store, surface that store's
-      // dashboard in the main nav. Org-level Dashboard/Stores/Users come from the
-      // titled "{org} Options" submenu below — we don't also repeat them inline
-      // (that produced confusing, org-name-prefixed duplicate entries).
-      if (contextOrgId && contextStoreId) {
-        const orgIndex = adminLinks.findIndex((link) => link.href === '/admin/organizations')
-        const storeDashboardLink: NavLink = {
-          label: `${storeMeta?.name || 'Store'} · Dashboard`,
-          href: `/org/${contextOrgId}/stores/${contextStoreId}`,
-          icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          indent: 1,
-        }
-        adminLinks.splice(orgIndex + 1, 0, storeDashboardLink)
-      }
-
-      groups.push({ links: adminLinks })
+      groups.push({ links: topLinks })
       
       // Add org submenu for Platform Admin when viewing an organization (but not a store)
       if (contextOrgId && !contextStoreId) {
@@ -321,7 +310,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const base = `/org/${contextOrgId}/stores/${contextStoreId}`
         const ico = 'h-4 w-4 flex-shrink-0 text-gray-700'
         groups.push({
+          title: storeMeta?.name || 'Store',
           links: [
+            { label: `${t('dashboard')}`, href: base, icon: <Store className={ico} /> },
             { label: t('pos'), href: `${base}/pos`, icon: <ShoppingCart className={ico} /> },
             { label: t('sales'), href: `${base}/sales`, icon: <TrendingUp className={ico} /> },
             { label: t('customers'), href: `${base}/customers`, icon: <UserCircle className={ico} /> },
@@ -333,7 +324,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           ],
         })
       }
-      
+
+      // Users + Settings at the bottom.
+      groups.push({ links: bottomLinks })
+
       return groups
     }
 
@@ -577,7 +571,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                             'rounded-lg transition-all duration-200',
                             'border-0 outline-0 ring-0 shadow-none before:hidden after:hidden',
                             isActive(link.href)
-                              ? 'bg-orange-500 text-white [&_svg]:text-white'
+                              ? 'bg-orange-100 text-orange-700 font-medium [&_svg]:text-orange-600'
                               : 'text-gray-700 hover:bg-blue-100 hover:text-blue-700'
                           )}
                         />
