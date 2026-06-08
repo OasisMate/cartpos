@@ -314,54 +314,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         })
       }
       
-      // Add store submenu for Platform Admin only when actually viewing a store page
+      // Store nav for Platform Admin when viewing a store. Rendered as regular icon'd
+      // links (not a collapse-hidden submenu) so the full store menu is always visible,
+      // matching the store-manager experience.
       if (contextStoreId && contextOrgId && pathname?.includes(`/stores/${contextStoreId}`)) {
-        const storeName = storeMeta?.name || 'Store'
+        const base = `/org/${contextOrgId}/stores/${contextStoreId}`
+        const ico = 'h-4 w-4 flex-shrink-0 text-gray-700'
         groups.push({
-          title: `${storeName} Options`,
-          isSubmenu: true,
           links: [
-            {
-              label: t('pos'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/pos`,
-              icon: <></>,
-            },
-            {
-              label: t('products'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/products`,
-              icon: <></>,
-            },
-            {
-              label: t('stock_adjustments'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/stock-adjustments`,
-              icon: <></>,
-            },
-            {
-              label: t('sales'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/sales`,
-              icon: <></>,
-            },
-            {
-              label: t('purchases'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/purchases`,
-              icon: <></>,
-            },
-            {
-              label: t('customers'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/customers`,
-              icon: <></>,
-            },
-            {
-              label: t('suppliers'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/suppliers`,
-              icon: <></>,
-            },
-            // Udhaar view is handled via customers/ledger, no separate menu item
-            {
-              label: t('reports'),
-              href: `/org/${contextOrgId}/stores/${contextStoreId}/reports`,
-              icon: <></>,
-            },
+            { label: t('pos'), href: `${base}/pos`, icon: <ShoppingCart className={ico} /> },
+            { label: t('sales'), href: `${base}/sales`, icon: <TrendingUp className={ico} /> },
+            { label: t('customers'), href: `${base}/customers`, icon: <UserCircle className={ico} /> },
+            { label: t('products'), href: `${base}/products`, icon: <Package className={ico} /> },
+            { label: t('stock_adjustments'), href: `${base}/stock-adjustments`, icon: <Repeat className={ico} /> },
+            { label: t('purchases'), href: `${base}/purchases`, icon: <ShoppingBag className={ico} /> },
+            { label: t('suppliers'), href: `${base}/suppliers`, icon: <Factory className={ico} /> },
+            { label: t('reports'), href: `${base}/reports`, icon: <BarChart3 className={ico} /> },
           ],
         })
       }

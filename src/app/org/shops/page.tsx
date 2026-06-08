@@ -98,9 +98,14 @@ export default function OrgShopsPage() {
 
       // Refresh user context
       await refreshUser()
-      
-      // Redirect to store dashboard
-      router.push('/store')
+
+      // Platform admins stay in the org-scoped tree (where their full store nav +
+      // breadcrumb are built); org admins / managers use the /store dashboard.
+      if (user?.role === 'PLATFORM_ADMIN') {
+        router.push(`/org/${user.currentOrgId}/stores/${shopId}`)
+      } else {
+        router.push('/store')
+      }
       router.refresh()
     } catch (e: any) {
       setError(e.message || 'Failed to enter store')
