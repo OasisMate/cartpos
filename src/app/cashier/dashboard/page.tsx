@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { getProductStockBatch } from '@/lib/domain/purchases'
 import CashierDashboardClient from './CashierDashboardClient'
 
 export default async function CashierDashboardPage() {
@@ -39,7 +40,7 @@ export default async function CashierDashboardPage() {
   const today = new Date(new Date().toDateString())
 
   // Get cashier's personal stats
-  const [invoices, lowStockProducts] = await Promise.all([
+  const [invoices, lowStockCandidates] = await Promise.all([
     prisma.invoice.findMany({
       where: {
         shopId,
@@ -64,9 +65,17 @@ export default async function CashierDashboardPage() {
         name: true,
         reorderLevel: true,
       },
-      take: 10,
     }),
   ])
+
+  // Only keep products whose on-hand quantity is at or below the reorder level.
+  const stockMap = await getProductStockBatch(
+    shopId,
+    lowStockCandidates.map((p) => p.id)
+  )
+  const lowStockProducts = lowStockCandidates
+    .filter((p) => p.reorderLevel != null && (stockMap.get(p.id) ?? 0) <= p.reorderLevel)
+    .slice(0, 10)
 
   const summary = invoices.reduce(
     (acc, inv) => {
