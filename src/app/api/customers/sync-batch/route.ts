@@ -29,16 +29,18 @@ export async function POST(request: NextRequest) {
 
     for (const c of customers) {
       try {
-        // Upsert by (shopId, name, phone) to avoid dupes; in v2 we can store clientId mapping
+        // Idempotent on (shopId, clientId): re-syncing the same offline customer
+        // updates the existing row instead of creating a duplicate.
         await prisma.customer.upsert({
-          where: {
-            // Assuming a compound unique on (shopId, name, phone) doesn't exist; fall back to find+create
-            // Prisma requires a unique; so we do a manual find
-            id: '___nonexistent___',
+          where: { shopId_clientId: { shopId: user.currentShopId, clientId: c.id } },
+          update: {
+            name: c.name.trim(),
+            phone: c.phone?.trim() || null,
+            notes: c.notes?.trim() || null,
           },
-          update: {},
           create: {
             shopId: user.currentShopId,
+            clientId: c.id,
             name: c.name.trim(),
             phone: c.phone?.trim() || null,
             notes: c.notes?.trim() || null,
@@ -46,20 +48,7 @@ export async function POST(request: NextRequest) {
         })
         results.synced++
       } catch (err: any) {
-        // Fallback: try manual create to better capture errors
-        try {
-          await prisma.customer.create({
-            data: {
-              shopId: user.currentShopId,
-              name: c.name.trim(),
-              phone: c.phone?.trim() || null,
-              notes: c.notes?.trim() || null,
-            },
-          })
-          results.synced++
-        } catch (inner: any) {
-          results.errors.push({ id: c.id, error: inner.message || 'Failed to sync customer' })
-        }
+        results.errors.push({ id: c.id, error: err.message || 'Failed to sync customer' })
       }
     }
 

@@ -292,6 +292,8 @@ model Purchase {
   date            DateTime       @default(now())
   reference       String?
   notes           String?
+  /// Offline client id — dedupes purchases created offline so re-sync can't duplicate them.
+  clientId        String?
   createdByUserId String?
   createdAt       DateTime       @default(now())
   shop            Shop           @relation(fields: [shopId], references: [id])
@@ -299,6 +301,7 @@ model Purchase {
   lines           PurchaseLine[]
   createdBy       User?          @relation("PurchaseCreatedBy", fields: [createdByUserId], references: [id])
 
+  @@unique([shopId, clientId])
   @@index([shopId, date])
 }
 
@@ -325,12 +328,15 @@ model Customer {
   name      String
   phone     String?
   notes     String?
+  /// Offline client id — dedupes customers created offline so re-sync can't duplicate them.
+  clientId  String?
   createdAt DateTime         @default(now())
   shop      Shop             @relation(fields: [shopId], references: [id])
   invoices  Invoice[]
   ledger    CustomerLedger[]
   payments  Payment[]
 
+  @@unique([shopId, clientId])
   @@index([shopId, name])
   @@index([shopId, phone])
 }
@@ -436,11 +442,14 @@ model Payment {
   amount      Decimal         @db.Decimal(10, 2)
   method      PaymentMethod
   note        String?
+  /// Offline client id — dedupes udhaar payments created offline so re-sync can't duplicate them.
+  clientId    String?
   createdAt   DateTime        @default(now())
   shop        Shop            @relation(fields: [shopId], references: [id])
   invoice     Invoice?        @relation(fields: [invoiceId], references: [id])
   customer    Customer?       @relation(fields: [customerId], references: [id])
 
+  @@unique([shopId, clientId])
   @@index([shopId, createdAt])
 }
 

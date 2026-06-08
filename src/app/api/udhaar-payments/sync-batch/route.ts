@@ -36,11 +36,21 @@ export async function POST(request: NextRequest) {
           throw new Error('Invalid customer for this shop')
         }
 
+        // Idempotency: if this offline payment already synced, skip (don't double-credit).
+        const existing = await prisma.payment.findUnique({
+          where: { shopId_clientId: { shopId: user.currentShopId, clientId: p.id } },
+        })
+        if (existing) {
+          results.skipped++
+          continue
+        }
+
         await prisma.$transaction(async (tx) => {
           // Create Payment row
           await tx.payment.create({
             data: {
               shopId: user.currentShopId!,
+              clientId: p.id,
               customerId: p.customerId,
               amount: p.amount,
               method: p.method,

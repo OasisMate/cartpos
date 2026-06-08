@@ -12,6 +12,8 @@ export interface CreatePurchaseInput {
   date?: Date
   reference?: string
   notes?: string
+  /** Offline client id for idempotent sync (dedupes re-synced purchases). */
+  clientId?: string
   lines: PurchaseLineInput[]
 }
 
@@ -120,6 +122,14 @@ export async function createPurchase(
 
   // Create purchase and lines in a transaction
   const purchase = await prisma.$transaction(async (tx) => {
+    // Idempotency: if this offline purchase already synced, return it (don't re-add stock).
+    if (input.clientId) {
+      const existing = await tx.purchase.findFirst({
+        where: { shopId, clientId: input.clientId },
+      })
+      if (existing) return existing
+    }
+
     // Create purchase header
     const purchase = await tx.purchase.create({
       data: {
@@ -128,6 +138,7 @@ export async function createPurchase(
         date: input.date || new Date(),
         reference: input.reference?.trim() || null,
         notes: input.notes?.trim() || null,
+        clientId: input.clientId || null,
         createdByUserId: userId,
       },
     })

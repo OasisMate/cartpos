@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
           date: p.date ? new Date(p.date) : undefined,
           reference: p.reference,
           notes: p.notes,
+          clientId: p.id,
           lines: p.lines.map((l) => ({
             productId: l.productId,
             quantity: l.quantity,
