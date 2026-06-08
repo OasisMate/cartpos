@@ -271,46 +271,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         },
       ]
 
-      if (contextOrgId) {
-        const orgName = orgMeta?.name || 'Organization'
-        const orgChildren: NavLink[] = [
-          {
-            label: `${orgName} · Org Dashboard`,
-            href: `/org/${contextOrgId}`,
-            icon: <LayoutDashboard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-            indent: 1,
-          },
-          {
-            label: `${orgName} · ${t('stores')}`,
-            href: `/org/${contextOrgId}/stores`,
-            icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-            indent: 1,
-          },
-          {
-            label: `${orgName} · ${t('users')}`,
-            href: `/org/${contextOrgId}/users`,
-            icon: <Users className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-            indent: 1,
-          },
-        ]
-
+      // When a platform admin is viewing a specific store, surface that store's
+      // dashboard in the main nav. Org-level Dashboard/Stores/Users come from the
+      // titled "{org} Options" submenu below — we don't also repeat them inline
+      // (that produced confusing, org-name-prefixed duplicate entries).
+      if (contextOrgId && contextStoreId) {
         const orgIndex = adminLinks.findIndex((link) => link.href === '/admin/organizations')
-        adminLinks.splice(orgIndex + 1, 0, ...orgChildren)
-
-          if (contextStoreId) {
-          // Store dashboard link stays in main nav
-          const storeDashboardLink: NavLink = {
-            label: `${storeMeta?.name || 'Store'} · Dashboard`,
-            href: `/org/${contextOrgId}/stores/${contextStoreId}`,
-            icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-            indent: 2,
-          }
-          
-          const insertIndex = orgIndex + 1 + orgChildren.length
-          adminLinks.splice(insertIndex, 0, storeDashboardLink)
-          
-          // Store submenu options will be added as a separate group
+        const storeDashboardLink: NavLink = {
+          label: `${storeMeta?.name || 'Store'} · Dashboard`,
+          href: `/org/${contextOrgId}/stores/${contextStoreId}`,
+          icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          indent: 1,
         }
+        adminLinks.splice(orgIndex + 1, 0, storeDashboardLink)
       }
 
       groups.push({ links: adminLinks })
