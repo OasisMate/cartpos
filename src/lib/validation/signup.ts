@@ -38,7 +38,7 @@ export function validateSignupForm(values: SignupFormData): Partial<Record<keyof
   }
 
   // Password validation
-  if (values.password && values.password.length < 6) {
+  if (values.password && values.password.length < 8) {
     errors.password = VALIDATION_MESSAGES.passwordMinLength
   }
 

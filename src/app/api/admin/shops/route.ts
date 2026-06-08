@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/auth'
 import { createShopWithOwner, listShops } from '@/lib/domain/shops'
 
-// GET: List all shops (admin only)
+// GET: List all shops (platform admin only)
 export async function GET() {
   try {
-    const session = await getSession()
+    const user = await getCurrentUser()
 
-    if (!session) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    if (!user || user.role !== 'PLATFORM_ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const shops = await listShops(session.userId)
+    const shops = await listShops(user.id)
 
     return NextResponse.json({ shops })
   } catch (error: any) {
@@ -23,13 +23,13 @@ export async function GET() {
   }
 }
 
-// POST: Create new shop + owner user (admin only)
+// POST: Create new shop + owner user (platform admin only)
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession()
+    const user = await getCurrentUser()
 
-    if (!session) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    if (!user || user.role !== 'PLATFORM_ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
         ownerEmail,
         ownerPassword,
       },
-      session.userId
+      user.id
     )
 
     return NextResponse.json({

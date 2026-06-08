@@ -11,9 +11,10 @@ export default async function Home() {
   try {
     const user = await getCurrentUser()
 
-    // If unauthenticated, middleware should redirect to /login
+    // If we reach here with no user but a session cookie existed (stale/deleted-user
+    // session), clear it to avoid a /login <-> / redirect loop.
     if (!user) {
-      redirect('/login')
+      redirect('/login?clearSession=1')
     }
 
     // Admins go to Admin

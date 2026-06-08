@@ -5,11 +5,17 @@ import { cookies } from 'next/headers'
 import { isDatabaseConnectionError } from './db/db-utils'
 import { withRetry } from './db/connection-retry'
 
-const secretKey = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+const secretKey = process.env.JWT_SECRET
+if (!secretKey || secretKey.length < 32) {
+  throw new Error(
+    'JWT_SECRET must be set to a strong value (at least 32 characters). Refusing to start with an insecure fallback.'
+  )
+}
 const encodedKey = new TextEncoder().encode(secretKey)
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10)
+  // Cost factor 12 (was 10) — stronger against offline cracking; ~250ms/hash is acceptable.
+  return bcrypt.hash(password, 12)
 }
 
 export async function verifyPassword(
@@ -33,7 +39,8 @@ export async function createSession(userId: string, email: string, role: string,
   const cookieStore = await cookies()
   cookieStore.set('session', session, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    // Secure everywhere except local dev (localhost is plain HTTP); staging/prod must use HTTPS.
+    secure: process.env.NODE_ENV !== 'development',
     expires: expiresAt,
     sameSite: 'lax',
     path: '/',

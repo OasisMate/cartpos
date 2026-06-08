@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
+import { PASSWORD_MIN_LENGTH } from '@/constants/auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +14,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (password.length < 6) {
+    if (password.length < PASSWORD_MIN_LENGTH) {
       return NextResponse.json(
-        { error: 'Password must be at least 6 characters' },
+        { error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` },
         { status: 400 }
       )
     }

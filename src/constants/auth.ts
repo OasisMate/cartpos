@@ -2,6 +2,9 @@
  * Authentication-related constants
  */
 
+/** Minimum password length enforced across signup, reset, and password-change flows. */
+export const PASSWORD_MIN_LENGTH = 8
+
 export const AUTH_HERO = {
   login: {
     title: 'Manage your retail shop with ease',
@@ -31,7 +34,7 @@ export const AUTH_FORM = {
 export const VALIDATION_MESSAGES = {
   required: 'This field is required',
   email: 'Please enter a valid email address',
-  passwordMinLength: 'Password must be at least 6 characters',
+  passwordMinLength: 'Password must be at least 8 characters',
   passwordMismatch: 'Passwords do not match',
   phone: 'Please enter a valid phone number',
   cnic: 'CNIC must be 13 digits',

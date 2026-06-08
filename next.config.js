@@ -44,6 +44,23 @@ const nextConfig = {
   // Note: Electron builds require special handling
   // Static export is not compatible with API routes
   // Electron setup is available but requires running Next.js as a server
+
+  // Baseline security headers (safe defaults that don't break the app).
+  // A strict Content-Security-Policy is intentionally deferred (needs per-page nonce work).
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' }, // clickjacking
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+        ],
+      },
+    ]
+  },
 }
 
 module.exports = withPWA(nextConfig)

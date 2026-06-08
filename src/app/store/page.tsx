@@ -2,6 +2,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { getProductStockBatch } from '@/lib/domain/purchases'
 import { DashboardContent } from './_components/DashboardContent'
 
 export default async function StoreDashboardPage() {
@@ -42,7 +43,7 @@ export default async function StoreDashboardPage() {
 
   const today = new Date(new Date().toDateString())
 
-  const [shop, invoicesToday, paymentsToday, udhaarCreatedToday, lowStockCount] = await Promise.all([
+  const [shop, invoicesToday, paymentsToday, udhaarInvoicesToday, trackedProducts] = await Promise.all([
     prisma.shop.findUnique({ where: { id: shopId } }),
     prisma.invoice.count({
       where: { shopId, createdAt: { gte: today }, status: 'COMPLETED' },
@@ -51,25 +52,35 @@ export default async function StoreDashboardPage() {
       _sum: { amount: true },
       where: { shopId, createdAt: { gte: today } },
     }),
-    prisma.customerLedger.aggregate({
-      _sum: { amount: true },
-      where: { shopId, createdAt: { gte: today }, type: 'SALE_UDHAAR', direction: 'DEBIT' },
+    // Udhaar given today = total of COMPLETED udhaar invoices today.
+    // Sourced from invoices (not the ledger) so VOIDed sales are excluded — matches Reports.
+    prisma.invoice.aggregate({
+      _sum: { total: true },
+      where: { shopId, createdAt: { gte: today }, status: 'COMPLETED', paymentStatus: 'UDHAAR' },
     }),
-    prisma.product.count({
-      where: {
-        shopId,
-        trackStock: true,
-        reorderLevel: { not: null },
-      },
+    // Candidates for low-stock: tracked products that have a reorder level set.
+    prisma.product.findMany({
+      where: { shopId, trackStock: true, reorderLevel: { not: null } },
+      select: { id: true, reorderLevel: true },
     }),
   ])
+
+  // Low stock = on-hand quantity at or below the reorder level (not just "has a reorder level").
+  const stockMap = await getProductStockBatch(
+    shopId,
+    trackedProducts.map((p) => p.id)
+  )
+  const lowStockCount = trackedProducts.filter((p) => {
+    const onHand = stockMap.get(p.id) ?? 0
+    return p.reorderLevel != null && onHand <= p.reorderLevel
+  }).length
 
   return (
     <DashboardContent
       shopName={shop?.name || 'Store'}
       invoicesToday={invoicesToday}
       paymentsToday={Number(paymentsToday._sum.amount || 0)}
-      udhaarCreatedToday={Number(udhaarCreatedToday._sum.amount || 0)}
+      udhaarCreatedToday={Number(udhaarInvoicesToday._sum.total || 0)}
       lowStockCount={lowStockCount}
     />
   )

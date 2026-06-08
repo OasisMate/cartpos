@@ -46,3 +46,30 @@ public/sw.js
 public/sw.js.map
 public/workbox-*.js
 public/workbox-*.js.map
+
+# QA / dev-only testing scripts (kept locally, not part of the product)
+/scripts/qa-*.ts
+/scripts/qa/
+
+# QA / working docs — kept locally, not committed
+/docs/TESTING_LOG.md
+/docs/USER_JOURNEYS.md
+/docs/SECURITY_AUDIT.md
+
+# Playwright / MCP test artifacts
+/.playwright-mcp/
+/playwright-report/
+/test-results/
+
+# editors & IDEs
+/.idea/
+/.vscode/
+*.swp
+*~
+
+# OS junk
+Thumbs.db
+desktop.ini
+
+# logs
+*.log

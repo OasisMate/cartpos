@@ -3,9 +3,21 @@ import type { ShopRole } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
+import { PASSWORD_MIN_LENGTH } from '@/constants/auth'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
 export async function POST(request: Request) {
   try {
+    // Throttle signups per IP to limit automated abuse.
+    const ip = getClientIp(request)
+    const limit = rateLimit(`signup:ip:${ip}`, 5, 60 * 60 * 1000)
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: 'Too many sign-up attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+      )
+    }
+
     const body = await request.json()
     const {
       // User fields
@@ -32,6 +44,14 @@ export async function POST(request: Request) {
     if (!firstName || !lastName || !email || !phone || !cnic || !password || !organizationName || !organizationType || !city) {
       return NextResponse.json(
         { error: 'Missing required fields. Please fill all required fields.' },
+        { status: 400 }
+      )
+    }
+
+    // Enforce password strength server-side (client validation can be bypassed)
+    if (typeof password !== 'string' || password.length < PASSWORD_MIN_LENGTH) {
+      return NextResponse.json(
+        { error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` },
         { status: 400 }
       )
     }
@@ -96,6 +116,10 @@ export async function POST(request: Request) {
           addressLine2: addressLine2 || null,
           ntn: ntn || null,
           strn: strn || null,
+          // Gated self-serve signup: public signups start PENDING and get NO access
+          // until a platform admin approves them (vetting / smallest attack surface).
+          // The other onboarding path is admin-created accounts, which are ACTIVE on
+          // creation (already vetted by the admin who created them).
           status: 'PENDING',
           requestedBy: user.id,
         },

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser, verifyPassword, hashPassword } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { PASSWORD_MIN_LENGTH } from '@/constants/auth'
 
 export async function PUT(request: Request) {
   const user = await getCurrentUser()
@@ -21,9 +22,9 @@ export async function PUT(request: Request) {
       )
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
       return NextResponse.json(
-        { error: 'New password must be at least 6 characters' },
+        { error: `New password must be at least ${PASSWORD_MIN_LENGTH} characters` },
         { status: 400 }
       )
     }

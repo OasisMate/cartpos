@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { sendEmail, generatePasswordResetEmail } from '@/lib/email'
 import { randomBytes } from 'crypto'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
+
+const ONE_HOUR = 60 * 60 * 1000
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,6 +12,17 @@ export async function POST(request: NextRequest) {
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+    }
+
+    // Throttle reset requests to prevent inbox flooding / enumeration probing.
+    const ip = getClientIp(request)
+    const ipLimit = rateLimit(`forgot:ip:${ip}`, 5, ONE_HOUR)
+    const emailLimit = rateLimit(`forgot:email:${String(email).toLowerCase()}`, 3, ONE_HOUR)
+    if (!ipLimit.ok || !emailLimit.ok) {
+      // Generic success-style message so we don't reveal throttling per-account.
+      return NextResponse.json({
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      })
     }
 
     // Find user by email

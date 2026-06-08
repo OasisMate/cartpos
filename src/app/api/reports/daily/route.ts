@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { canViewReports } from '@/lib/permissions'
 import { getDailySummary } from '@/lib/domain/reports'
 
 export async function GET(request: NextRequest) {
@@ -10,6 +11,10 @@ export async function GET(request: NextRequest) {
     }
     if (!user.currentShopId) {
       return NextResponse.json({ error: 'No shop selected' }, { status: 400 })
+    }
+    // Cashiers must not see financial reports — only managers/owners/admins.
+    if (!canViewReports(user, user.currentShopId)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

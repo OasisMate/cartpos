@@ -147,8 +147,8 @@ export default function SettingsPage() {
     setSuccess('')
 
     // Validation
-    if (passwordData.newPassword.length < 6) {
-      setError('New password must be at least 6 characters')
+    if (passwordData.newPassword.length < 8) {
+      setError('New password must be at least 8 characters')
       setSaving(false)
       return
     }
@@ -496,7 +496,7 @@ export default function SettingsPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Must be at least 6 characters long
+                Must be at least 8 characters long
               </p>
             </div>
 

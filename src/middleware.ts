@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
 
-const secretKey = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+const secretKey = process.env.JWT_SECRET
+if (!secretKey || secretKey.length < 32) {
+  throw new Error('JWT_SECRET must be set to a strong value (at least 32 characters).')
+}
 const encodedKey = new TextEncoder().encode(secretKey)
 
 async function validateSession(sessionCookie: string | undefined): Promise<boolean> {
@@ -57,8 +60,15 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // If valid session exists and on login page, redirect to home
+  // If valid session exists and on login page, redirect to home —
+  // UNLESS ?clearSession=1 is present, which means a downstream page detected a
+  // stale/deleted-user session and is asking us to clear it (prevents redirect loops).
   if (hasValidSession && pathname === '/login') {
+    if (request.nextUrl.searchParams.get('clearSession')) {
+      const response = NextResponse.next()
+      response.cookies.delete('session')
+      return response
+    }
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)

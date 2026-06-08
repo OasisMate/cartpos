@@ -58,6 +58,35 @@ export default function OrganizationsPage() {
   const [suspendReason, setSuspendReason] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE'>('ALL')
   const [enteringOrgId, setEnteringOrgId] = useState<string | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const emptyCreateForm = {
+    organizationName: '', organizationType: 'GENERAL_STORE', city: '',
+    ownerName: '', ownerEmail: '', ownerPassword: '', ownerPhone: '',
+  }
+  const [createForm, setCreateForm] = useState(emptyCreateForm)
+
+  async function createOrg() {
+    setCreating(true)
+    setCreateError('')
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(createForm),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create organization')
+      setShowCreateModal(false)
+      setCreateForm(emptyCreateForm)
+      await fetchOrgs()
+    } catch (e: any) {
+      setCreateError(e.message || 'Failed to create organization')
+    } finally {
+      setCreating(false)
+    }
+  }
 
   useEffect(() => {
     if (user?.role === 'PLATFORM_ADMIN') {
@@ -214,6 +243,12 @@ export default function OrganizationsPage() {
             <option value="SUSPENDED">Suspended</option>
             <option value="INACTIVE">Inactive</option>
           </select>
+          <button
+            onClick={() => { setCreateError(''); setShowCreateModal(true) }}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-md transition-colors"
+          >
+            + Create Organization
+          </button>
         </div>
       </div>
 
@@ -397,6 +432,81 @@ export default function OrganizationsPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Create Organization Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-1">Create Organization</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Creates an <span className="font-medium">active</span> shop + owner account immediately (no approval needed).
+            </p>
+            {createError && <div className="mb-3 p-2 bg-red-100 text-red-700 rounded text-sm">{createError}</div>}
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Business / Shop Name *</label>
+                  <input className="w-full px-3 py-2 border border-gray-300 rounded-md" value={createForm.organizationName}
+                    onChange={(e) => setCreateForm({ ...createForm, organizationName: e.target.value })} placeholder="Shop name" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Business Type *</label>
+                  <select className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" value={createForm.organizationType}
+                    onChange={(e) => setCreateForm({ ...createForm, organizationType: e.target.value })}>
+                    <option value="RETAIL_STORE">Retail Store</option>
+                    <option value="WHOLESALE">Wholesale</option>
+                    <option value="SUPERMARKET">Supermarket</option>
+                    <option value="GENERAL_STORE">General Store</option>
+                    <option value="CONVENIENCE_STORE">Convenience Store</option>
+                    <option value="PHARMACY">Pharmacy</option>
+                    <option value="ELECTRONICS_STORE">Electronics Store</option>
+                    <option value="CLOTHING_STORE">Clothing Store</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                  <input className="w-full px-3 py-2 border border-gray-300 rounded-md" value={createForm.city}
+                    onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })} placeholder="City" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Owner Phone</label>
+                  <input className="w-full px-3 py-2 border border-gray-300 rounded-md" value={createForm.ownerPhone}
+                    onChange={(e) => setCreateForm({ ...createForm, ownerPhone: e.target.value })} placeholder="+92XXXXXXXXXX (optional)" />
+                </div>
+              </div>
+              <div className="border-t pt-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">Owner Account</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Owner Name *</label>
+                    <input className="w-full px-3 py-2 border border-gray-300 rounded-md" value={createForm.ownerName}
+                      onChange={(e) => setCreateForm({ ...createForm, ownerName: e.target.value })} placeholder="Full name" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Owner Email *</label>
+                    <input type="email" className="w-full px-3 py-2 border border-gray-300 rounded-md" value={createForm.ownerEmail}
+                      onChange={(e) => setCreateForm({ ...createForm, ownerEmail: e.target.value })} placeholder="owner@email.com" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password * (min 8 chars)</label>
+                    <input className="w-full px-3 py-2 border border-gray-300 rounded-md" value={createForm.ownerPassword}
+                      onChange={(e) => setCreateForm({ ...createForm, ownerPassword: e.target.value })} placeholder="Owner sets their own later" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-5">
+              <button onClick={() => setShowCreateModal(false)} disabled={creating}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md disabled:opacity-50">Cancel</button>
+              <button onClick={createOrg} disabled={creating}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-md disabled:opacity-50">
+                {creating ? 'Creating...' : 'Create Organization'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

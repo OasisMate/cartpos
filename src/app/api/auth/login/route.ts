@@ -3,6 +3,9 @@ import { prisma } from '@/lib/db/prisma'
 import { verifyPassword, createSession } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone } from '@/lib/validation'
 import { withRetry } from '@/lib/db/connection-retry'
+import { rateLimit, clearRateLimit, getClientIp } from '@/lib/rate-limit'
+
+const FIFTEEN_MIN = 15 * 60 * 1000
 
 function isDatabaseConnectionError(error: unknown): boolean {
   if (!error) return false
@@ -26,6 +29,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Identifier and password are required' },
         { status: 400 }
+      )
+    }
+
+    // Brute-force protection: coarse per-IP cap + per-account cap (cleared on success).
+    const ip = getClientIp(request)
+    const ipLimit = rateLimit(`login:ip:${ip}`, 40, FIFTEEN_MIN)
+    const acctKey = `login:id:${String(identifier).toLowerCase()}`
+    const acctLimit = rateLimit(acctKey, 8, FIFTEEN_MIN)
+    if (!ipLimit.ok || !acctLimit.ok) {
+      const retryAfter = Math.max(ipLimit.retryAfter, acctLimit.retryAfter)
+      return NextResponse.json(
+        { error: `Too many login attempts. Please try again in about ${Math.ceil(retryAfter / 60)} minute(s).` },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
       )
     }
 
@@ -92,6 +108,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    // Successful login — reset this account's failed-attempt counter.
+    clearRateLimit(acctKey)
 
     // Create session with remember me option
     await createSession(user.id, user.email, user.role, rememberMe)
