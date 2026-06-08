@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useAuth } from '@/contexts/AuthContext'
-import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
+import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer, Globe } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
+  const { language, setLanguage } = useLanguage()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -544,6 +546,31 @@ export default function SettingsPage() {
             </div>
           </form>
         )}
+      </div>
+
+      {/* Language - available to every user */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Globe className="h-5 w-5 text-blue-600" />
+          <h2 className="text-xl font-semibold text-gray-900">Language</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-3">Choose the display language for the app.</p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setLanguage('en')}
+            className={`px-4 py-2 rounded-lg border font-medium ${language === 'en' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+          >
+            English
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage('ur')}
+            className={`px-4 py-2 rounded-lg border font-medium ${language === 'ur' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+          >
+            اردو
+          </button>
+        </div>
       </div>
 
       {/* Shop Settings - Only for STORE_MANAGER */}

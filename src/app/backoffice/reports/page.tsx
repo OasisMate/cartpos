@@ -10,6 +10,8 @@ interface RangeSummary {
   totalInvoices: number
   totalUdhaar: number
   totalPaymentsReceived: number
+  costOfGoods: number
+  grossProfit: number
 }
 
 type Preset = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'CUSTOM'
@@ -179,6 +181,17 @@ export default function ReportsPage() {
             <div className="text-2xl font-semibold text-emerald-700">
               Rs {summary.totalPaymentsReceived.toFixed(2)}
             </div>
+          </div>
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Cost of Goods</div>
+            <div className="text-2xl font-semibold">Rs {summary.costOfGoods.toFixed(2)}</div>
+          </div>
+          <div className="bg-white border-2 border-emerald-200 rounded-lg p-4 shadow-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Gross Profit</div>
+            <div className={`text-2xl font-semibold ${summary.grossProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+              Rs {summary.grossProfit.toFixed(2)}
+            </div>
+            <div className="text-[11px] text-gray-400 mt-1">Sales − cost of goods sold</div>
           </div>
         </div>
       ) : (
