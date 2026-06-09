@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import Button from '@/components/ui/Button'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface Shop {
   id: string
@@ -120,12 +122,9 @@ export default function AdminShopsPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Shops</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
+        <Button variant={showForm ? 'outline' : 'primary'} onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : 'Create Shop'}
-        </button>
+        </Button>
       </div>
 
       {showForm && (
@@ -198,13 +197,9 @@ export default function AdminShopsPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500"
               />
             </div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-            >
+            <Button type="submit" disabled={submitting}>
               {submitting ? 'Creating...' : 'Create Shop'}
-            </button>
+            </Button>
           </form>
         </div>
       )}
@@ -260,7 +255,7 @@ export default function AdminShopsPage() {
           </tbody>
         </table>
         {shops.length === 0 && (
-          <p className="text-center text-gray-500 py-8">No shops found. Create your first shop!</p>
+          <EmptyState title="No shops yet" description="Create your first shop to get started." />
         )}
       </div>
     </div>

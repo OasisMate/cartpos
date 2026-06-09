@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { format } from 'date-fns'
 import { User, Mail, Phone, CreditCard, Shield, Building2, Store } from 'lucide-react'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface AdminUser {
   id: string
@@ -110,7 +111,7 @@ export default function UsersPage() {
       {loading ? (
         <div className="text-gray-600">Loading...</div>
       ) : filteredUsers.length === 0 ? (
-        <div className="text-gray-600">No users found.</div>
+        <EmptyState title="No users found" description="Platform users will appear here." />
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
