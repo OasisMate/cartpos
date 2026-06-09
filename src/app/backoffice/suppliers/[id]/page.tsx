@@ -53,9 +53,17 @@ export default async function SupplierDetailPage({
             )}
           </p>
         </div>
-        <Link href="/store/suppliers" className="btn btn-outline h-9 px-4">
-          Back to Suppliers
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href={`/store/suppliers/${supplier.id}/statement`}
+            className="btn btn-outline h-9 px-4"
+          >
+            Print Statement
+          </Link>
+          <Link href="/store/suppliers" className="btn btn-outline h-9 px-4">
+            Back to Suppliers
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

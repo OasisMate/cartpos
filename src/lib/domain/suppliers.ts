@@ -234,7 +234,10 @@ export interface SupplierCreditInput {
 
 /** Fetch a supplier's payables ledger plus running balance owed. */
 export async function getSupplierLedger(id: string, userId: string) {
-  const supplier = await prisma.supplier.findUnique({ where: { id } })
+  const supplier = await prisma.supplier.findUnique({
+    where: { id },
+    include: { shop: { select: { name: true } } },
+  })
   if (!supplier) {
     throw new Error('Supplier not found')
   }
@@ -263,6 +266,7 @@ export async function getSupplierLedger(id: string, userId: string) {
       phone: supplier.phone,
       address: supplier.address,
       notes: supplier.notes,
+      shopName: supplier.shop?.name ?? null,
     },
     balance,
     entries: entries.map((e) => ({
