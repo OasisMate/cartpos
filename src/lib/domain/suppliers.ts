@@ -257,7 +257,13 @@ export async function getSupplierLedger(id: string, userId: string) {
   }
 
   return {
-    supplier: { id: supplier.id, name: supplier.name, phone: supplier.phone },
+    supplier: {
+      id: supplier.id,
+      name: supplier.name,
+      phone: supplier.phone,
+      address: supplier.address,
+      notes: supplier.notes,
+    },
     balance,
     entries: entries.map((e) => ({
       id: e.id,

@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { recordSupplierPayment } from '@/lib/domain/suppliers'
+import { recordSupplierCredit } from '@/lib/domain/suppliers'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
-import type { PaymentMethod } from '@prisma/client'
 
-const METHODS: PaymentMethod[] = ['CASH', 'CARD', 'OTHER']
-
-// POST: record a payment made to the supplier (reduces what the shop owes)
+// POST: record an amount the shop owes the supplier (opening balance / manual adjustment)
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -22,33 +19,32 @@ export async function POST(
 
     const formData = await request.formData()
     const amountRaw = formData.get('amount')
-    const methodRaw = formData.get('method')
     const noteRaw = formData.get('note')
 
     const amount =
       typeof amountRaw === 'string' && amountRaw.trim() !== '' ? Number(amountRaw) : 0
     const note =
       typeof noteRaw === 'string' && noteRaw.trim() !== '' ? noteRaw.trim() : undefined
-    const method: PaymentMethod =
-      typeof methodRaw === 'string' && METHODS.includes(methodRaw as PaymentMethod)
-        ? (methodRaw as PaymentMethod)
-        : 'CASH'
 
     if (!amount || isNaN(amount) || amount <= 0) {
       return NextResponse.redirect(back)
     }
 
-    const entry = await recordSupplierPayment(supplierId, { amount, method, note }, user.id)
+    const entry = await recordSupplierCredit(
+      supplierId,
+      { amount, type: 'OPENING_BALANCE', note },
+      user.id
+    )
 
     if (user.currentOrgId) {
       await logActivity({
         userId: user.id,
         orgId: user.currentOrgId,
         shopId: entry.shopId,
-        action: ActivityActions.RECORD_SUPPLIER_PAYMENT,
+        action: ActivityActions.RECORD_SUPPLIER_CREDIT,
         entityType: EntityTypes.SUPPLIER,
         entityId: supplierId,
-        details: { amount: Number(entry.amount), method: entry.method },
+        details: { amount: Number(entry.amount), type: entry.type },
         ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
         userAgent: request.headers.get('user-agent') || null,
       })
@@ -56,7 +52,7 @@ export async function POST(
 
     return NextResponse.redirect(back)
   } catch (error) {
-    console.error('Record supplier payment error:', error)
+    console.error('Record supplier credit error:', error)
     return NextResponse.redirect(back)
   }
 }

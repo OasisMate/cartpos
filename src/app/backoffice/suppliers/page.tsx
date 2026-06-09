@@ -8,8 +8,9 @@ import Modal from '@/components/ui/Modal'
 import EmptyState from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
-import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Wallet } from 'lucide-react'
 import IconButton from '@/components/ui/IconButton'
+import Link from 'next/link'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getSuppliersWithCache } from '@/lib/offline/data'
 
@@ -414,6 +415,14 @@ export default function SuppliersPage() {
                       <TD className="text-center">{supplier._count.purchases}</TD>
                       <TD className="text-center">
                         <div className="flex gap-2 justify-center">
+                          <Link
+                            href={`/store/suppliers/${supplier.id}`}
+                            title="Ledger & payments"
+                            aria-label="Ledger & payments"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-gray-300"
+                          >
+                            <Wallet className="h-4 w-4" />
+                          </Link>
                           <IconButton variant="neutral" label="Edit supplier" onClick={() => openEditForm(supplier)}>
                             <Pencil className="h-4 w-4" />
                           </IconButton>
