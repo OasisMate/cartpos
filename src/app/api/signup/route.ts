@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     } = body || {}
 
     // Validate required fields
-    if (!firstName || !lastName || !email || !phone || !cnic || !password || !organizationName || !organizationType || !city) {
+    if (!firstName || !lastName || !email || !phone || !password || !organizationName || !organizationType || !city) {
       return NextResponse.json(
         { error: 'Missing required fields. Please fill all required fields.' },
         { status: 400 }
@@ -64,17 +64,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 })
     }
 
-    // Validate and normalize CNIC
-    const normalizedCNIC = normalizeCNIC(cnic)
-    if (!normalizedCNIC || !validateCNIC(cnic)) {
-      return NextResponse.json({ error: 'Invalid CNIC format. CNIC must be 13 digits.' }, { status: 400 })
+    // CNIC is optional. Validate + dedup only when provided.
+    let normalizedCNIC: string | null = null
+    if (cnic && String(cnic).trim() !== '') {
+      normalizedCNIC = normalizeCNIC(cnic)
+      if (!normalizedCNIC || !validateCNIC(cnic)) {
+        return NextResponse.json({ error: 'Invalid CNIC format. CNIC must be 13 digits.' }, { status: 400 })
+      }
     }
 
-    // Check for existing user by email, phone, or CNIC
+    // Check for existing user by email, phone, and (if given) CNIC
     const [existingEmail, existingPhone, existingCNIC] = await Promise.all([
       prisma.user.findUnique({ where: { email: email.toLowerCase() } }),
       prisma.user.findUnique({ where: { phone: normalizedPhone } }),
-      prisma.user.findUnique({ where: { cnic: normalizedCNIC } }),
+      normalizedCNIC
+        ? prisma.user.findUnique({ where: { cnic: normalizedCNIC } })
+        : Promise.resolve(null),
     ])
 
     if (existingEmail) {

@@ -92,7 +92,6 @@ export default function Signup() {
       !formData.lastName ||
       !formData.email ||
       !formData.phone ||
-      !formData.cnic ||
       !formData.password ||
       !formData.organizationName ||
       !formData.organizationType ||
@@ -290,7 +289,7 @@ export default function Signup() {
                 </div>
                 <div>
                   <label htmlFor="cnic" className="block text-sm font-medium text-gray-700 mb-1">
-                    CNIC <span className="text-red-500">*</span>
+                    CNIC <span className="text-xs text-gray-500 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="text"
@@ -301,7 +300,6 @@ export default function Signup() {
                     maxLength={15}
                     className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                     placeholder="XXXXX-XXXXXXX-X"
-                    required
                     disabled={loading}
                   />
                 </div>
@@ -406,15 +404,42 @@ export default function Signup() {
                     disabled={loading}
                   >
                     <option value="">Select business type</option>
-                    <option value="RETAIL_STORE">Retail Store</option>
-                    <option value="WHOLESALE">Wholesale</option>
-                    <option value="SUPERMARKET">Supermarket</option>
-                    <option value="GENERAL_STORE">General Store</option>
-                    <option value="CONVENIENCE_STORE">Convenience Store</option>
-                    <option value="PHARMACY">Pharmacy</option>
-                    <option value="ELECTRONICS_STORE">Electronics Store</option>
-                    <option value="CLOTHING_STORE">Clothing Store</option>
-                    <option value="OTHER">Other</option>
+                    <optgroup label="Grocery & General">
+                      <option value="GENERAL_STORE">General Store</option>
+                      <option value="KIRYANA_STORE">Kiryana / Grocery</option>
+                      <option value="CONVENIENCE_STORE">Convenience Store</option>
+                      <option value="SUPERMARKET">Supermarket</option>
+                      <option value="WHOLESALE">Wholesale</option>
+                      <option value="RETAIL_STORE">Retail Store</option>
+                    </optgroup>
+                    <optgroup label="Pharmacy & Health">
+                      <option value="PHARMACY">Pharmacy / Medical Store</option>
+                      <option value="OPTICAL_STORE">Optical Store</option>
+                    </optgroup>
+                    <optgroup label="Electronics & Mobile">
+                      <option value="ELECTRONICS_STORE">Electronics Store</option>
+                      <option value="MOBILE_ACCESSORIES">Mobile & Accessories</option>
+                    </optgroup>
+                    <optgroup label="Fashion & Beauty">
+                      <option value="CLOTHING_STORE">Clothing / Garments</option>
+                      <option value="FOOTWEAR_STORE">Footwear</option>
+                      <option value="COSMETICS_STORE">Cosmetics & Beauty</option>
+                      <option value="JEWELRY_STORE">Jewellery</option>
+                    </optgroup>
+                    <optgroup label="Home & Hardware">
+                      <option value="HARDWARE_STORE">Hardware Store</option>
+                      <option value="SANITARY_STORE">Sanitary & Tiles</option>
+                      <option value="FURNITURE_STORE">Furniture</option>
+                    </optgroup>
+                    <optgroup label="Food">
+                      <option value="BAKERY">Bakery & Sweets</option>
+                      <option value="RESTAURANT">Restaurant / Food</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                      <option value="AUTO_PARTS">Auto Parts & Accessories</option>
+                      <option value="STATIONERY_STORE">Stationery & Books</option>
+                      <option value="OTHER">Other</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div>
@@ -583,8 +608,12 @@ export default function Signup() {
                       {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                    <p className="mt-1 text-xs text-red-600">Passwords do not match</p>
+                  )}
                 </div>
               </div>
+              <p className="mt-2 text-xs text-gray-500">Use at least 8 characters.</p>
             </div>
 
             <button
