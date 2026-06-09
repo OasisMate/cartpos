@@ -92,39 +92,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [orgAdminStoreMeta, setOrgAdminStoreMeta] = useState<{ id: string; name: string } | null>(null)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
-  const menuContainerRef = useRef<HTMLDivElement | null>(null)
-  const isClickingInsideRef = useRef(false)
 
+  // Close the user menu when clicking outside it. Clicks on the trigger button are
+  // inside userMenuRef, so this never fires for them — the button's own onClick toggles.
   useEffect(() => {
     if (!userMenuOpen) return
-
     function handleClickOutside(event: MouseEvent) {
-      // If we're clicking inside, don't close
-      if (isClickingInsideRef.current) {
-        isClickingInsideRef.current = false
-        return
-      }
-
-      const target = event.target as Node
-      const isClickInsideMenu = 
-        (userMenuRef.current && userMenuRef.current.contains(target)) ||
-        (menuContainerRef.current && menuContainerRef.current.contains(target))
-      
-      if (!isClickInsideMenu) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setUserMenuOpen(false)
       }
     }
-
-    // Add listener after a small delay to avoid immediate closure
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('click', handleClickOutside, true)
-    }, 10)
-
-    return () => {
-      clearTimeout(timeoutId)
-      document.removeEventListener('click', handleClickOutside, true)
-    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [userMenuOpen])
+
+  // Close the user menu when the sidebar collapses (cursor leaves) so it can't linger.
+  useEffect(() => {
+    if (!open) setUserMenuOpen(false)
+  }, [open])
 
   // Extract context from URL if Platform Admin viewing org/store
   const orgIdMatch = pathname?.match(/\/org\/([^\/]+)/)
@@ -594,89 +579,71 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="border-t border-blue-200 pt-3 relative" ref={userMenuRef}>
             {user && (
               <>
-                <div className="mb-1">
-                  <NotificationBell sidebarOpen={open} />
-                </div>
-                <button
-                  onClick={() => setUserMenuOpen((prev) => !prev)}
-                  className={cn(
-                    'w-full flex items-center py-1.5 rounded-md transition-colors text-sm',
-                    'hover:bg-blue-100',
-                    open ? 'gap-2 px-3 justify-between' : 'justify-center px-0'
-                  )}
-                  title={!open ? user.name : undefined}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-xs font-semibold">
-                        {user.name?.[0]?.toUpperCase() || 'U'}
-                      </span>
+                {/* User row: avatar + name (toggles menu) with the notification bell inline */}
+                <div className={cn('flex items-center', open ? 'gap-1' : 'flex-col gap-2')}>
+                  <button
+                    onClick={() => setUserMenuOpen((prev) => !prev)}
+                    className={cn(
+                      'flex items-center py-1.5 rounded-md transition-colors text-sm hover:bg-blue-100',
+                      open ? 'flex-1 min-w-0 gap-2 px-2 justify-between' : 'justify-center px-0'
+                    )}
+                    title={!open ? user.name : undefined}
+                    aria-expanded={userMenuOpen}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
+                        <span className="text-white text-xs font-semibold">
+                          {user.name?.[0]?.toUpperCase() || 'U'}
+                        </span>
+                      </div>
+                      {open && (
+                        <div className="text-sm font-medium text-gray-900 truncate">
+                          {user.name}
+                        </div>
+                      )}
                     </div>
                     {open && (
-                      <div className="text-sm font-medium text-gray-900 truncate">
-                        {user.name}
-                      </div>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 text-gray-500 transition-transform flex-shrink-0',
+                          userMenuOpen && 'rotate-180'
+                        )}
+                      />
                     )}
-                  </div>
-                  {open && (
-                    <ChevronDown
-                      className={cn(
-                        'h-4 w-4 text-gray-500 transition-transform',
-                        userMenuOpen && 'rotate-180'
-                      )}
-                    />
-                  )}
-                </button>
+                  </button>
+                  <NotificationBell sidebarOpen={open} />
+                </div>
 
                 {userMenuOpen && (
                   <div
-                    ref={menuContainerRef}
-                    onMouseDown={(e) => {
-                      isClickingInsideRef.current = true
-                      e.stopPropagation()
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                    }}
                     className={cn(
-                      'mt-2 rounded-lg border border-blue-100 bg-white shadow-lg p-3 space-y-2 z-50',
-                      open ? 'mx-2' : 'absolute left-2 right-2 bottom-20'
+                      'absolute bottom-full mb-2 rounded-lg border border-blue-100 bg-white shadow-lg p-1.5 flex items-center gap-1 z-50',
+                      open ? 'left-1 right-1' : 'left-1 w-44'
                     )}
                   >
                     <button
                       type="button"
-                      onMouseDown={(e) => {
-                        isClickingInsideRef.current = true
-                        e.stopPropagation()
-                      }}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        const newLang = language === 'en' ? 'ur' : 'en'
-                        setLanguage(newLang)
+                      title={language === 'en' ? 'Switch to Urdu' : 'Switch to English'}
+                      onClick={() => {
+                        setLanguage(language === 'en' ? 'ur' : 'en')
                         setUserMenuOpen(false)
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-blue-50 transition-colors cursor-pointer"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-gray-700 hover:bg-blue-50 transition-colors"
                     >
                       <Languages className="h-4 w-4" />
-                      <span>{language === 'en' ? 'اردو' : 'English'}</span>
+                      <span className="text-xs font-medium">{language === 'en' ? 'اردو' : 'EN'}</span>
                     </button>
                     <button
                       type="button"
-                      onMouseDown={(e) => {
-                        isClickingInsideRef.current = true
-                        e.stopPropagation()
-                      }}
-                      onClick={async (e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
+                      title={t('logout')}
+                      onClick={async () => {
                         setUserMenuOpen(false)
                         await logout()
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <LogOut className="h-4 w-4" />
-                      <span>{t('logout')}</span>
+                      <span className="text-xs font-medium">{t('logout')}</span>
                     </button>
                   </div>
                 )}

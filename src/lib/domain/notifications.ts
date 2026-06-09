@@ -113,14 +113,27 @@ export async function listNotifications(userId: string, limit = 20) {
   }
 }
 
-/** Mark notifications read for a user. Pass ids to target specific ones, omit for all. */
-export async function markNotificationsRead(userId: string, ids?: string[]): Promise<void> {
+/** Set read/unread for a user's notifications. Pass ids to target specific ones, omit for all. */
+export async function setNotificationsRead(
+  userId: string,
+  read: boolean,
+  ids?: string[]
+): Promise<void> {
   await prisma.notification.updateMany({
     where: {
       userId,
-      read: false,
       ...(ids && ids.length > 0 ? { id: { in: ids } } : {}),
     },
-    data: { read: true },
+    data: { read },
+  })
+}
+
+/** Delete notifications for a user. Pass ids to clear specific ones, omit to clear all. */
+export async function clearNotifications(userId: string, ids?: string[]): Promise<void> {
+  await prisma.notification.deleteMany({
+    where: {
+      userId,
+      ...(ids && ids.length > 0 ? { id: { in: ids } } : {}),
+    },
   })
 }
