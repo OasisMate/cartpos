@@ -205,49 +205,41 @@ export default function AdminShopsPage() {
       )}
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Shop Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Organization
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                City
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Owner
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Stats
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
+            <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 w-[22%]">Shop Name</th>
+              <th className="px-4 py-3 w-[20%]">Organization</th>
+              <th className="px-4 py-3 w-[12%]">City</th>
+              <th className="px-4 py-3 w-[26%]">Owner</th>
+              <th className="px-4 py-3 w-[12%]">Stats</th>
+              <th className="px-4 py-3 w-[8%]">Created</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white divide-y divide-gray-200 align-top">
             {shops.map((shop) => (
               <tr key={shop.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900 break-words">
                   {shop.name}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-4 py-3 text-sm text-gray-500 break-words">
                   {shop.organization?.name || '-'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-4 py-3 text-sm text-gray-500 break-words">
                   {shop.city || '-'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {shop.owners[0]?.user.name} ({shop.owners[0]?.user.email})
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  <div className="font-medium break-words">{shop.owners[0]?.user.name || '-'}</div>
+                  {shop.owners[0]?.user.email && (
+                    <div className="text-xs text-gray-400 break-words">{shop.owners[0]?.user.email}</div>
+                  )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {shop._count.products} products, {shop._count.customers} customers,{' '}
-                  {shop._count.invoices} invoices
+                <td className="px-4 py-3 text-xs text-gray-500">
+                  <div>{shop._count.products} products</div>
+                  <div>{shop._count.customers} customers</div>
+                  <div>{shop._count.invoices} invoices</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-4 py-3 text-xs text-gray-500">
                   {new Date(shop.createdAt).toLocaleDateString()}
                 </td>
               </tr>

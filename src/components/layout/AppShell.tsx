@@ -260,6 +260,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           href: '/admin/organizations',
           icon: <Building2 className="h-4 w-4 flex-shrink-0 text-gray-700" />,
         },
+        {
+          label: t('stores'),
+          href: '/admin/shops',
+          icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+        },
       ]
       // Users + Settings go in a bottom group so they never split the store section.
       const bottomLinks: NavLink[] = [
