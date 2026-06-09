@@ -96,7 +96,7 @@ export default function NewStockAdjustmentPage() {
             }, isOnline)
 
             show({ message: 'Adjustment saved', variant: 'success' })
-            router.push('/backoffice/products/adjustments')
+            router.push('/store/stock-adjustments')
         } catch (err) {
             console.error('Error saving adjustment:', err)
             show({ message: 'Failed to save adjustment', variant: 'destructive' })

@@ -181,7 +181,7 @@ export default function StockAdjustmentsPage() {
     <div className="p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Stock Adjustments</h1>
-        <Link href="/backoffice/products/adjustments/new">
+        <Link href="/store/stock-adjustments/new">
           <Button className="w-full sm:w-auto">New Adjustment</Button>
         </Link>
       </div>

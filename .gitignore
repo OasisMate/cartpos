@@ -55,6 +55,7 @@ public/workbox-*.js.map
 /docs/TESTING_LOG.md
 /docs/USER_JOURNEYS.md
 /docs/SECURITY_AUDIT.md
+/docs/UI_UX_AUDIT.md
 
 # Playwright / MCP test artifacts
 /.playwright-mcp/

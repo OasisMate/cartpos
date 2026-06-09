@@ -12,8 +12,12 @@ export async function POST(req: NextRequest) {
         const body = await req.json()
         const { category, amount, description, date, createdAt } = body
 
-        if (!category || amount === undefined || !date) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+        const amt = Number(amount)
+        if (!category || !date || !Number.isFinite(amt) || amt <= 0) {
+            return NextResponse.json(
+                { error: 'Category, date, and a valid positive amount are required' },
+                { status: 400 }
+            )
         }
 
         // Create Expense entry
@@ -22,7 +26,7 @@ export async function POST(req: NextRequest) {
                 shopId: user.currentShopId,
                 userId: user.id,
                 category,
-                amount,
+                amount: amt,
                 description,
                 date: new Date(date),
                 createdAt: createdAt ? new Date(createdAt) : undefined,

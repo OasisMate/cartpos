@@ -55,9 +55,9 @@ export async function createStockAdjustment(
     throw new Error('Product does not belong to this shop')
   }
 
-  // Validate quantity
-  if (input.quantity === 0) {
-    throw new Error('Quantity cannot be zero')
+  // Validate quantity (must be a finite, non-zero number)
+  if (!Number.isFinite(input.quantity) || input.quantity === 0) {
+    throw new Error('Quantity must be a valid non-zero number')
   }
 
   // Validate product tracks stock

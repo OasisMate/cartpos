@@ -99,8 +99,14 @@ export async function createProduct(
 
   // Force uppercase for consistent product naming across the system (intentional UX choice).
   const name = (input.name || '').trim().toUpperCase()
-  if (!name || !input.unit || !input.price) {
-    throw new Error('Name, unit, and price are required')
+  if (!name || !input.unit) {
+    throw new Error('Name and unit are required')
+  }
+  if (!Number.isFinite(input.price) || input.price <= 0) {
+    throw new Error('Price must be a valid amount greater than 0')
+  }
+  if (input.costPrice != null && (!Number.isFinite(input.costPrice) || input.costPrice < 0)) {
+    throw new Error('Cost price must be a valid non-negative amount')
   }
 
   // Validate barcode uniqueness per shop (if provided)

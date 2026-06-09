@@ -120,11 +120,20 @@ export async function createSale(
 
   const allowNegativeStock = shopSettings?.allowNegativeStock ?? true // Default: allow
 
-  // Validate quantities
+  // Validate quantities and line amounts (reject NaN/Infinity/negative; verify line math)
   for (const item of input.items) {
-    if (!item.quantity || item.quantity <= 0) {
+    if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
       throw new Error('All items must have a quantity greater than 0')
     }
+    if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0 || !Number.isFinite(item.lineTotal) || item.lineTotal < 0) {
+      throw new Error('Invalid item price or line total')
+    }
+    if (Math.abs(item.lineTotal - item.quantity * item.unitPrice) > 0.01) {
+      throw new Error('Line total does not match quantity × unit price')
+    }
+  }
+  if (!Number.isFinite(input.subtotal) || !Number.isFinite(input.discount) || !Number.isFinite(input.total) || input.discount < 0) {
+    throw new Error('Invalid sale totals')
   }
 
   // Batch stock check for all products that track stock
