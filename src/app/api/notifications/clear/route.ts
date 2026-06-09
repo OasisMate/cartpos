@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { setNotificationsRead } from '@/lib/domain/notifications'
+import { clearNotifications } from '@/lib/domain/notifications'
 
-// POST: set read/unread. Body { ids?: string[], read?: boolean }
-//   - omit ids → applies to all the user's notifications
-//   - read defaults to true
+// POST: delete notifications. Body { ids?: string[] } — omit ids to clear all.
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
@@ -13,21 +11,19 @@ export async function POST(request: NextRequest) {
     }
 
     let ids: string[] | undefined
-    let read = true
     try {
       const body = await request.json()
       if (Array.isArray(body?.ids)) {
         ids = body.ids.filter((x: unknown): x is string => typeof x === 'string')
       }
-      if (typeof body?.read === 'boolean') read = body.read
     } catch {
-      // no body → mark all read
+      // no body → clear all
     }
 
-    await setNotificationsRead(user.id, read, ids)
+    await clearNotifications(user.id, ids)
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    console.error('Set notifications read error:', error)
-    return NextResponse.json({ error: 'Failed to update notifications' }, { status: 500 })
+    console.error('Clear notifications error:', error)
+    return NextResponse.json({ error: 'Failed to clear notifications' }, { status: 500 })
   }
 }

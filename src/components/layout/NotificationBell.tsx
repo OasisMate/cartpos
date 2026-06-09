@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, Check } from 'lucide-react'
+import { Bell, Check, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NotificationItem {
@@ -26,12 +26,19 @@ function timeAgo(iso: string): string {
   return `${d}d ago`
 }
 
-export default function NotificationBell({ sidebarOpen }: { sidebarOpen: boolean }) {
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+
+export default function NotificationBell({ sidebarOpen }: { sidebarOpen?: boolean }) {
   const router = useRouter()
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unread, setUnread] = useState(0)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
+
+  // Close the panel when the sidebar collapses so it can't linger detached.
+  useEffect(() => {
+    if (sidebarOpen === false) setOpen(false)
+  }, [sidebarOpen])
 
   const load = useCallback(async () => {
     try {
@@ -65,28 +72,44 @@ export default function NotificationBell({ sidebarOpen }: { sidebarOpen: boolean
     }
   }, [open])
 
-  async function markAllRead() {
+  function markAllRead() {
+    if (unread === 0) return
     setUnread(0)
     setItems((prev) => prev.map((n) => ({ ...n, read: true })))
-    try {
-      await fetch('/api/notifications/read', { method: 'POST' })
-    } catch {
-      /* ignore */
-    }
+    fetch('/api/notifications/read', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ read: true }) }).catch(() => {})
+  }
+
+  function clearAll() {
+    setItems([])
+    setUnread(0)
+    fetch('/api/notifications/clear', { method: 'POST' }).catch(() => {})
+  }
+
+  function toggleRead(e: React.MouseEvent, n: NotificationItem) {
+    e.stopPropagation()
+    const next = !n.read
+    setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: next } : x)))
+    setUnread((u) => (next ? Math.max(0, u - 1) : u + 1))
+    fetch('/api/notifications/read', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ ids: [n.id], read: next }) }).catch(() => {})
+  }
+
+  function removeItem(e: React.MouseEvent, n: NotificationItem) {
+    e.stopPropagation()
+    setItems((prev) => prev.filter((x) => x.id !== n.id))
+    if (!n.read) setUnread((u) => Math.max(0, u - 1))
+    fetch('/api/notifications/clear', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ ids: [n.id] }) }).catch(() => {})
   }
 
   function onItemClick(n: NotificationItem) {
-    setOpen(false)
     if (!n.read) {
       setUnread((u) => Math.max(0, u - 1))
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
-      fetch('/api/notifications/read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [n.id] }),
-      }).catch(() => {})
+      fetch('/api/notifications/read', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ ids: [n.id], read: true }) }).catch(() => {})
     }
-    if (n.href) router.push(n.href)
+    if (n.href) {
+      setOpen(false)
+      router.push(n.href)
+    }
   }
 
   return (
@@ -95,69 +118,73 @@ export default function NotificationBell({ sidebarOpen }: { sidebarOpen: boolean
         type="button"
         onClick={() => setOpen((o) => !o)}
         title="Notifications"
-        aria-label="Notifications"
-        className={cn(
-          'w-full flex items-center py-1.5 rounded-md transition-colors text-sm hover:bg-blue-100 text-gray-700',
-          sidebarOpen ? 'gap-2 px-3 justify-between' : 'justify-center px-0'
-        )}
+        aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
+        className="relative inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
       >
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Bell className="h-5 w-5 flex-shrink-0 text-gray-700" />
-            {unread > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">
-                {unread > 9 ? '9+' : unread}
-              </span>
-            )}
-          </div>
-          {sidebarOpen && <span className="font-medium">Notifications</span>}
-        </div>
-        {sidebarOpen && unread > 0 && (
-          <span className="text-xs text-red-600 font-semibold">{unread} new</span>
+        <Bell className="h-5 w-5" />
+        {unread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">
+            {unread > 9 ? '9+' : unread}
+          </span>
         )}
       </button>
 
       {open && (
         <div className="absolute bottom-full mb-2 left-0 w-72 max-h-96 overflow-y-auto rounded-lg border border-blue-100 bg-white shadow-lg z-50">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 sticky top-0 bg-white">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 sticky top-0 bg-white">
             <span className="text-sm font-semibold text-gray-900">Notifications</span>
-            {unread > 0 && (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={markAllRead}
-                className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                disabled={unread === 0}
+                title="Mark all read"
+                className="text-xs text-blue-600 hover:text-blue-700 disabled:text-gray-300 flex items-center gap-1"
               >
-                <Check className="h-3 w-3" /> Mark all read
+                <Check className="h-3.5 w-3.5" />
               </button>
-            )}
+              <button
+                type="button"
+                onClick={clearAll}
+                disabled={items.length === 0}
+                title="Clear all"
+                className="text-xs text-red-600 hover:text-red-700 disabled:text-gray-300 flex items-center gap-1"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
           {items.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-gray-500">No notifications yet.</div>
+            <div className="px-3 py-6 text-center text-sm text-gray-500">No notifications.</div>
           ) : (
             <ul className="divide-y divide-gray-50">
               {items.map((n) => (
-                <li key={n.id}>
+                <li
+                  key={n.id}
+                  className={cn('group flex items-start gap-2 px-3 py-2.5 hover:bg-blue-50/60 transition-colors', !n.read && 'bg-blue-50/40')}
+                >
                   <button
                     type="button"
-                    onClick={() => onItemClick(n)}
-                    className={cn(
-                      'w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors flex gap-2',
-                      !n.read && 'bg-blue-50/40'
-                    )}
+                    onClick={(e) => toggleRead(e, n)}
+                    title={n.read ? 'Mark as unread' : 'Mark as read'}
+                    aria-label={n.read ? 'Mark as unread' : 'Mark as read'}
+                    className="mt-1 flex-shrink-0"
                   >
-                    <span
-                      className={cn(
-                        'mt-1.5 h-2 w-2 rounded-full flex-shrink-0',
-                        n.read ? 'bg-transparent' : 'bg-blue-500'
-                      )}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-gray-900 truncate">{n.title}</span>
-                      {n.body && (
-                        <span className="block text-xs text-gray-600 line-clamp-2">{n.body}</span>
-                      )}
-                      <span className="block text-[11px] text-gray-400 mt-0.5">{timeAgo(n.createdAt)}</span>
-                    </span>
+                    <span className={cn('block h-2.5 w-2.5 rounded-full border', n.read ? 'border-gray-300 bg-transparent' : 'border-blue-500 bg-blue-500')} />
+                  </button>
+                  <button type="button" onClick={() => onItemClick(n)} className="min-w-0 flex-1 text-left">
+                    <span className="block text-sm font-medium text-gray-900 truncate">{n.title}</span>
+                    {n.body && <span className="block text-xs text-gray-600 line-clamp-2">{n.body}</span>}
+                    <span className="block text-[11px] text-gray-400 mt-0.5">{timeAgo(n.createdAt)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => removeItem(e, n)}
+                    title="Remove"
+                    aria-label="Remove notification"
+                    className="mt-0.5 flex-shrink-0 text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </li>
               ))}
