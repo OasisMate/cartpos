@@ -8,12 +8,15 @@ import { getCustomersWithCache } from '@/lib/offline/data'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import Modal from '@/components/ui/Modal'
+import EmptyState from '@/components/ui/EmptyState'
 import { formatCurrency } from '@/lib/utils/money'
 
 interface Customer {
   id: string
   name: string
   phone: string | null
+  notes?: string | null
   balance?: number
 }
 
@@ -26,6 +29,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('')
   const [onlyWithBalance, setOnlyWithBalance] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({ name: '', phone: '', notes: '', openingBalance: '' })
   const [submitting, setSubmitting] = useState(false)
 
@@ -116,6 +120,7 @@ export default function CustomersPage() {
           <Button
             className="h-9 px-4"
             onClick={() => {
+              setEditingId(null)
               setFormData({ name: '', phone: '', notes: '', openingBalance: '' })
               setError('')
               setShowForm(true)
@@ -140,11 +145,17 @@ export default function CustomersPage() {
 
       {error && <div className="mb-3 p-3 bg-red-100 text-red-700 rounded">{error}</div>}
 
-      {/* Add/Edit Customer Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg border border-gray-200">
-            <h2 className="text-xl font-bold mb-4">Add Customer</h2>
+      {/* Add Customer Modal */}
+      <Modal
+        open={showForm}
+        onClose={() => {
+          setShowForm(false)
+          setEditingId(null)
+          setError('')
+        }}
+        title={editingId ? 'Edit Customer' : 'Add Customer'}
+        size="sm"
+      >
             {error && (
               <div className="mb-3 p-2 bg-red-100 text-red-700 rounded text-sm">
                 {error}
@@ -156,21 +167,31 @@ export default function CustomersPage() {
                 setSubmitting(true)
                 setError('')
                 try {
-                  const res = await fetch('/api/customers', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData),
-                  })
+                  const res = await fetch(
+                    editingId ? `/api/customers/${editingId}` : '/api/customers',
+                    {
+                      method: editingId ? 'PUT' : 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(formData),
+                    }
+                  )
                   const data = await res.json()
                   if (!res.ok) {
-                    throw new Error(data.error || 'Failed to create customer')
+                    throw new Error(data.error || `Failed to ${editingId ? 'update' : 'create'} customer`)
                   }
-                  const created = data.customer as Customer
-                  setCustomers((prev) => [created, ...prev])
+                  const saved = data.customer as Customer
+                  if (editingId) {
+                    setCustomers((prev) =>
+                      prev.map((c) => (c.id === editingId ? { ...c, ...saved } : c))
+                    )
+                  } else {
+                    setCustomers((prev) => [saved, ...prev])
+                  }
                   setShowForm(false)
+                  setEditingId(null)
                   setFormData({ name: '', phone: '', notes: '', openingBalance: '' })
                 } catch (err: any) {
-                  setError(err.message || 'Failed to create customer')
+                  setError(err.message || `Failed to ${editingId ? 'update' : 'create'} customer`)
                 } finally {
                   setSubmitting(false)
                 }
@@ -204,16 +225,18 @@ export default function CustomersPage() {
                     placeholder="Optional"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Opening Balance</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.openingBalance}
-                    onChange={(e) => setFormData({ ...formData, openingBalance: e.target.value })}
-                    placeholder="0.00"
-                  />
-                </div>
+                {!editingId && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Opening Balance</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.openingBalance}
+                      onChange={(e) => setFormData({ ...formData, openingBalance: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 <Button
@@ -232,14 +255,12 @@ export default function CustomersPage() {
                 </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {loading ? (
         <div className="text-[hsl(var(--muted-foreground))]">Loading...</div>
       ) : customers.length === 0 ? (
-        <div className="text-[hsl(var(--muted-foreground))]">No customers found</div>
+        <EmptyState title="No customers" description="Add your first customer to start tracking udhaar." />
       ) : (
         <div className="overflow-x-auto">
           <Table>
@@ -261,9 +282,28 @@ export default function CustomersPage() {
                     <TD>{c.phone || '—'}</TD>
                     <TD className="text-right">{formatCurrency(c.balance ?? 0)}</TD>
                     <TD className="text-right">
-                      <Link href={`/store/customers/${c.id}`} className="btn btn-outline h-8 px-3">
-                        View
-                      </Link>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingId(c.id)
+                            setFormData({
+                              name: c.name,
+                              phone: c.phone || '',
+                              notes: c.notes || '',
+                              openingBalance: '',
+                            })
+                            setError('')
+                            setShowForm(true)
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Link href={`/store/customers/${c.id}`} className="btn btn-outline h-8 px-3">
+                          View
+                        </Link>
+                      </div>
                     </TD>
                   </TR>
                 ))

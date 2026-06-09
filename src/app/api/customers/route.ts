@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 // GET: List customers for current shop (with optional search/balance filter)
 export async function GET(request: NextRequest) {
@@ -142,6 +143,20 @@ export async function POST(request: NextRequest) {
 
       return created
     })
+
+    if (user.currentOrgId) {
+      await logActivity({
+        userId: user.id,
+        orgId: user.currentOrgId,
+        shopId: user.currentShopId,
+        action: ActivityActions.CREATE_CUSTOMER,
+        entityType: EntityTypes.CUSTOMER,
+        entityId: customer.id,
+        details: { name: customer.name, openingBalance: openingBalance > 0 ? openingBalance : 0 },
+        ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+        userAgent: request.headers.get('user-agent') || null,
+      })
+    }
 
     return NextResponse.json(
       {

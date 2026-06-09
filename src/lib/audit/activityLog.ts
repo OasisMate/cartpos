@@ -77,6 +77,10 @@ export const ActivityActions = {
   ARCHIVE_PRODUCT: 'ARCHIVE_PRODUCT',
   DELETE_PRODUCT: 'DELETE_PRODUCT',
   
+  // Customer actions
+  CREATE_CUSTOMER: 'CREATE_CUSTOMER',
+  UPDATE_CUSTOMER: 'UPDATE_CUSTOMER',
+
   // Purchase actions
   CREATE_PURCHASE: 'CREATE_PURCHASE',
   
@@ -92,6 +96,7 @@ export const EntityTypes = {
   STORE: 'STORE',
   USER: 'USER',
   PRODUCT: 'PRODUCT',
+  CUSTOMER: 'CUSTOMER',
   SALE: 'SALE',
   PURCHASE: 'PURCHASE',
   ORGANIZATION: 'ORGANIZATION',
