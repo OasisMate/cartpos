@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatNumber, formatCurrency } from '@/lib/utils/money'
 import { Pencil, Trash2, Package, Loader2, Plus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import IconButton from '@/components/ui/IconButton'
 
 interface Product {
   id: string
@@ -975,39 +976,25 @@ export default function ProductsPage() {
                         <TD className="text-center">
                           <div className="flex gap-2 justify-center">
                             {product.trackStock && (
-                              <Button 
-                                variant="outline" 
-                                onClick={() => openAdjustmentModal(product)} 
-                                size="sm"
-                                className="p-2"
-                                title="Adjust Stock"
-                              >
-                                <Package className="w-4 h-4" />
-                              </Button>
+                              <IconButton variant="neutral" label="Adjust stock" onClick={() => openAdjustmentModal(product)}>
+                                <Package className="h-4 w-4" />
+                              </IconButton>
                             )}
-                            <Button 
-                              variant="outline" 
-                              onClick={() => openEditForm(product)} 
-                              size="sm"
-                              className="p-2"
-                              title="Edit"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              onClick={() => handleDeleteClick(product)} 
-                              size="sm"
-                              className="p-2 text-red-600 hover:text-red-700 hover:border-red-600"
+                            <IconButton variant="neutral" label="Edit product" onClick={() => openEditForm(product)}>
+                              <Pencil className="h-4 w-4" />
+                            </IconButton>
+                            <IconButton
+                              variant="danger"
+                              label="Delete product"
+                              onClick={() => handleDeleteClick(product)}
                               disabled={deletingProductId === product.id}
-                              title="Delete"
                             >
                               {deletingProductId === product.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="h-4 w-4" />
                               )}
-                            </Button>
+                            </IconButton>
                           </div>
                         </TD>
                       </TR>

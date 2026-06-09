@@ -10,6 +10,8 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
 import EmptyState from '@/components/ui/EmptyState'
+import IconButton from '@/components/ui/IconButton'
+import { Pencil, Eye } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/money'
 
 interface Customer {
@@ -283,9 +285,9 @@ export default function CustomersPage() {
                     <TD className="text-right">{formatCurrency(c.balance ?? 0)}</TD>
                     <TD className="text-right">
                       <div className="flex gap-2 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
+                        <IconButton
+                          variant="neutral"
+                          label="Edit customer"
                           onClick={() => {
                             setEditingId(c.id)
                             setFormData({
@@ -298,10 +300,15 @@ export default function CustomersPage() {
                             setShowForm(true)
                           }}
                         >
-                          Edit
-                        </Button>
-                        <Link href={`/store/customers/${c.id}`} className="btn btn-outline h-8 px-3">
-                          View
+                          <Pencil className="h-4 w-4" />
+                        </IconButton>
+                        <Link
+                          href={`/store/customers/${c.id}`}
+                          title="View customer"
+                          aria-label="View customer"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                        >
+                          <Eye className="h-4 w-4" />
                         </Link>
                       </div>
                     </TD>

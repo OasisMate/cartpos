@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { savePurchaseLocally, syncPendingPurchasesBatch } from '@/lib/offline/purchases'
 import { cuid } from '@/lib/utils/cuid'
 import { Pencil, Trash2, Loader2, Plus } from 'lucide-react'
+import IconButton from '@/components/ui/IconButton'
 import { useToast } from '@/components/ui/ToastProvider'
 import { formatNumber } from '@/lib/utils/money'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
@@ -1075,31 +1076,31 @@ export default function PurchasesPage() {
                       <TD>{purchase.notes || '-'}</TD>
                       <TD className="text-center">
                         <div className="flex gap-2 justify-center">
-                          <button
+                          <IconButton
+                            variant="neutral"
+                            label="Edit purchase"
                             onClick={(e) => {
                               e.stopPropagation()
                               openEditForm(purchase)
                             }}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Edit"
                           >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
+                            <Pencil className="h-4 w-4" />
+                          </IconButton>
+                          <IconButton
+                            variant="danger"
+                            label="Delete purchase"
                             onClick={(e) => {
                               e.stopPropagation()
                               handleDeleteClick(purchase)
                             }}
                             disabled={deletingPurchaseId === purchase.id}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded disabled:opacity-50 transition-colors"
-                            title="Delete"
                           >
                             {deletingPurchaseId === purchase.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="h-4 w-4" />
                             )}
-                          </button>
+                          </IconButton>
                         </div>
                       </TD>
                     </TR>

@@ -9,6 +9,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
+import IconButton from '@/components/ui/IconButton'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getSuppliersWithCache } from '@/lib/offline/data'
 
@@ -413,29 +414,21 @@ export default function SuppliersPage() {
                       <TD className="text-center">{supplier._count.purchases}</TD>
                       <TD className="text-center">
                         <div className="flex gap-2 justify-center">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => openEditForm(supplier)}
-                            className="p-2"
-                            title="Edit"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+                          <IconButton variant="neutral" label="Edit supplier" onClick={() => openEditForm(supplier)}>
+                            <Pencil className="h-4 w-4" />
+                          </IconButton>
+                          <IconButton
+                            variant="danger"
+                            label="Delete supplier"
                             onClick={() => handleDeleteClick(supplier)}
-                            className="p-2 text-red-600 hover:text-red-700 hover:border-red-600"
                             disabled={deletingSupplierId === supplier.id}
-                            title="Delete"
                           >
                             {deletingSupplierId === supplier.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="h-4 w-4" />
                             )}
-                          </Button>
+                          </IconButton>
                         </div>
                       </TD>
                     </TR>

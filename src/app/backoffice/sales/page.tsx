@@ -7,6 +7,8 @@ import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import EmptyState from '@/components/ui/EmptyState'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
+import IconButton from '@/components/ui/IconButton'
+import { Printer, Ban, Trash2 } from 'lucide-react'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
 
 interface SaleLine {
@@ -278,9 +280,9 @@ export default function BackofficeSalesPage() {
                       <TD>{s.status}</TD>
                       <TD className="text-center">
                       <div className="flex justify-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
+                        <IconButton
+                          variant="neutral"
+                          label="Print receipt"
                           onClick={async () => {
                             try {
                               const response = await fetch(`/api/sales/${s.id}`)
@@ -293,18 +295,17 @@ export default function BackofficeSalesPage() {
                               console.error('Failed to load receipt:', err)
                             }
                           }}
-                          title="View receipt"
                         >
-                          Print
-                        </Button>
+                          <Printer className="h-4 w-4" />
+                        </IconButton>
                         {s.status === 'VOID' ? (
-                          <Button variant="danger" size="sm" onClick={() => deleteSale(s.id)} title="Delete voided sale">
-                            Delete
-                          </Button>
+                          <IconButton variant="danger" label="Delete voided sale" onClick={() => deleteSale(s.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </IconButton>
                         ) : (
-                          <Button variant="danger" size="sm" onClick={() => openVoidModal(s)} title="Void sale">
-                            Void
-                          </Button>
+                          <IconButton variant="danger" label="Void sale" onClick={() => openVoidModal(s)}>
+                            <Ban className="h-4 w-4" />
+                          </IconButton>
                         )}
                       </div>
                       </TD>

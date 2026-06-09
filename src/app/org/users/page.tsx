@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { UserPlus, Edit, Trash2, Mail, Eye, EyeOff, Phone, Fingerprint } from 'lucide-react'
+import IconButton from '@/components/ui/IconButton'
 
 interface OrgUser {
   id: string
@@ -475,23 +476,23 @@ export default function OrgUsersPage() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <button
+                        <IconButton
+                          variant="neutral"
+                          label="Edit user"
                           onClick={() => {
                             router.push(`/org/users/${u.id}`)
                           }}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                          title="Edit User"
                         >
                           <Edit className="h-4 w-4" />
-                        </button>
-                        <button
+                        </IconButton>
+                        <IconButton
+                          variant="danger"
+                          label="Remove user"
                           onClick={() => handleDelete(u.id)}
                           disabled={deletingId === u.id || u.id === user?.id}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Remove User"
                         >
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </IconButton>
                       </div>
                     </td>
                   </tr>
