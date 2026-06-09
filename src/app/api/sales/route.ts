@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { createSale, listSales, CreateSaleInput } from '@/lib/domain/sales'
-import { 
-  canMakeSales, 
-  hasShopAccess, 
-  UnauthorizedResponse, 
-  ForbiddenResponse 
+import {
+  canMakeSales,
+  hasShopAccess,
+  UnauthorizedResponse,
+  ForbiddenResponse
 } from '@/lib/permissions'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 // GET: List sales
 export async function GET(request: NextRequest) {
@@ -99,11 +100,29 @@ export async function POST(request: NextRequest) {
 
     const result = await createSale(user.currentShopId, input, user.id)
 
+    if (user.currentOrgId && result.created) {
+      await logActivity({
+        userId: user.id,
+        orgId: user.currentOrgId,
+        shopId: user.currentShopId,
+        action: ActivityActions.CREATE_SALE,
+        entityType: EntityTypes.SALE,
+        entityId: result.invoice.id,
+        details: {
+          number: result.invoice.number,
+          total: Number(result.invoice.total),
+          paymentStatus: result.invoice.paymentStatus,
+        },
+        ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+        userAgent: request.headers.get('user-agent') || null,
+      })
+    }
+
     return NextResponse.json(
-      { 
+      {
         invoice: result.invoice,
         stockWarnings: result.stockWarnings,
-      }, 
+      },
       { status: 201 }
     )
   } catch (error: any) {

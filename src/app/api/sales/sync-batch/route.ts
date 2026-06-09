@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { createSale, CreateSaleInput } from '@/lib/domain/sales'
 import { prisma } from '@/lib/db/prisma'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 interface SyncSaleInput {
   id: string // client-generated ID
@@ -70,8 +71,27 @@ export async function POST(request: NextRequest) {
           amountReceived: sale.amountReceived,
         }
 
-        await createSale(user.currentShopId, input, user.id)
+        const saleResult = await createSale(user.currentShopId, input, user.id)
         results.synced++
+
+        if (user.currentOrgId && saleResult.created) {
+          await logActivity({
+            userId: user.id,
+            orgId: user.currentOrgId,
+            shopId: user.currentShopId,
+            action: ActivityActions.CREATE_SALE,
+            entityType: EntityTypes.SALE,
+            entityId: saleResult.invoice.id,
+            details: {
+              number: saleResult.invoice.number,
+              total: Number(saleResult.invoice.total),
+              paymentStatus: saleResult.invoice.paymentStatus,
+              offlineSync: true,
+            },
+            ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+            userAgent: request.headers.get('user-agent') || null,
+          })
+        }
       } catch (error: any) {
         if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
           results.skipped++

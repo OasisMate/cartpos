@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import Button from '@/components/ui/Button'
+import Modal from '@/components/ui/Modal'
+import { formatCurrency } from '@/lib/utils/money'
 
 interface EndShiftProps {
     summary: {
@@ -19,63 +21,59 @@ export default function EndShiftButton({ summary }: EndShiftProps) {
     return (
         <>
             <Button
+                variant="danger"
                 onClick={() => setShowModal(true)}
-                className="w-full md:w-auto bg-red-600 hover:bg-red-700"
+                className="w-full md:w-auto"
             >
                 End Shift
             </Button>
 
-            {showModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-[hsl(var(--card))] p-6 rounded-lg max-w-sm w-full border border-[hsl(var(--border))]">
-                        <h2 className="text-xl font-bold mb-4">End Shift Summary</h2>
-
-                        <div className="space-y-3 mb-6">
-                            <div className="flex justify-between">
-                                <span className="text-[hsl(var(--muted-foreground))]">Total Invoices:</span>
-                                <span className="font-medium">{summary.invoiceCount}</span>
-                            </div>
-                            <div className="border-t border-[hsl(var(--border))] my-2"></div>
-                            <div className="flex justify-between">
-                                <span>Cash Sales:</span>
-                                <span className="font-medium">Rs.{summary.cashSales.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span>Card Sales:</span>
-                                <span className="font-medium">Rs.{summary.cardSales.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span>Udhaar (Credit):</span>
-                                <span className="font-medium">Rs.{summary.udhaarSales.toFixed(2)}</span>
-                            </div>
-                            <div className="border-t border-[hsl(var(--border))] my-2"></div>
-                            <div className="flex justify-between text-lg font-bold">
-                                <span>Total Sales:</span>
-                                <span>Rs.{summary.totalSales.toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3">
-                            <Button
-                                variant="outline"
-                                onClick={() => setShowModal(false)}
-                                className="flex-1"
-                            >
-                                Close
-                            </Button>
-                            <Button
-                                onClick={() => {
-                                    // Clear the session cookie via middleware, then land on login.
-                                    window.location.href = '/login?clearSession=1'
-                                }}
-                                className="flex-1 bg-red-600 hover:bg-red-700"
-                            >
-                                Logout
-                            </Button>
-                        </div>
+            <Modal open={showModal} onClose={() => setShowModal(false)} title="End Shift Summary" size="sm">
+                <div className="space-y-3 mb-6">
+                    <div className="flex justify-between">
+                        <span className="text-[hsl(var(--muted-foreground))]">Total Invoices:</span>
+                        <span className="font-medium">{summary.invoiceCount}</span>
+                    </div>
+                    <div className="border-t border-[hsl(var(--border))] my-2"></div>
+                    <div className="flex justify-between">
+                        <span>Cash Sales:</span>
+                        <span className="font-medium">{formatCurrency(summary.cashSales)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Card Sales:</span>
+                        <span className="font-medium">{formatCurrency(summary.cardSales)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Udhaar (Credit):</span>
+                        <span className="font-medium">{formatCurrency(summary.udhaarSales)}</span>
+                    </div>
+                    <div className="border-t border-[hsl(var(--border))] my-2"></div>
+                    <div className="flex justify-between text-lg font-bold">
+                        <span>Total Sales:</span>
+                        <span>{formatCurrency(summary.totalSales)}</span>
                     </div>
                 </div>
-            )}
+
+                <div className="flex gap-3">
+                    <Button
+                        variant="outline"
+                        onClick={() => setShowModal(false)}
+                        className="flex-1"
+                    >
+                        Close
+                    </Button>
+                    <Button
+                        variant="danger"
+                        onClick={() => {
+                            // Clear the session cookie via middleware, then land on login.
+                            window.location.href = '/login?clearSession=1'
+                        }}
+                        className="flex-1"
+                    >
+                        Logout
+                    </Button>
+                </div>
+            </Modal>
         </>
     )
 }

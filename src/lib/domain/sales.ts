@@ -209,7 +209,7 @@ export async function createSale(
         include: invoiceDetailInclude,
       })
       if (existing) {
-        return { invoice: existing, stockWarnings: undefined }
+        return { invoice: existing, stockWarnings: undefined, created: false }
       }
     }
 
@@ -336,6 +336,7 @@ export async function createSale(
     return {
       invoice: invoiceWithDetails!,
       stockWarnings: stockWarnings.length > 0 ? stockWarnings : undefined,
+      created: true,
     }
   }, {
     maxWait: 10000, // 10 seconds max wait
@@ -354,7 +355,7 @@ export async function createSale(
         include: invoiceDetailInclude,
       })
       if (existing) {
-        return { invoice: existing, stockWarnings: undefined }
+        return { invoice: existing, stockWarnings: undefined, created: false }
       }
     }
     throw e
