@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { updateProduct, getProduct, deleteProduct, UpdateProductInput } from '@/lib/domain/products'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 // GET: Get single product
 export async function GET(
@@ -108,6 +109,20 @@ export async function PUT(
 
     const product = await updateProduct(params.id, input, user.id)
 
+    if (user.currentOrgId) {
+      await logActivity({
+        userId: user.id,
+        orgId: user.currentOrgId,
+        shopId: user.currentShopId || null,
+        action: ActivityActions.UPDATE_PRODUCT,
+        entityType: EntityTypes.PRODUCT,
+        entityId: product.id,
+        details: { name: product.name },
+        ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+        userAgent: request.headers.get('user-agent') || null,
+      })
+    }
+
     return NextResponse.json({ product })
   } catch (error: any) {
     console.error('Update product error:', error)
@@ -129,7 +144,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    await deleteProduct(params.id, user.id)
+    const deleted = await deleteProduct(params.id, user.id)
+
+    if (user.currentOrgId) {
+      await logActivity({
+        userId: user.id,
+        orgId: user.currentOrgId,
+        shopId: deleted.shopId,
+        action: ActivityActions.DELETE_PRODUCT,
+        entityType: EntityTypes.PRODUCT,
+        entityId: params.id,
+        details: { name: deleted.name },
+        ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+        userAgent: request.headers.get('user-agent') || null,
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

@@ -5,6 +5,8 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import { Table, THead, TR, TH, TD, EmptyRow, SkeletonRow } from '@/components/ui/DataTable'
+import EmptyState from '@/components/ui/EmptyState'
+import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatNumber, formatCurrency } from '@/lib/utils/money'
@@ -601,13 +603,16 @@ export default function ProductsPage() {
       </form>
 
       {/* Product Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">
-              {editingProduct ? 'Edit Product' : 'Add Product'}
-            </h2>
-
+      <Modal
+        open={showForm}
+        onClose={() => {
+          setShowForm(false)
+          setEditingProduct(null)
+          setError('')
+        }}
+        title={editingProduct ? 'Edit Product' : 'Add Product'}
+        size="lg"
+      >
             {error && (
               <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
                 {error}
@@ -817,17 +822,20 @@ export default function ProductsPage() {
                 </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Products List */}
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : products.length === 0 ? (
-        <div className="text-center py-8 text-[hsl(var(--muted-foreground))]">
-          {searchTerm ? 'No products found' : 'No products yet. Create your first product!'}
-        </div>
+        <EmptyState
+          title={searchTerm ? 'No products found' : 'No products yet'}
+          description={
+            searchTerm
+              ? 'Try a different search term.'
+              : 'Create your first product to get started.'
+          }
+        />
       ) : (
         <>
           <div className="overflow-x-auto">
@@ -1016,24 +1024,26 @@ export default function ProductsPage() {
               <div className="text-sm text-gray-600">
                 Showing {products.length} of {pagination.total} products
               </div>
-              <div className="flex gap-2">
-                <button
+              <div className="flex gap-2 items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   Previous
-                </button>
-                <span className="px-4 py-2">
+                </Button>
+                <span className="px-2 text-sm text-gray-600">
                   Page {currentPage} of {pagination.totalPages}
                 </span>
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))}
                   disabled={currentPage === pagination.totalPages}
-                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   Next
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -1042,9 +1052,7 @@ export default function ProductsPage() {
 
       {/* Stock Adjustment Modal */}
       {showAdjustmentModal && adjustingProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Adjust Stock</h2>
+        <Modal open onClose={closeAdjustmentModal} title="Adjust Stock" size="sm">
             <p className="text-sm text-gray-600 mb-4">
               Product: <span className="font-semibold">{adjustingProduct.name}</span>
             </p>
@@ -1136,15 +1144,20 @@ export default function ProductsPage() {
                 </Button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && productToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Delete Product</h2>
+        <Modal
+          open
+          onClose={() => {
+            setShowDeleteConfirm(false)
+            setProductToDelete(null)
+          }}
+          title="Delete Product"
+          size="sm"
+        >
             <p className="text-sm text-gray-600 mb-4">
               Are you sure you want to delete <span className="font-semibold">{productToDelete.name}</span>?
             </p>
@@ -1165,15 +1178,14 @@ export default function ProductsPage() {
               </Button>
               <Button
                 type="button"
+                variant="danger"
                 onClick={handleDeleteConfirm}
                 disabled={deletingProductId !== null}
-                className="bg-red-600 hover:bg-red-700 text-white"
               >
                 {deletingProductId ? 'Deleting...' : 'Delete'}
               </Button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

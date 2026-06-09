@@ -6,12 +6,13 @@ import {
   CreateProductInput,
   ProductFilters,
 } from '@/lib/domain/products'
-import { 
-  canManageProducts, 
-  hasShopAccess, 
-  UnauthorizedResponse, 
-  ForbiddenResponse 
+import {
+  canManageProducts,
+  hasShopAccess,
+  UnauthorizedResponse,
+  ForbiddenResponse
 } from '@/lib/permissions'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 // GET: List products
 export async function GET(request: NextRequest) {
@@ -151,6 +152,20 @@ export async function POST(request: NextRequest) {
     }
 
     const product = await createProduct(user.currentShopId, input, user.id)
+
+    if (user.currentOrgId) {
+      await logActivity({
+        userId: user.id,
+        orgId: user.currentOrgId,
+        shopId: user.currentShopId,
+        action: ActivityActions.CREATE_PRODUCT,
+        entityType: EntityTypes.PRODUCT,
+        entityId: product.id,
+        details: { name: product.name, price: input.price },
+        ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+        userAgent: request.headers.get('user-agent') || null,
+      })
+    }
 
     return NextResponse.json({ product }, { status: 201 })
   } catch (error: any) {

@@ -385,7 +385,7 @@ export async function deleteProduct(id: string, userId: string) {
     where: { id },
   })
 
-  return { success: true }
+  return { success: true, shopId: product.shopId, name: product.name }
 }
 
 // Get products for POS (lightweight, no pagination)

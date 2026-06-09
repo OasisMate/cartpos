@@ -1,6 +1,6 @@
 import React from 'react'
 
-type Variant = 'primary' | 'outline'
+type Variant = 'primary' | 'outline' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
 
 const sizeClasses: Record<Size, string> = {
@@ -22,7 +22,9 @@ export default function Button({
   const base =
     variant === 'primary'
       ? 'btn-primary'
-      : 'btn-outline'
+      : variant === 'danger'
+        ? 'btn-danger'
+        : 'btn-outline'
   return (
     <button className={`${base} ${sizeClasses[size]} ${className}`} {...props}>
       {children}
