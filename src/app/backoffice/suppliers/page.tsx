@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
+import Modal from '@/components/ui/Modal'
+import EmptyState from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react'
@@ -291,13 +293,16 @@ export default function SuppliersPage() {
       </form>
 
       {/* Supplier Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto border border-[hsl(var(--border))]">
-            <h2 className="text-xl font-bold mb-4">
-              {editingSupplier ? 'Edit Supplier' : 'Add Supplier'}
-            </h2>
-
+      <Modal
+        open={showForm}
+        onClose={() => {
+          setShowForm(false)
+          setEditingSupplier(null)
+          setError('')
+        }}
+        title={editingSupplier ? 'Edit Supplier' : 'Add Supplier'}
+        size="md"
+      >
             {error && (
               <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
                 {error}
@@ -367,17 +372,20 @@ export default function SuppliersPage() {
                 </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Suppliers List */}
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : suppliers.length === 0 ? (
-        <div className="text-center py-8 text-[hsl(var(--muted-foreground))]">
-          {searchTerm ? 'No suppliers found' : 'No suppliers yet. Create your first supplier!'}
-        </div>
+        <EmptyState
+          title={searchTerm ? 'No suppliers found' : 'No suppliers yet'}
+          description={
+            searchTerm
+              ? 'Try a different search term.'
+              : 'Add your first supplier to start recording purchases.'
+          }
+        />
       ) : (
         <>
           <div className="overflow-x-auto">
@@ -443,24 +451,26 @@ export default function SuppliersPage() {
               <div className="text-sm text-gray-600">
                 Showing {suppliers.length} of {pagination.total} suppliers
               </div>
-              <div className="flex gap-2">
-                <button
+              <div className="flex gap-2 items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   Previous
-                </button>
-                <span className="px-4 py-2">
+                </Button>
+                <span className="px-2 text-sm text-gray-600">
                   Page {currentPage} of {pagination.totalPages}
                 </span>
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))}
                   disabled={currentPage === pagination.totalPages}
-                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   Next
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -469,9 +479,15 @@ export default function SuppliersPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && supplierToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Delete Supplier</h2>
+        <Modal
+          open
+          onClose={() => {
+            setShowDeleteConfirm(false)
+            setSupplierToDelete(null)
+          }}
+          title="Delete Supplier"
+          size="sm"
+        >
             <p className="text-sm text-gray-600 mb-4">
               Are you sure you want to delete <span className="font-semibold">{supplierToDelete.name}</span>?
             </p>
@@ -492,15 +508,14 @@ export default function SuppliersPage() {
               </Button>
               <Button
                 type="button"
+                variant="danger"
                 onClick={handleDeleteConfirm}
                 disabled={deletingSupplierId !== null}
-                className="bg-red-600 hover:bg-red-700 text-white"
               >
                 {deletingSupplierId ? 'Deleting...' : 'Delete'}
               </Button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

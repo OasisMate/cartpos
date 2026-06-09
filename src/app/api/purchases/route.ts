@@ -6,6 +6,7 @@ import {
   CreatePurchaseInput,
   PurchaseFilters,
 } from '@/lib/domain/purchases'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 // GET: List purchases
 export async function GET(request: NextRequest) {
@@ -77,6 +78,20 @@ export async function POST(request: NextRequest) {
     }
 
     const purchase = await createPurchase(user.currentShopId, input, user.id)
+
+    if (user.currentOrgId) {
+      await logActivity({
+        userId: user.id,
+        orgId: user.currentOrgId,
+        shopId: user.currentShopId,
+        action: ActivityActions.CREATE_PURCHASE,
+        entityType: EntityTypes.PURCHASE,
+        entityId: purchase.id,
+        details: { reference: purchase.reference, lines: input.lines.length },
+        ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+        userAgent: request.headers.get('user-agent') || null,
+      })
+    }
 
     return NextResponse.json({ purchase }, { status: 201 })
   } catch (error: any) {

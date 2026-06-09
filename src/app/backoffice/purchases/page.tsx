@@ -10,6 +10,9 @@ import { Pencil, Trash2, Loader2, Plus } from 'lucide-react'
 import { useToast } from '@/components/ui/ToastProvider'
 import { formatNumber } from '@/lib/utils/money'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
+import Button from '@/components/ui/Button'
+import Modal from '@/components/ui/Modal'
+import EmptyState from '@/components/ui/EmptyState'
 
 interface Product {
   id: string
@@ -552,23 +555,23 @@ export default function PurchasesPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Purchases</h1>
-        <button
-          onClick={openCreateForm}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
-        >
+        <Button onClick={openCreateForm} className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
           <span>New Purchase</span>
-        </button>
+        </Button>
       </div>
 
       {/* Purchase Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">
-              {editingPurchase ? 'Edit Purchase' : 'New Purchase'}
-            </h2>
-
+      <Modal
+        open={showForm}
+        onClose={() => {
+          setShowForm(false)
+          setEditingPurchase(null)
+          setError('')
+        }}
+        title={editingPurchase ? 'Edit Purchase' : 'New Purchase'}
+        size="xl"
+      >
             {error && (
               <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
                 {error}
@@ -849,34 +852,42 @@ export default function PurchasesPage() {
               </div>
 
               <div className="flex justify-end gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => {
                     setShowForm(false)
+                    setEditingPurchase(null)
                     setError('')
                   }}
-                  className="px-4 py-2 border rounded hover:bg-gray-50"
                 >
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                >
+                </Button>
+                <Button type="submit" disabled={submitting}>
                   {submitting ? (editingPurchase ? 'Updating...' : 'Creating...') : (editingPurchase ? 'Update Purchase' : 'Create Purchase')}
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Quick Add Product Modal */}
       {showQuickAddProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Quick Add Product</h2>
+        <Modal
+          open
+          onClose={() => {
+            setShowQuickAddProduct(false)
+            setQuickAddProductData({
+              name: '',
+              unit: 'pcs',
+              price: '',
+              costPrice: '',
+              barcode: '',
+              trackStock: true,
+            })
+          }}
+          title="Quick Add Product"
+          size="sm"
+        >
             <p className="text-sm text-gray-600 mb-4">
               Create a product quickly and add it to this purchase
             </p>
@@ -984,8 +995,9 @@ export default function PurchasesPage() {
             </div>
 
             <div className="flex justify-end gap-2 mt-6">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => {
                   setShowQuickAddProduct(false)
                   setQuickAddProductData({
@@ -997,31 +1009,26 @@ export default function PurchasesPage() {
                     trackStock: true,
                   })
                 }}
-                className="px-4 py-2 border rounded hover:bg-gray-50"
                 disabled={addingProduct}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleQuickAddProduct}
                 disabled={addingProduct || !quickAddProductData.name || !quickAddProductData.price}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
               >
                 {addingProduct ? 'Adding...' : 'Add Product'}
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Purchases List */}
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : purchases.length === 0 ? (
-        <div className="text-center py-8 text-gray-600">
-          No purchases yet. Create your first purchase!
-        </div>
+        <EmptyState title="No purchases yet" description="Record your first purchase to add stock and track suppliers." />
       ) : (
         <>
           <div className="overflow-x-auto">
@@ -1108,24 +1115,26 @@ export default function PurchasesPage() {
               <div className="text-sm text-gray-600">
                 Showing {purchases.length} of {pagination.total} purchases
               </div>
-              <div className="flex gap-2">
-                <button
+              <div className="flex gap-2 items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   Previous
-                </button>
-                <span className="px-4 py-2">
+                </Button>
+                <span className="px-2 text-sm text-gray-600">
                   Page {currentPage} of {pagination.totalPages}
                 </span>
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))}
                   disabled={currentPage === pagination.totalPages}
-                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   Next
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -1134,9 +1143,15 @@ export default function PurchasesPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && purchaseToDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Delete Purchase</h2>
+        <Modal
+          open
+          onClose={() => {
+            setShowDeleteConfirm(false)
+            setPurchaseToDelete(null)
+          }}
+          title="Delete Purchase"
+          size="sm"
+        >
             <p className="text-sm text-gray-600 mb-4">
               Are you sure you want to delete this purchase from{' '}
               <span className="font-semibold">
@@ -1147,28 +1162,27 @@ export default function PurchasesPage() {
               This will reverse all stock updates from this purchase. This action cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => {
                   setShowDeleteConfirm(false)
                   setPurchaseToDelete(null)
                 }}
                 disabled={deletingPurchaseId !== null}
-                className="px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="danger"
                 onClick={handleDeleteConfirm}
                 disabled={deletingPurchaseId !== null}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
               >
                 {deletingPurchaseId ? 'Deleting...' : 'Delete'}
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Product Dropdown Portal - Renders outside modal for proper visibility */}
