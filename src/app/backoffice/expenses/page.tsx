@@ -70,12 +70,6 @@ export default function ExpensesPage() {
                 )}
             </div>
 
-            <div className="bg-[hsl(var(--card))] rounded-lg border border-[hsl(var(--border))] p-4">
-                <h2 className="text-lg font-semibold mb-4">Recent Expenses</h2>
-                <p className="text-[hsl(var(--muted-foreground))]">
-                    Server-side list not implemented yet. Only pending offline expenses are shown above.
-                </p>
-            </div>
         </div>
     )
 }

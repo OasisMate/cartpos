@@ -65,8 +65,8 @@ export default function EndShiftButton({ summary }: EndShiftProps) {
                             </Button>
                             <Button
                                 onClick={() => {
-                                    // In a real app, this might trigger a logout or status update
-                                    window.location.href = '/login'
+                                    // Clear the session cookie via middleware, then land on login.
+                                    window.location.href = '/login?clearSession=1'
                                 }}
                                 className="flex-1 bg-red-600 hover:bg-red-700"
                             >
