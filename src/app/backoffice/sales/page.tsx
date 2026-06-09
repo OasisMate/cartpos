@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
+import EmptyState from '@/components/ui/EmptyState'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
 
 interface SaleLine {
@@ -245,7 +246,7 @@ export default function BackofficeSalesPage() {
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : sales.length === 0 ? (
-        <div className="text-center py-8 text-gray-600">No sales found.</div>
+        <EmptyState title="No sales found" description="Completed sales will appear here." />
       ) : (
         <>
           <div className="overflow-x-auto">

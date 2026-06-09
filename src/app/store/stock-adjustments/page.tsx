@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import Button from '@/components/ui/Button'
+import EmptyState from '@/components/ui/EmptyState'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 
@@ -262,9 +263,7 @@ export default function StockAdjustmentsPage() {
       {loading ? (
         <div className="text-center py-8">Loading...</div>
       ) : adjustments.length === 0 ? (
-        <div className="text-center py-8 text-gray-600">
-          No stock adjustments found.
-        </div>
+        <EmptyState title="No stock adjustments found" description="Record damage, expiry, returns or corrections to see them here." />
       ) : (
         <>
           <div className="overflow-x-auto">
