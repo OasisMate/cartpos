@@ -2,6 +2,47 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 
+// GET: recorded (synced) expenses for the current shop, most recent first.
+export async function GET(req: NextRequest) {
+    try {
+        const user = await getCurrentUser()
+        if (!user?.currentShopId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const limitParam = Number(req.nextUrl.searchParams.get('limit'))
+        const take = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 200) : 100
+
+        const expenses = await prisma.expense.findMany({
+            where: { shopId: user.currentShopId },
+            orderBy: { date: 'desc' },
+            take,
+            select: {
+                id: true,
+                category: true,
+                amount: true,
+                description: true,
+                date: true,
+                user: { select: { name: true } },
+            },
+        })
+
+        return NextResponse.json({
+            expenses: expenses.map((e) => ({
+                id: e.id,
+                category: e.category,
+                amount: Number(e.amount),
+                description: e.description,
+                date: e.date,
+                userName: e.user?.name || null,
+            })),
+        })
+    } catch (error: any) {
+        console.error('Error listing expenses:', error)
+        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 })
+    }
+}
+
 export async function POST(req: NextRequest) {
     try {
         const user = await getCurrentUser()

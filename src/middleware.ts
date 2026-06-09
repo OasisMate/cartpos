@@ -94,9 +94,12 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - icon.svg and other icon files (static assets)
+     * - manifest.json, sw.js, workbox-* (PWA files fetched without credentials;
+     *   redirecting these to /login broke the manifest and service-worker
+     *   registration, i.e. offline mode)
      * - files in public directory (handled by Next.js static file serving)
      */
-    '/((?!_next/static|_next/image|favicon.ico|icon).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon|manifest.json|sw.js|workbox).*)',
   ],
 }
 
