@@ -108,6 +108,7 @@ model Shop {
   stockLedger StockLedger[]
   payments    Payment[]
   customerLedger CustomerLedger[]
+  supplierLedger SupplierLedger[]
   expenses    Expense[]
   activityLogs ActivityLog[]
 
@@ -129,6 +130,7 @@ model User {
   organizations    OrganizationUser[]
   createdInvoices  Invoice[]   @relation("InvoiceCreatedBy")
   createdPurchases Purchase[]  @relation("PurchaseCreatedBy")
+  supplierLedgerEntries SupplierLedger[] @relation("SupplierLedgerCreatedBy")
   passwordResets   PasswordResetToken[]
   expenses         Expense[]
   activityLogs     ActivityLog[]
@@ -299,8 +301,44 @@ model Supplier {
   createdAt DateTime   @default(now())
   shop      Shop       @relation(fields: [shopId], references: [id])
   purchases Purchase[]
+  ledger    SupplierLedger[]
 
   @@index([shopId, name])
+}
+
+// Supplier payables ledger (what the shop OWES each supplier).
+// Mirror of CustomerLedger. Balance owed = sum(CREDIT) − sum(DEBIT).
+//   PURCHASE_CREDIT / OPENING_BALANCE => CREDIT (payable goes up)
+//   PAYMENT_MADE                      => DEBIT  (payable goes down)
+//   ADJUSTMENT                        => either direction
+model SupplierLedger {
+  id              String            @id @default(cuid())
+  shopId          String
+  supplierId      String
+  type            SupplierEntryType
+  direction       LedgerDirection
+  amount          Decimal           @db.Decimal(10, 2)
+  method          PaymentMethod?    // set for PAYMENT_MADE
+  note            String?
+  refType         String?           // e.g. PURCHASE
+  refId           String?           // e.g. purchase id
+  createdByUserId String?
+  createdAt       DateTime          @default(now())
+  shop            Shop              @relation(fields: [shopId], references: [id])
+  supplier        Supplier          @relation(fields: [supplierId], references: [id])
+  createdBy       User?             @relation("SupplierLedgerCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([shopId])
+  @@index([supplierId])
+  @@index([supplierId, createdAt])
+  @@index([shopId, supplierId])
+}
+
+enum SupplierEntryType {
+  PURCHASE_CREDIT   // bought on credit — payable increases
+  PAYMENT_MADE      // paid the supplier — payable decreases
+  OPENING_BALANCE   // initial amount already owed when supplier added
+  ADJUSTMENT
 }
 
 model Purchase {
