@@ -21,8 +21,10 @@ async function getData(customerId: string, userId: string) {
   })
   if (!customer) return null
 
-  // Balance = DEBIT - CREDIT
-  const [debits, credits, lastPayment] = await Promise.all([
+  // Balance = DEBIT - CREDIT (all credits reduce what's owed, incl. void reversals).
+  // "Payments received" must count only actual payments (type PAYMENT_RECEIVED) —
+  // void/opening adjustments are credits too but are NOT money received.
+  const [debits, credits, payments, lastPayment] = await Promise.all([
     prisma.customerLedger.aggregate({
       _sum: { amount: true },
       where: { customerId, direction: 'DEBIT' },
@@ -31,14 +33,18 @@ async function getData(customerId: string, userId: string) {
       _sum: { amount: true },
       where: { customerId, direction: 'CREDIT' },
     }),
+    prisma.customerLedger.aggregate({
+      _sum: { amount: true },
+      where: { customerId, type: 'PAYMENT_RECEIVED' },
+    }),
     prisma.customerLedger.findFirst({
-      where: { customerId, direction: 'CREDIT' },
+      where: { customerId, type: 'PAYMENT_RECEIVED' },
       orderBy: { createdAt: 'desc' },
     }),
   ])
   const balance = Number(debits._sum.amount || 0) - Number(credits._sum.amount || 0)
   const totalInvoiced = customer.invoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0)
-  const totalPaid = Number(credits._sum.amount || 0)
+  const totalPaid = Number(payments._sum.amount || 0)
   const lastInvoiceAt = customer.invoices[0]?.createdAt ?? null
   const lastPaymentAt = lastPayment?.createdAt ?? null
 
@@ -195,7 +201,7 @@ export default async function CustomerDetailPage({
                             : 'bg-orange-50 text-orange-700 border border-orange-100'
                         }`}
                       >
-                        {l.direction === 'CREDIT' ? 'Payment' : 'Udhaar'}
+                        {l.type === 'PAYMENT_RECEIVED' ? 'Payment' : l.type === 'SALE_UDHAAR' ? 'Udhaar' : 'Adjustment'}
                       </span>
                       <span className="font-semibold">
                         {l.direction === 'CREDIT' ? '-' : '+'}
