@@ -93,12 +93,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
 
-  // Close the user menu when clicking outside it. Clicks on the trigger button are
-  // inside userMenuRef, so this never fires for them — the button's own onClick toggles.
+  // Close the user menu when clicking outside it. Detect "inside" via a DOM attribute
+  // (not a ref): the sidebar renders the user section twice (desktop + mobile), so a
+  // single shared ref points at only one copy and would misread clicks on the other as
+  // "outside" — closing the menu the same tick the click opens it.
   useEffect(() => {
     if (!userMenuOpen) return
     function handleClickOutside(event: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement | null
+      if (!target?.closest('[data-user-menu]')) {
         setUserMenuOpen(false)
       }
     }
@@ -576,7 +579,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* User Profile Section */}
-          <div className="border-t border-blue-200 pt-3 relative" ref={userMenuRef}>
+          <div className="border-t border-blue-200 pt-3 relative" ref={userMenuRef} data-user-menu>
             {user && (
               <>
                 {/* User row: avatar + name (toggles menu) with the notification bell inline */}
