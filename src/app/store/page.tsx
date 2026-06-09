@@ -3,8 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getProductStockBatch } from '@/lib/domain/purchases'
-import { getShopTimezone } from '@/lib/db/shop-timezone'
-import { shopDayStartUTC } from '@/lib/utils/timezone'
+import { shopDayStartUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
 import { DashboardContent } from './_components/DashboardContent'
 
 export default async function StoreDashboardPage() {
@@ -27,28 +26,27 @@ export default async function StoreDashboardPage() {
     redirect('/')
   }
 
-  if (!isPlatform) {
-    const shop = await prisma.shop.findUnique({
-      where: { id: shopId },
-      select: { orgId: true },
-    })
-    if (shop?.orgId) {
-      const org = await prisma.organization.findUnique({
-        where: { id: shop.orgId },
-        select: { status: true },
-      })
-      if (org?.status !== 'ACTIVE') {
-        redirect('/waiting-approval')
-      }
-    }
+  // One round-trip: shop name + org status (for the access gate) + timezone.
+  // Folding these together (instead of 3 sequential queries) matters a lot
+  // because the DB is cross-region from the function.
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
+    select: {
+      name: true,
+      organization: { select: { status: true } },
+      settings: { select: { timezone: true } },
+    },
+  })
+
+  if (!isPlatform && shop?.organization && shop.organization.status !== 'ACTIVE') {
+    redirect('/waiting-approval')
   }
 
   // "Today" in the shop's own timezone so the dashboard matches what the
   // shopkeeper considers today (and agrees with Reports).
-  const today = shopDayStartUTC(await getShopTimezone(shopId))
+  const today = shopDayStartUTC(shop?.settings?.timezone || DEFAULT_TIMEZONE)
 
-  const [shop, invoicesToday, paymentsToday, udhaarInvoicesToday, trackedProducts] = await Promise.all([
-    prisma.shop.findUnique({ where: { id: shopId } }),
+  const [invoicesToday, paymentsToday, udhaarInvoicesToday, trackedProducts] = await Promise.all([
     prisma.invoice.count({
       where: { shopId, createdAt: { gte: today }, status: 'COMPLETED' },
     }),

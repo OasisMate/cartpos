@@ -2,8 +2,7 @@ import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getProductStockBatch } from '@/lib/domain/purchases'
-import { getShopTimezone } from '@/lib/db/shop-timezone'
-import { shopDayStartUTC } from '@/lib/utils/timezone'
+import { shopDayStartUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
 import CashierDashboardClient from './CashierDashboardClient'
 
 export default async function CashierDashboardPage() {
@@ -23,23 +22,21 @@ export default async function CashierDashboardPage() {
     redirect('/')
   }
 
-  // Check organization status
+  // One round-trip: shop name + org status (access gate) + timezone.
   const shop = await prisma.shop.findUnique({
     where: { id: shopId },
-    select: { orgId: true, name: true },
+    select: {
+      name: true,
+      organization: { select: { status: true } },
+      settings: { select: { timezone: true } },
+    },
   })
 
-  if (shop?.orgId && user.role !== 'PLATFORM_ADMIN') {
-    const org = await prisma.organization.findUnique({
-      where: { id: shop.orgId },
-      select: { status: true },
-    })
-    if (org?.status !== 'ACTIVE') {
-      redirect('/waiting-approval')
-    }
+  if (user.role !== 'PLATFORM_ADMIN' && shop?.organization && shop.organization.status !== 'ACTIVE') {
+    redirect('/waiting-approval')
   }
 
-  const today = shopDayStartUTC(await getShopTimezone(shopId))
+  const today = shopDayStartUTC(shop?.settings?.timezone || DEFAULT_TIMEZONE)
 
   // Get cashier's personal stats
   const [invoices, lowStockCandidates] = await Promise.all([
