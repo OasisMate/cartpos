@@ -15,6 +15,7 @@ export interface PurchaseInput {
   date?: number
   reference?: string
   notes?: string
+  onCredit?: boolean
   lines: Array<{
     productId: string
     quantity: number
@@ -40,6 +41,7 @@ export async function syncPendingPurchasesBatch(
       date: (rec as CachedPurchase).date,
       reference: (rec as CachedPurchase).reference,
       notes: (rec as CachedPurchase).notes,
+      onCredit: (rec as CachedPurchase).onCredit,
       lines: (rec as CachedPurchase).lines,
     }),
     endpoint: '/api/purchases/sync-batch',
