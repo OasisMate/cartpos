@@ -40,7 +40,7 @@ export default function NewExpensePage() {
             await saveExpense(expense, isOnline)
 
             show({ message: 'Expense saved', variant: 'success' })
-            router.push('/backoffice/expenses')
+            router.push('/store/expenses')
         } catch (err) {
             console.error('Error saving expense:', err)
             show({ message: 'Failed to save expense', variant: 'destructive' })

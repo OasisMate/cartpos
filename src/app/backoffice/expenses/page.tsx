@@ -34,7 +34,7 @@ export default function ExpensesPage() {
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">Expenses</h1>
-                <Link href="/backoffice/expenses/new">
+                <Link href="/store/expenses/new">
                     <Button>New Expense</Button>
                 </Link>
             </div>

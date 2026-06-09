@@ -5,6 +5,8 @@ import { hashPassword } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 import { PASSWORD_MIN_LENGTH } from '@/constants/auth'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
+import { withRetry } from '@/lib/db/connection-retry'
+import { isDatabaseConnectionError } from '@/lib/db/db-utils'
 
 export async function POST(request: Request) {
   try {
@@ -91,8 +93,10 @@ export async function POST(request: Request) {
     // Normalize org phone if provided, otherwise use contact phone
     const normalizedOrgPhone = orgPhone ? normalizePhone(orgPhone, 'PK') : normalizedPhone
 
-    // Create user, organization, default shop, and link as ORG_ADMIN
-    const result = await prisma.$transaction(async (tx) => {
+    // Create user, organization, default shop, and link as ORG_ADMIN.
+    // Wrapped in withRetry so a transient DB connection drop (P1001) retries
+    // with backoff instead of failing the sign-up outright.
+    const result = await withRetry(() => prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           name: contactName,
@@ -155,7 +159,7 @@ export async function POST(request: Request) {
       })
 
       return { userId: user.id, orgId: org.id, shopId: shop.id }
-    })
+    }))
 
     return NextResponse.json({ ok: true, ...result })
   } catch (e: any) {
@@ -172,6 +176,14 @@ export async function POST(request: Request) {
       if (field === 'cnic') {
         return NextResponse.json({ error: 'User with this CNIC already exists' }, { status: 409 })
       }
+    }
+    // Distinguish a transient connectivity problem (after retries were exhausted)
+    // from a genuine server error so the user knows it's worth trying again.
+    if (isDatabaseConnectionError(e)) {
+      return NextResponse.json(
+        { error: 'Could not reach the server. Please check your connection and try again.' },
+        { status: 503 }
+      )
     }
     return NextResponse.json({ error: 'Signup failed. Please try again.' }, { status: 500 })
   }

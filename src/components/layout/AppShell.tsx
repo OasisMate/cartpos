@@ -475,6 +475,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             icon: <BarChart3 className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
           {
+            label: t('expenses'),
+            href: '/store/expenses',
+            icon: <Receipt className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          },
+          {
             label: t('settings'),
             href: '/settings',
             icon: <Settings className="h-4 w-4 flex-shrink-0 text-gray-700" />,
