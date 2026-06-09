@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { suspendOrganization } from '@/lib/domain/organizations'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { notifyOrgAdmins } from '@/lib/domain/notifications'
 
 export async function POST(
   request: Request,
@@ -32,6 +33,12 @@ export async function POST(
       details: { name: updated?.name, reason: reason || null },
       ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
       userAgent: request.headers.get('user-agent') || null,
+    })
+
+    await notifyOrgAdmins(orgId, {
+      type: 'ORG_SUSPENDED',
+      title: 'Your account has been suspended',
+      body: reason ? `Reason: ${reason}` : 'Please contact support for details.',
     })
 
     return NextResponse.json({ organization: updated })

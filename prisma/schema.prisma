@@ -131,6 +131,7 @@ model User {
   createdInvoices  Invoice[]   @relation("InvoiceCreatedBy")
   createdPurchases Purchase[]  @relation("PurchaseCreatedBy")
   supplierLedgerEntries SupplierLedger[] @relation("SupplierLedgerCreatedBy")
+  notifications    Notification[]
   passwordResets   PasswordResetToken[]
   expenses         Expense[]
   activityLogs     ActivityLog[]
@@ -555,5 +556,27 @@ model ActivityLog {
   @@index([shopId, createdAt])
   @@index([userId, createdAt])
   @@index([action])
+}
+
+// -----------------------------------------------------
+// In-app notifications (per recipient user)
+// -----------------------------------------------------
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   // recipient
+  orgId     String?  // context
+  shopId    String?  // context
+  type      String   // LOW_STOCK, ORG_APPROVED, ORG_SUSPENDED, etc.
+  title     String
+  body      String?
+  href      String?  // optional in-app deep link
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }
 
