@@ -26,6 +26,7 @@ import {
   BarChart3,
   UserCircle,
   ChevronDown,
+  History,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
@@ -293,6 +294,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             { label: t('dashboard'), href: `/org/${contextOrgId}`, icon: <LayoutDashboard className={ico} /> },
             { label: t('stores'), href: `/org/${contextOrgId}/stores`, icon: <Store className={ico} /> },
             { label: t('users'), href: `/org/${contextOrgId}/users`, icon: <Users className={ico} /> },
+            { label: t('activity'), href: `/org/${contextOrgId}/activity`, icon: <History className={ico} /> },
           ],
         })
       }
@@ -342,6 +344,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           label: t('users'),
           href: '/org/users',
           icon: <Users className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+        },
+        {
+          label: t('activity'),
+          href: '/org/activity',
+          icon: <History className="h-4 w-4 flex-shrink-0 text-gray-700" />,
         },
         {
           label: t('settings'),
