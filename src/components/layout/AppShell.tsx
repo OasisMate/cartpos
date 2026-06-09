@@ -31,6 +31,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
 import Link from 'next/link'
+import NotificationBell from '@/components/layout/NotificationBell'
 
 // Submenu link component for store options (small text, no icons, hover-only)
 function SubmenuLink({ 
@@ -593,6 +594,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="border-t border-blue-200 pt-3 relative" ref={userMenuRef}>
             {user && (
               <>
+                <div className="mb-1">
+                  <NotificationBell sidebarOpen={open} />
+                </div>
                 <button
                   onClick={() => setUserMenuOpen((prev) => !prev)}
                   className={cn(

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { approveOrganization } from '@/lib/domain/organizations'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { notifyOrgAdmins } from '@/lib/domain/notifications'
 
 export async function POST(
   request: Request,
@@ -28,6 +29,13 @@ export async function POST(
     details: { name: updated?.name },
     ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
     userAgent: request.headers.get('user-agent') || null,
+  })
+
+  await notifyOrgAdmins(orgId, {
+    type: 'ORG_APPROVED',
+    title: 'Your account is approved 🎉',
+    body: 'Your organization has been approved. You can start using CartPOS now.',
+    href: '/',
   })
 
   return NextResponse.json({ organization: updated })
