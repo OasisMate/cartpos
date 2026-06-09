@@ -14,15 +14,12 @@ export function formatNumber(value: number | string | null | undefined): string 
   
   // Round to 2 decimal places to avoid floating point issues
   const rounded = roundToTwo(num)
-  
-  // If it's a whole number, return without decimals
-  if (Math.abs(rounded % 1) < Number.EPSILON) {
-    return Math.round(rounded).toString()
-  }
-  
-  // Otherwise, format to 2 decimal places and remove trailing zeros
-  const formatted = rounded.toFixed(2)
-  return formatted.replace(/\.?0+$/, '')
+
+  // Group thousands and show decimals only when needed (e.g. 1234.5 -> "1,234.5").
+  return rounded.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
 }
 
 /**

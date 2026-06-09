@@ -1,6 +1,7 @@
 'use client'
 
 import { useLanguage } from '@/contexts/LanguageContext'
+import { formatCurrency } from '@/lib/utils/money'
 
 interface DashboardContentProps {
   shopName: string
@@ -35,7 +36,7 @@ export function DashboardContent({
           <div className="card-body">
             <div className="text-sm text-[hsl(var(--muted-foreground))]">{t('payments_today')}</div>
             <div className="text-2xl font-semibold">
-              {Number(paymentsToday).toFixed(2)}
+              {formatCurrency(paymentsToday)}
             </div>
           </div>
         </div>
@@ -43,7 +44,7 @@ export function DashboardContent({
           <div className="card-body">
             <div className="text-sm text-[hsl(var(--muted-foreground))]">{t('udhaar_today')}</div>
             <div className="text-2xl font-semibold">
-              {Number(udhaarCreatedToday).toFixed(2)}
+              {formatCurrency(udhaarCreatedToday)}
             </div>
           </div>
         </div>

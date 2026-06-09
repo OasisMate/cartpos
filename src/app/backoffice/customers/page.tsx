@@ -8,6 +8,7 @@ import { getCustomersWithCache } from '@/lib/offline/data'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import { formatCurrency } from '@/lib/utils/money'
 
 interface Customer {
   id: string
@@ -258,7 +259,7 @@ export default function CustomersPage() {
                   <TR key={c.id}>
                     <TD>{c.name}</TD>
                     <TD>{c.phone || '—'}</TD>
-                    <TD className="text-right">{(c.balance ?? 0).toFixed(2)}</TD>
+                    <TD className="text-right">{formatCurrency(c.balance ?? 0)}</TD>
                     <TD className="text-right">
                       <Link href={`/store/customers/${c.id}`} className="btn btn-outline h-8 px-3">
                         View

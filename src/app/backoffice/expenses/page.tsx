@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import { getPendingExpenses, CachedExpense } from '@/lib/offline/indexedDb'
 import Button from '@/components/ui/Button'
+import { formatCurrency } from '@/lib/utils/money'
 
 export default function ExpensesPage() {
     const { user } = useAuth()
@@ -58,7 +59,7 @@ export default function ExpensesPage() {
                                     )}
                                 </div>
                                 <div className="text-right">
-                                    <div className="font-semibold">Rs.{exp.amount.toFixed(2)}</div>
+                                    <div className="font-semibold">{formatCurrency(exp.amount)}</div>
                                     <div className="text-sm text-[hsl(var(--muted-foreground))]">
                                         {new Date(exp.date).toLocaleDateString()}
                                     </div>

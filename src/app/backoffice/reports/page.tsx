@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { formatCurrency } from '@/lib/utils/money'
 
 interface RangeSummary {
   from: string
@@ -162,7 +163,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white border rounded-lg p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Sales</div>
-            <div className="text-2xl font-semibold">Rs {summary.totalSales.toFixed(2)}</div>
+            <div className="text-2xl font-semibold">{formatCurrency(summary.totalSales)}</div>
           </div>
           <div className="bg-white border rounded-lg p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Invoices</div>
@@ -171,7 +172,7 @@ export default function ReportsPage() {
           <div className="bg-white border rounded-lg p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Udhaar (Sales)</div>
             <div className="text-2xl font-semibold text-red-600">
-              Rs {summary.totalUdhaar.toFixed(2)}
+              {formatCurrency(summary.totalUdhaar)}
             </div>
           </div>
           <div className="bg-white border rounded-lg p-4 shadow-sm">
@@ -179,17 +180,17 @@ export default function ReportsPage() {
               Payments Received
             </div>
             <div className="text-2xl font-semibold text-emerald-700">
-              Rs {summary.totalPaymentsReceived.toFixed(2)}
+              {formatCurrency(summary.totalPaymentsReceived)}
             </div>
           </div>
           <div className="bg-white border rounded-lg p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Cost of Goods</div>
-            <div className="text-2xl font-semibold">Rs {summary.costOfGoods.toFixed(2)}</div>
+            <div className="text-2xl font-semibold">{formatCurrency(summary.costOfGoods)}</div>
           </div>
           <div className="bg-white border-2 border-emerald-200 rounded-lg p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Gross Profit</div>
             <div className={`text-2xl font-semibold ${summary.grossProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-              Rs {summary.grossProfit.toFixed(2)}
+              {formatCurrency(summary.grossProfit)}
             </div>
             <div className="text-[11px] text-gray-400 mt-1">Sales − cost of goods sold</div>
           </div>

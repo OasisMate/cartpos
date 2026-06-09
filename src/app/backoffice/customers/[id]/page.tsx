@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import CustomerInvoicesCard from '@/components/customers/CustomerInvoicesCard'
+import { formatCurrency } from '@/lib/utils/money'
 
 async function getData(customerId: string, userId: string) {
   const customer = await prisma.customer.findUnique({
@@ -86,7 +87,7 @@ export default async function CustomerDetailPage({
                 balance > 0 ? 'text-red-600' : balance < 0 ? 'text-emerald-600' : 'text-emerald-600'
               }`}
             >
-              {balance.toFixed(2)}
+              {formatCurrency(balance)}
             </div>
             <div className="text-xs text-[hsl(var(--muted-foreground))]">
               {balance > 0 ? 'Customer owes you this amount.' : 'No outstanding udhaar.'}
@@ -96,7 +97,7 @@ export default async function CustomerDetailPage({
         <div className="card">
           <div className="card-body space-y-1">
             <div className="text-sm text-[hsl(var(--muted-foreground))]">Total Udhaar Given</div>
-            <div className="text-xl font-semibold">{totalInvoiced.toFixed(2)}</div>
+            <div className="text-xl font-semibold">{formatCurrency(totalInvoiced)}</div>
             <div className="text-xs text-[hsl(var(--muted-foreground))]">
               {lastInvoiceAt ? `Last invoice: ${new Date(lastInvoiceAt).toLocaleDateString()}` : 'No invoices yet.'}
             </div>
@@ -105,7 +106,7 @@ export default async function CustomerDetailPage({
         <div className="card">
           <div className="card-body space-y-1">
             <div className="text-sm text-[hsl(var(--muted-foreground))]">Total Payments Received</div>
-            <div className="text-xl font-semibold text-emerald-700">{totalPaid.toFixed(2)}</div>
+            <div className="text-xl font-semibold text-emerald-700">{formatCurrency(totalPaid)}</div>
             <div className="text-xs text-[hsl(var(--muted-foreground))]">
               {lastPaymentAt
                 ? `Last payment: ${new Date(lastPaymentAt).toLocaleDateString()}`
@@ -198,7 +199,7 @@ export default async function CustomerDetailPage({
                       </span>
                       <span className="font-semibold">
                         {l.direction === 'CREDIT' ? '-' : '+'}
-                        {Number(l.amount).toFixed(2)}
+                        {formatCurrency(Number(l.amount))}
                       </span>
                     </div>
                   </li>
