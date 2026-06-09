@@ -1,4 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
+import type { PaymentMethod, SupplierEntryType, LedgerDirection } from '@prisma/client'
+
+const PAYMENT_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'OTHER']
 
 export interface CreateSupplierInput {
   name: string
@@ -206,4 +209,145 @@ export async function deleteSupplier(id: string, userId: string) {
   })
 
   return { success: true }
+}
+
+// -----------------------------------------------------
+// Supplier credit / payables ledger
+// Balance owed by the shop = sum(CREDIT) - sum(DEBIT)
+//   PURCHASE_CREDIT / OPENING_BALANCE => CREDIT (we owe more)
+//   PAYMENT_MADE                      => DEBIT  (we owe less)
+// -----------------------------------------------------
+
+export interface SupplierPaymentInput {
+  amount: number
+  method?: PaymentMethod
+  note?: string
+}
+
+export interface SupplierCreditInput {
+  amount: number
+  type?: Extract<SupplierEntryType, 'PURCHASE_CREDIT' | 'OPENING_BALANCE' | 'ADJUSTMENT'>
+  note?: string
+  refType?: string
+  refId?: string
+}
+
+/** Fetch a supplier's payables ledger plus running balance owed. */
+export async function getSupplierLedger(id: string, userId: string) {
+  const supplier = await prisma.supplier.findUnique({ where: { id } })
+  if (!supplier) {
+    throw new Error('Supplier not found')
+  }
+
+  const hasPermission = await checkSupplierPermission(userId, supplier.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to view this supplier')
+  }
+
+  const entries = await prisma.supplierLedger.findMany({
+    where: { supplierId: id },
+    orderBy: { createdAt: 'desc' },
+    include: { createdBy: { select: { name: true } } },
+  })
+
+  let balance = 0
+  for (const e of entries) {
+    const amt = Number(e.amount)
+    balance += e.direction === 'CREDIT' ? amt : -amt
+  }
+
+  return {
+    supplier: { id: supplier.id, name: supplier.name, phone: supplier.phone },
+    balance,
+    entries: entries.map((e) => ({
+      id: e.id,
+      type: e.type,
+      direction: e.direction,
+      amount: Number(e.amount),
+      method: e.method,
+      note: e.note,
+      refType: e.refType,
+      refId: e.refId,
+      createdAt: e.createdAt,
+      createdByName: e.createdBy?.name ?? null,
+    })),
+  }
+}
+
+/** Record a payment made to the supplier (reduces what the shop owes). */
+export async function recordSupplierPayment(
+  id: string,
+  input: SupplierPaymentInput,
+  userId: string
+) {
+  const supplier = await prisma.supplier.findUnique({ where: { id } })
+  if (!supplier) {
+    throw new Error('Supplier not found')
+  }
+
+  const hasPermission = await checkSupplierPermission(userId, supplier.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to manage this supplier')
+  }
+
+  const amount = Number(input.amount)
+  if (!amount || isNaN(amount) || amount <= 0) {
+    throw new Error('Payment amount must be greater than zero')
+  }
+
+  const method: PaymentMethod =
+    input.method && PAYMENT_METHODS.includes(input.method) ? input.method : 'CASH'
+
+  return prisma.supplierLedger.create({
+    data: {
+      shopId: supplier.shopId,
+      supplierId: id,
+      type: 'PAYMENT_MADE',
+      direction: 'DEBIT',
+      amount,
+      method,
+      note: input.note?.trim() || null,
+      refType: 'payment',
+      createdByUserId: userId,
+    },
+  })
+}
+
+/** Record an amount the shop owes a supplier (opening balance, purchase on credit, or adjustment). */
+export async function recordSupplierCredit(
+  id: string,
+  input: SupplierCreditInput,
+  userId: string
+) {
+  const supplier = await prisma.supplier.findUnique({ where: { id } })
+  if (!supplier) {
+    throw new Error('Supplier not found')
+  }
+
+  const hasPermission = await checkSupplierPermission(userId, supplier.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to manage this supplier')
+  }
+
+  const amount = Number(input.amount)
+  if (!amount || isNaN(amount) || amount <= 0) {
+    throw new Error('Amount must be greater than zero')
+  }
+
+  const type: SupplierEntryType = input.type || 'PURCHASE_CREDIT'
+  const direction: LedgerDirection = 'CREDIT'
+
+  return prisma.supplierLedger.create({
+    data: {
+      shopId: supplier.shopId,
+      supplierId: id,
+      type,
+      direction,
+      amount,
+      note: input.note?.trim() || null,
+      refType: input.refType || null,
+      refId: input.refId || null,
+      createdByUserId: userId,
+    },
+  })
 }
