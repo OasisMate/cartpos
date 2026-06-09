@@ -207,7 +207,8 @@ export default function WaitingApprovalPage() {
             We&apos;re reviewing your organization registration
           </p>
           <p className="text-base md:text-lg text-blue-200">
-            A platform admin will review your request shortly. You&apos;ll be notified once your organization is approved.
+            An administrator needs to approve your request before you can sign in. This page updates on its own
+            when your status changes — keep it open or check back later.
           </p>
         </div>
       </div>
@@ -226,6 +227,11 @@ export default function WaitingApprovalPage() {
               <p className="text-gray-600">
                 Your organization &quot;{orgStatus?.name || 'Unknown'}&quot; is waiting for admin approval.
               </p>
+            </div>
+
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-md text-sm text-blue-800">
+              Your account is created, but access stays locked until an administrator approves this request.
+              If it&apos;s urgent, please contact your administrator directly.
             </div>
 
             {orgStatus && (

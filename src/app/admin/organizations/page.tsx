@@ -37,6 +37,7 @@ interface Organization {
   approvedAt?: string | null
   rejectionReason?: string | null
   suspensionReason?: string | null
+  deletionScheduledAt?: string | null
   requestedByUser: RequestedByUser | null
   _count: {
     shops: number
@@ -58,6 +59,16 @@ export default function OrganizationsPage() {
   const [suspendReason, setSuspendReason] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE'>('ALL')
   const [enteringOrgId, setEnteringOrgId] = useState<string | null>(null)
+  // Safe-deletion state
+  const [showPurgeModal, setShowPurgeModal] = useState(false)
+  const [purgeOrgData, setPurgeOrgData] = useState<Organization | null>(null)
+  const [purgePreview, setPurgePreview] = useState<any>(null)
+  const [purgeConfirmName, setPurgeConfirmName] = useState('')
+  const [purgeDeleteOwner, setPurgeDeleteOwner] = useState(true)
+  const [purgeDeleteStaff, setPurgeDeleteStaff] = useState(true)
+  const [purging, setPurging] = useState(false)
+  const [purgeError, setPurgeError] = useState('')
+  const DELETION_BUFFER_DAYS = 7
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -181,6 +192,83 @@ export default function OrganizationsPage() {
     } finally {
       setActioningId(null)
     }
+  }
+
+  async function scheduleDeletion(id: string) {
+    try {
+      setActioningId(id)
+      const res = await fetch(`/api/admin/organizations/${id}/schedule-deletion`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to schedule deletion')
+      await fetchOrgs()
+    } catch (e: any) {
+      setError(e.message || 'Failed to schedule deletion')
+    } finally {
+      setActioningId(null)
+    }
+  }
+
+  async function cancelDeletion(id: string) {
+    try {
+      setActioningId(id)
+      const res = await fetch(`/api/admin/organizations/${id}/cancel-deletion`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel deletion')
+      await fetchOrgs()
+    } catch (e: any) {
+      setError(e.message || 'Failed to cancel deletion')
+    } finally {
+      setActioningId(null)
+    }
+  }
+
+  async function openPurge(org: Organization) {
+    setPurgeOrgData(org)
+    setPurgeConfirmName('')
+    setPurgeDeleteOwner(true)
+    setPurgeDeleteStaff(true)
+    setPurgeError('')
+    setPurgePreview(null)
+    setShowPurgeModal(true)
+    try {
+      const res = await fetch(`/api/admin/organizations/${org.id}/deletion-preview`)
+      const data = await res.json()
+      if (res.ok) setPurgePreview(data.preview)
+    } catch {
+      /* preview is best-effort */
+    }
+  }
+
+  async function confirmPurge() {
+    if (!purgeOrgData) return
+    setPurging(true)
+    setPurgeError('')
+    try {
+      const res = await fetch(`/api/admin/organizations/${purgeOrgData.id}/purge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confirmName: purgeConfirmName,
+          deleteOwner: purgeDeleteOwner,
+          deleteStaff: purgeDeleteStaff,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete organization')
+      setShowPurgeModal(false)
+      setPurgeOrgData(null)
+      await fetchOrgs()
+    } catch (e: any) {
+      setPurgeError(e.message || 'Failed to delete organization')
+    } finally {
+      setPurging(false)
+    }
+  }
+
+  // Whether a scheduled org's buffer has elapsed (purge allowed).
+  function purgeEligibleDate(org: Organization): Date | null {
+    if (!org.deletionScheduledAt) return null
+    return new Date(new Date(org.deletionScheduledAt).getTime() + DELETION_BUFFER_DAYS * 24 * 60 * 60 * 1000)
   }
 
   async function enterOrg(orgId: string) {
@@ -339,6 +427,52 @@ export default function OrganizationsPage() {
                       {actioningId === org.id ? 'Reactivating...' : 'Reactivate'}
                     </button>
                   )}
+                  {/* Accept a previously-rejected request */}
+                  {org.status === 'INACTIVE' && (
+                    <button
+                      className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                      disabled={actioningId === org.id}
+                      onClick={() => approveOrg(org.id)}
+                    >
+                      {actioningId === org.id ? 'Approving...' : 'Approve'}
+                    </button>
+                  )}
+                  {/* Safe deletion controls (rejected or suspended only) */}
+                  {(org.status === 'INACTIVE' || org.status === 'SUSPENDED') &&
+                    (org.deletionScheduledAt ? (
+                      <>
+                        <button
+                          className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50"
+                          disabled={actioningId === org.id}
+                          onClick={() => cancelDeletion(org.id)}
+                        >
+                          Cancel deletion
+                        </button>
+                        {(() => {
+                          const due = purgeEligibleDate(org)
+                          return due && new Date() >= due ? (
+                            <button
+                              className="px-3 py-1 bg-red-700 text-white rounded text-sm hover:bg-red-800"
+                              onClick={() => openPurge(org)}
+                            >
+                              Delete permanently
+                            </button>
+                          ) : (
+                            <span className="px-2 text-xs text-gray-500 self-center whitespace-nowrap">
+                              Deletable {due?.toLocaleDateString()}
+                            </span>
+                          )
+                        })()}
+                      </>
+                    ) : (
+                      <button
+                        className="px-3 py-1 border border-red-300 text-red-700 rounded text-sm hover:bg-red-50 disabled:opacity-50"
+                        disabled={actioningId === org.id}
+                        onClick={() => scheduleDeletion(org.id)}
+                      >
+                        Schedule deletion
+                      </button>
+                    ))}
                 </div>
               </div>
 
@@ -428,6 +562,14 @@ export default function OrganizationsPage() {
                     {org.rejectionReason ? 'Rejection Reason:' : 'Suspension Reason:'}
                   </p>
                   <p className="text-sm text-red-700">{org.rejectionReason || org.suspensionReason}</p>
+                </div>
+              )}
+
+              {org.deletionScheduledAt && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                  ⏳ Scheduled for deletion — can be permanently deleted on{' '}
+                  <span className="font-medium">{purgeEligibleDate(org)?.toLocaleDateString()}</span>.
+                  Click <span className="font-medium">Cancel deletion</span> to restore it any time before then.
                 </div>
               )}
             </div>
@@ -590,6 +732,80 @@ export default function OrganizationsPage() {
                 className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
               >
                 {actioningId === selectedOrg.id ? 'Suspending...' : 'Suspend'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Permanent Delete (purge) Modal */}
+      {showPurgeModal && purgeOrgData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-1 text-red-700">Delete organization permanently</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This permanently removes <span className="font-semibold">{purgeOrgData.name}</span> and all of its data.
+              This cannot be undone.
+            </p>
+
+            {purgeError && <div className="mb-3 p-2 bg-red-100 text-red-700 rounded text-sm">{purgeError}</div>}
+
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+              {purgePreview ? (
+                <>
+                  <p className="font-medium mb-1">The following will be permanently deleted:</p>
+                  <p>
+                    {purgePreview.shops} shop(s) · {purgePreview.products} products · {purgePreview.invoices} invoices ·{' '}
+                    {purgePreview.customers} customers · {purgePreview.suppliers} suppliers · {purgePreview.purchases} purchases
+                  </p>
+                </>
+              ) : (
+                <p>Loading what will be removed…</p>
+              )}
+            </div>
+
+            <div className="space-y-2 mb-4">
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" checked={purgeDeleteOwner} onChange={(e) => setPurgeDeleteOwner(e.target.checked)} className="mt-0.5" />
+                <span>
+                  Also delete the owner account
+                  {purgePreview?.owner && <span className="text-gray-500"> ({purgePreview.owner.email})</span>}
+                  <span className="block text-xs text-gray-500">Frees their email / phone / CNIC to sign up again.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" checked={purgeDeleteStaff} onChange={(e) => setPurgeDeleteStaff(e.target.checked)} className="mt-0.5" />
+                <span>
+                  Also delete {purgePreview?.staffCount ?? 0} staff account(s) unique to this org
+                  <span className="block text-xs text-gray-500">Accounts shared with another organization are never touched.</span>
+                </span>
+              </label>
+            </div>
+
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Type <span className="font-mono font-semibold">{purgeOrgData.name}</span> to confirm
+            </label>
+            <input
+              value={purgeConfirmName}
+              onChange={(e) => setPurgeConfirmName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md mb-4"
+              placeholder={purgeOrgData.name}
+            />
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setShowPurgeModal(false); setPurgeOrgData(null) }}
+                disabled={purging}
+                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPurge}
+                disabled={purging || purgeConfirmName.trim() !== purgeOrgData.name}
+                className="px-4 py-2 bg-red-700 text-white rounded-md hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {purging ? 'Deleting…' : 'Delete permanently'}
               </button>
             </div>
           </div>

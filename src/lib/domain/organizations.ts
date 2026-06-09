@@ -218,9 +218,160 @@ export async function reactivateOrganization(orgId: string, adminUserId: string)
     data: {
       status: 'ACTIVE',
       suspensionReason: null, // Clear suspension reason
+      // Reactivating cancels any scheduled deletion.
+      deletionScheduledAt: null,
+      deletionScheduledBy: null,
     },
   })
   return updated
+}
+
+// --- Safe organization deletion (schedule -> buffer -> manual purge) ---
+
+export const ORG_DELETION_BUFFER_DAYS = 7
+
+function purgeEligibleAt(scheduledAt: Date): Date {
+  return new Date(scheduledAt.getTime() + ORG_DELETION_BUFFER_DAYS * 24 * 60 * 60 * 1000)
+}
+
+/** Start the deletion timer. Only rejected (INACTIVE) or suspended orgs are eligible. */
+export async function scheduleOrgDeletion(orgId: string, adminUserId: string) {
+  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { status: true } })
+  if (!org) throw new Error('Organization not found')
+  if (org.status !== 'INACTIVE' && org.status !== 'SUSPENDED') {
+    throw new Error('Only rejected or suspended organizations can be scheduled for deletion')
+  }
+  return prisma.organization.update({
+    where: { id: orgId },
+    data: { deletionScheduledAt: new Date(), deletionScheduledBy: adminUserId },
+  })
+}
+
+/** Cancel a scheduled deletion (restore). */
+export async function cancelOrgDeletion(orgId: string, _adminUserId: string) {
+  return prisma.organization.update({
+    where: { id: orgId },
+    data: { deletionScheduledAt: null, deletionScheduledBy: null },
+  })
+}
+
+/** Counts shown to the admin before purging, plus eligibility. */
+export async function getOrgDeletionPreview(orgId: string) {
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: {
+      name: true, status: true, requestedBy: true, deletionScheduledAt: true,
+      shops: { select: { id: true } },
+    },
+  })
+  if (!org) throw new Error('Organization not found')
+  const shopIds = org.shops.map((s) => s.id)
+
+  const [products, invoices, customers, suppliers, purchases, shopUsers, orgUsers, owner] = await Promise.all([
+    prisma.product.count({ where: { shopId: { in: shopIds } } }),
+    prisma.invoice.count({ where: { shopId: { in: shopIds } } }),
+    prisma.customer.count({ where: { shopId: { in: shopIds } } }),
+    prisma.supplier.count({ where: { shopId: { in: shopIds } } }),
+    prisma.purchase.count({ where: { shopId: { in: shopIds } } }),
+    prisma.userShop.findMany({ where: { shopId: { in: shopIds } }, select: { userId: true } }),
+    prisma.organizationUser.findMany({ where: { orgId }, select: { userId: true } }),
+    org.requestedBy
+      ? prisma.user.findUnique({ where: { id: org.requestedBy }, select: { id: true, name: true, email: true } })
+      : Promise.resolve(null),
+  ])
+
+  const staff = new Set([...shopUsers.map((u) => u.userId), ...orgUsers.map((u) => u.userId)])
+  if (org.requestedBy) staff.delete(org.requestedBy)
+
+  const scheduledAt = org.deletionScheduledAt
+  return {
+    name: org.name,
+    status: org.status,
+    shops: shopIds.length,
+    products,
+    invoices,
+    customers,
+    suppliers,
+    purchases,
+    owner: owner ? { id: owner.id, name: owner.name, email: owner.email } : null,
+    staffCount: staff.size,
+    deletionScheduledAt: scheduledAt,
+    purgeEligibleAt: scheduledAt ? purgeEligibleAt(scheduledAt) : null,
+    canPurgeNow: scheduledAt ? new Date() >= purgeEligibleAt(scheduledAt) : false,
+  }
+}
+
+/**
+ * Permanently delete an org and all its data. Guarded: never ACTIVE, must be
+ * scheduled, and the buffer must have elapsed. Optionally removes the owner's
+ * and/or staff login accounts (only when they have no other memberships).
+ */
+export async function purgeOrganization(
+  orgId: string,
+  adminUserId: string,
+  opts: { deleteOwner?: boolean; deleteStaff?: boolean } = {}
+) {
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { name: true, status: true, requestedBy: true, deletionScheduledAt: true, shops: { select: { id: true } } },
+  })
+  if (!org) throw new Error('Organization not found')
+  if (org.status === 'ACTIVE') throw new Error('Active organizations cannot be deleted. Suspend it first.')
+  if (!org.deletionScheduledAt) throw new Error('Deletion has not been scheduled for this organization')
+  if (new Date() < purgeEligibleAt(org.deletionScheduledAt)) {
+    throw new Error('The deletion buffer has not elapsed yet')
+  }
+
+  const shopIds = org.shops.map((s) => s.id)
+  const ownerId = org.requestedBy || null
+
+  let staffIds: string[] = []
+  if (opts.deleteStaff) {
+    const [shopUsers, orgUsers] = await Promise.all([
+      prisma.userShop.findMany({ where: { shopId: { in: shopIds } }, select: { userId: true } }),
+      prisma.organizationUser.findMany({ where: { orgId }, select: { userId: true } }),
+    ])
+    const ids = new Set([...shopUsers.map((u) => u.userId), ...orgUsers.map((u) => u.userId)])
+    if (ownerId) ids.delete(ownerId)
+    staffIds = [...ids]
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (shopIds.length) {
+      await tx.invoiceLine.deleteMany({ where: { invoice: { shopId: { in: shopIds } } } })
+      await tx.purchaseLine.deleteMany({ where: { purchase: { shopId: { in: shopIds } } } })
+      await tx.payment.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.customerLedger.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.stockLedger.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.invoice.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.purchase.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.product.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.customer.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.supplier.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.expense.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.shopSettings.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.userShop.deleteMany({ where: { shopId: { in: shopIds } } })
+    }
+    await tx.activityLog.deleteMany({ where: { orgId } })
+    await tx.organizationUser.deleteMany({ where: { orgId } })
+    await tx.shop.deleteMany({ where: { orgId } })
+    await tx.organization.delete({ where: { id: orgId } })
+
+    // Remove orphaned user accounts the admin opted to delete.
+    const candidates = [...(opts.deleteOwner && ownerId ? [ownerId] : []), ...staffIds]
+    for (const uid of candidates) {
+      const [shopCount, orgCount, u] = await Promise.all([
+        tx.userShop.count({ where: { userId: uid } }),
+        tx.organizationUser.count({ where: { userId: uid } }),
+        tx.user.findUnique({ where: { id: uid }, select: { role: true } }),
+      ])
+      if (u && u.role !== 'PLATFORM_ADMIN' && shopCount === 0 && orgCount === 0) {
+        await tx.user.delete({ where: { id: uid } })
+      }
+    }
+  }, { timeout: 30000 })
+
+  return { name: org.name }
 }
 
 
