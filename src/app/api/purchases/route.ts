@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       date: body.date ? new Date(body.date) : undefined,
       reference: body.reference,
       notes: body.notes,
+      onCredit: body.onCredit === true,
       lines: body.lines.map((line: any) => ({
         productId: line.productId,
         quantity: parseFloat(line.quantity),
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
         action: ActivityActions.CREATE_PURCHASE,
         entityType: EntityTypes.PURCHASE,
         entityId: purchase.id,
-        details: { reference: purchase.reference, lines: input.lines.length },
+        details: { reference: purchase.reference, lines: input.lines.length, onCredit: input.onCredit === true },
         ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
         userAgent: request.headers.get('user-agent') || null,
       })

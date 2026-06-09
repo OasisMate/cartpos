@@ -94,6 +94,7 @@ export default function PurchasesPage() {
     date: new Date().toISOString().split('T')[0],
     reference: '',
     notes: '',
+    onCredit: false,
     lines: [] as PurchaseLine[],
   })
   const [error, setError] = useState('')
@@ -347,6 +348,7 @@ export default function PurchasesPage() {
       date: new Date().toISOString().split('T')[0],
       reference: '',
       notes: '',
+      onCredit: false,
       lines: [{ productId: '', quantity: '', unitCost: '', unit: 'piece' }],
     })
     setError('')
@@ -362,6 +364,7 @@ export default function PurchasesPage() {
       date: new Date(purchase.date).toISOString().split('T')[0],
       reference: purchase.reference || '',
       notes: purchase.notes || '',
+      onCredit: false,
       lines: purchase.lines.map((line) => ({
         productId: line.product.id,
         quantity: formatNumber(parseFloat(line.quantity)),
@@ -498,6 +501,7 @@ export default function PurchasesPage() {
         date: formData.date ? new Date(formData.date).getTime() : undefined,
         reference: formData.reference || undefined,
         notes: formData.notes || undefined,
+        onCredit: formData.onCredit && !!formData.supplierId,
         lines: validLines.map((line) => ({
           productId: line.productId,
           quantity: line.unit === 'carton'
@@ -631,6 +635,26 @@ export default function PurchasesPage() {
                   placeholder="Additional notes"
                 />
               </div>
+
+              {!editingPurchase && (
+                <div className="mb-4 rounded border border-dashed border-orange-300 bg-orange-50/50 p-3">
+                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.onCredit}
+                      disabled={!formData.supplierId}
+                      onChange={(e) => setFormData({ ...formData, onCredit: e.target.checked })}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <span>Purchase on credit — add total to supplier balance</span>
+                  </label>
+                  <p className="mt-1 ml-6 text-xs text-[hsl(var(--muted-foreground))]">
+                    {formData.supplierId
+                      ? 'The purchase total (qty × cost) will be added to what you owe this supplier.'
+                      : 'Select a supplier above to enable credit.'}
+                  </p>
+                </div>
+              )}
 
               {/* Lines Table */}
               <div className="mb-4">

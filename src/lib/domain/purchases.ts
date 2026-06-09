@@ -14,6 +14,8 @@ export interface CreatePurchaseInput {
   notes?: string
   /** Offline client id for idempotent sync (dedupes re-synced purchases). */
   clientId?: string
+  /** When true, add the purchase total to the supplier's payable balance (bought on credit). */
+  onCredit?: boolean
   lines: PurchaseLineInput[]
 }
 
@@ -100,6 +102,11 @@ export async function createPurchase(
     }
   }
 
+  // A credit purchase must be tied to a supplier (you owe someone).
+  if (input.onCredit && !input.supplierId) {
+    throw new Error('Select a supplier to record a purchase on credit')
+  }
+
   // Validate all products exist and belong to shop
   const productIds = input.lines.map((line) => line.productId)
   const products = await prisma.product.findMany({
@@ -176,6 +183,29 @@ export async function createPurchase(
         await tx.product.update({
           where: { id: lineInput.productId },
           data: { costPrice: unitCost },
+        })
+      }
+    }
+
+    // Purchase on credit: add the total to the supplier's payable balance.
+    if (input.onCredit && input.supplierId) {
+      const total = input.lines.reduce(
+        (sum, l) => sum + (l.unitCost ? l.unitCost * l.quantity : 0),
+        0
+      )
+      if (total > 0) {
+        await tx.supplierLedger.create({
+          data: {
+            shopId,
+            supplierId: input.supplierId,
+            type: 'PURCHASE_CREDIT',
+            direction: 'CREDIT',
+            amount: new Decimal(total),
+            note: purchase.reference ? `Purchase ${purchase.reference}` : 'Purchase on credit',
+            refType: 'purchase',
+            refId: purchase.id,
+            createdByUserId: userId,
+          },
         })
       }
     }

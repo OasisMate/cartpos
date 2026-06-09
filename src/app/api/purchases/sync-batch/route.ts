@@ -8,6 +8,7 @@ interface SyncPurchaseInput {
   date?: number
   reference?: string
   notes?: string
+  onCredit?: boolean
   lines: Array<{
     productId: string
     quantity: number
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
           date: p.date ? new Date(p.date) : undefined,
           reference: p.reference,
           notes: p.notes,
+          onCredit: p.onCredit === true,
           clientId: p.id,
           lines: p.lines.map((l) => ({
             productId: l.productId,

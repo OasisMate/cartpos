@@ -353,6 +353,7 @@ export interface CachedPurchase {
   date?: number
   reference?: string
   notes?: string
+  onCredit?: boolean
   lines: Array<{
     productId: string
     quantity: number
