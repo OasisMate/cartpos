@@ -26,8 +26,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const filters: SupplierFilters = {
       search: searchParams.get('search') || undefined,
-      page: parseInt(searchParams.get('page') || '1'),
-      limit: parseInt(searchParams.get('limit') || '50'),
+      page: Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1),
+      limit: Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50)),
     }
 
     const result = await listSuppliers(user.currentShopId, filters)

@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import EmptyState from '@/components/ui/EmptyState'
+import Button from '@/components/ui/Button'
+import Modal from '@/components/ui/Modal'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
 
 interface SaleLine {
@@ -276,7 +278,9 @@ export default function BackofficeSalesPage() {
                       <TD>{s.status}</TD>
                       <TD className="text-center">
                       <div className="flex justify-center gap-2">
-                        <button
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={async () => {
                             try {
                               const response = await fetch(`/api/sales/${s.id}`)
@@ -289,27 +293,18 @@ export default function BackofficeSalesPage() {
                               console.error('Failed to load receipt:', err)
                             }
                           }}
-                          className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
                           title="View receipt"
                         >
                           Print
-                        </button>
+                        </Button>
                         {s.status === 'VOID' ? (
-                          <button
-                            onClick={() => deleteSale(s.id)}
-                            className="px-3 py-1 text-sm border border-red-200 text-red-600 rounded hover:bg-red-50"
-                            title="Delete voided sale"
-                          >
+                          <Button variant="danger" size="sm" onClick={() => deleteSale(s.id)} title="Delete voided sale">
                             Delete
-                          </button>
+                          </Button>
                         ) : (
-                          <button
-                            onClick={() => openVoidModal(s)}
-                            className="px-3 py-1 text-sm border border-red-600 text-red-600 rounded hover:bg-red-50 font-semibold"
-                            title="Void sale"
-                          >
+                          <Button variant="danger" size="sm" onClick={() => openVoidModal(s)} title="Void sale">
                             Void
-                          </button>
+                          </Button>
                         )}
                       </div>
                       </TD>
@@ -326,23 +321,23 @@ export default function BackofficeSalesPage() {
                 Showing {sales.length} of {pagination.total} sales
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   Previous
-                </button>
+                </Button>
                 <span className="px-4 py-2">
                   Page {currentPage} of {pagination.totalPages}
                 </span>
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))}
                   disabled={currentPage === pagination.totalPages}
-                  className="px-4 py-2 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   Next
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -350,59 +345,42 @@ export default function BackofficeSalesPage() {
       )}
 
       {/* Void Modal */}
-      {voidModalOpen && saleToVoid && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div 
-            className="absolute inset-0 bg-black/40" 
-            onClick={() => {
-              if (!voiding) {
-                setVoidModalOpen(false)
-                setSaleToVoid(null)
-              }
-            }} 
-          />
-          <div className="relative bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-red-600">Void Sale</h2>
-            {voiding ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mb-4"></div>
-                <p className="text-gray-700 text-center">
-                  Processing... Please wait
-                </p>
-              </div>
-            ) : (
-              <>
-                <p className="text-gray-700 mb-6">
-                  Are you sure you want to void this sale? This will reverse stock and ledger entries.
-                </p>
-                <div className="space-y-3">
-                  <button
-                    onClick={() => handleVoid(true)}
-                    disabled={voiding}
-                    className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Void and Delete
-                  </button>
-                  <button
-                    onClick={() => handleVoid(false)}
-                    disabled={voiding}
-                    className="w-full px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Only Void
-                  </button>
-                  <button
-                    onClick={() => { setVoidModalOpen(false); setSaleToVoid(null) }}
-                    disabled={voiding}
-                    className="w-full px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
+      <Modal
+        open={voidModalOpen && !!saleToVoid}
+        onClose={() => {
+          if (!voiding) {
+            setVoidModalOpen(false)
+            setSaleToVoid(null)
+          }
+        }}
+        title="Void Sale"
+      >
+        {voiding ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mb-4"></div>
+            <p className="text-gray-700 text-center">
+              Processing... Please wait
+            </p>
           </div>
-        </div>
-      )}
+        ) : (
+          <>
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to void this sale? This will reverse stock and ledger entries.
+            </p>
+            <div className="space-y-3">
+              <Button variant="danger" onClick={() => handleVoid(true)} disabled={voiding} className="w-full">
+                Void and Delete
+              </Button>
+              <Button variant="primary" onClick={() => handleVoid(false)} disabled={voiding} className="w-full">
+                Only Void
+              </Button>
+              <Button variant="outline" onClick={() => { setVoidModalOpen(false); setSaleToVoid(null) }} disabled={voiding} className="w-full">
+                Cancel
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
 
       {/* Receipt Modal */}
       {receiptModalOpen && receiptInvoice && (

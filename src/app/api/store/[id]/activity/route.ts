@@ -50,8 +50,10 @@ export async function GET(
     const endDate = searchParams.get('endDate')
     const userId = searchParams.get('userId')
     const action = searchParams.get('action')
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '50')
+    const rawPage = parseInt(searchParams.get('page') || '1', 10)
+    const rawLimit = parseInt(searchParams.get('limit') || '50', 10)
+    const page = Number.isFinite(rawPage) ? Math.max(rawPage, 1) : 1
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50
     const skip = (page - 1) * limit
 
     const where: any = {
