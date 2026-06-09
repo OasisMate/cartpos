@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || undefined
     const balanceOnly = searchParams.get('balance') === 'true'
-    const limit = parseInt(searchParams.get('limit') || '1000', 10)
+    // Clamp to a sane range so a client can't request an unbounded result set.
+    const rawLimit = parseInt(searchParams.get('limit') || '500', 10)
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 500
 
     const customers = await prisma.customer.findMany({
       where: {
