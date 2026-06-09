@@ -13,6 +13,7 @@ import { sumCartLines, calculateTotals, formatNumber, formatCurrency, roundToTwo
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/ToastProvider'
 import { Minus, Plus, X, ShoppingCart, Package, Trash2, Edit3 } from 'lucide-react'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
@@ -1312,7 +1313,11 @@ export default function POSPage() {
         {/* Product Grid */}
         <div className="p-4">
           {loading ? (
-            <div className="text-center py-8">Loading products...</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 p-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-[84px]" />
+              ))}
+            </div>
           ) : products.length === 0 ? (
             <div className="text-center py-8 text-[hsl(var(--muted-foreground))]">
               No products available

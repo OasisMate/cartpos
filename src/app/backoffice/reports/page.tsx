@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCurrency } from '@/lib/utils/money'
+import { SkeletonCards } from '@/components/ui/Skeleton'
 
 interface RangeSummary {
   from: string
@@ -158,7 +159,7 @@ export default function ReportsPage() {
       {error && <div className="mb-2 p-3 bg-red-100 text-red-700 rounded text-sm">{error}</div>}
 
       {loading ? (
-        <div className="text-gray-600 text-sm">Loading summary...</div>
+        <SkeletonCards count={6} />
       ) : summary ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white border rounded-lg p-4 shadow-sm">
