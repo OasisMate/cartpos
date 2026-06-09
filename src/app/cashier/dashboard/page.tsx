@@ -2,6 +2,8 @@ import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getProductStockBatch } from '@/lib/domain/purchases'
+import { getShopTimezone } from '@/lib/db/shop-timezone'
+import { shopDayStartUTC } from '@/lib/utils/timezone'
 import CashierDashboardClient from './CashierDashboardClient'
 
 export default async function CashierDashboardPage() {
@@ -37,7 +39,7 @@ export default async function CashierDashboardPage() {
     }
   }
 
-  const today = new Date(new Date().toDateString())
+  const today = shopDayStartUTC(await getShopTimezone(shopId))
 
   // Get cashier's personal stats
   const [invoices, lowStockCandidates] = await Promise.all([

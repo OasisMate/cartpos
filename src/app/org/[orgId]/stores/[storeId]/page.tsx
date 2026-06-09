@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { getShopTimezone } from '@/lib/db/shop-timezone'
+import { shopDayStartUTC } from '@/lib/utils/timezone'
 
 export default async function OrgStoreDashboardPage({
   params,
@@ -34,7 +36,7 @@ export default async function OrgStoreDashboardPage({
     redirect('/')
   }
 
-  const today = new Date(new Date().toDateString())
+  const today = shopDayStartUTC(await getShopTimezone(storeId))
 
   const [invoicesToday, paymentsToday, udhaarCreatedToday, lowStockCount] = await Promise.all([
     prisma.invoice.count({

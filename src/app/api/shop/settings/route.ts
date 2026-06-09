@@ -91,6 +91,7 @@ export async function PUT(request: NextRequest) {
       receiptHeaderDisplay,
       cardFeePercent,
       allowCardFeeOverride,
+      timezone,
     } = body
 
     // Update or create settings
@@ -108,6 +109,7 @@ export async function PUT(request: NextRequest) {
         ...(receiptHeaderDisplay !== undefined && { receiptHeaderDisplay }),
         ...(cardFeePercent !== undefined && { cardFeePercent }),
         ...(allowCardFeeOverride !== undefined && { allowCardFeeOverride }),
+        ...(timezone !== undefined && timezone && { timezone }),
       },
       create: {
         shopId: user.currentShopId,
@@ -122,6 +124,7 @@ export async function PUT(request: NextRequest) {
         receiptHeaderDisplay: receiptHeaderDisplay || 'NAME_ONLY',
         cardFeePercent: (cardFeePercent ?? 0) as any,
         allowCardFeeOverride: allowCardFeeOverride ?? false,
+        ...(timezone && { timezone }),
       },
     })
 

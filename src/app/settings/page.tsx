@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer, Globe } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
+import { COMMON_TIMEZONES } from '@/lib/utils/timezone'
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
@@ -38,6 +39,7 @@ export default function SettingsPage() {
     receiptHeaderDisplay: 'NAME_ONLY' as 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH',
     cardFeePercent: 0,
     allowCardFeeOverride: false,
+    timezone: 'Asia/Karachi',
   })
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -79,6 +81,7 @@ export default function SettingsPage() {
             receiptHeaderDisplay: data.settings?.receiptHeaderDisplay || 'NAME_ONLY',
             cardFeePercent: Number(data.settings?.cardFeePercent || 0),
             allowCardFeeOverride: Boolean(data.settings?.allowCardFeeOverride || false),
+            timezone: data.settings?.timezone || 'Asia/Karachi',
           })
           if (data.settings?.logoUrl) {
             setLogoPreview(data.settings.logoUrl)
@@ -285,6 +288,7 @@ export default function SettingsPage() {
           receiptHeaderDisplay: shopSettings.receiptHeaderDisplay,
           cardFeePercent: shopSettings.cardFeePercent,
           allowCardFeeOverride: shopSettings.allowCardFeeOverride,
+          timezone: shopSettings.timezone,
         }),
       })
 
@@ -657,6 +661,28 @@ export default function SettingsPage() {
                   </select>
                   <p className="mt-1 text-xs text-gray-500">
                     Choose what to display at the top of receipts.
+                  </p>
+                </div>
+
+                {/* Timezone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Shop Timezone
+                  </label>
+                  <select
+                    value={shopSettings.timezone}
+                    onChange={(e) => setShopSettings({ ...shopSettings, timezone: e.target.value })}
+                    disabled={savingSettings}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  >
+                    {COMMON_TIMEZONES.map((tz) => (
+                      <option key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Used to decide what counts as &quot;today&quot; on dashboards and reports.
                   </p>
                 </div>
 

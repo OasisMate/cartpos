@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { canViewReports } from '@/lib/permissions'
 import { getDailySummary } from '@/lib/domain/reports'
+import { getShopTimezone } from '@/lib/db/shop-timezone'
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +24,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing date' }, { status: 400 })
     }
 
-    const summary = await getDailySummary(user.currentShopId, date)
+    const timezone = await getShopTimezone(user.currentShopId)
+    const summary = await getDailySummary(user.currentShopId, date, timezone)
     return NextResponse.json({ summary })
   } catch (error: any) {
     console.error('Daily summary error:', error)

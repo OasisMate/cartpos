@@ -194,6 +194,7 @@ model ShopSettings {
   receiptHeaderDisplay            ReceiptHeaderDisplay @default(NAME_ONLY)  // What to show on receipt header
   cardFeePercent                  Decimal?      @db.Decimal(5, 2) // Percentage card fee applied on card payments (0 = no fee)
   allowCardFeeOverride            Boolean       @default(false)   // Allow per-sale override of card fee percent
+  timezone                        String        @default("Asia/Karachi") // IANA tz used to compute the shop's "today" for dashboards/reports
   shop                            Shop          @relation(fields: [shopId], references: [id])
 }
 

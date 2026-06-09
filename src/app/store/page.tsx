@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getProductStockBatch } from '@/lib/domain/purchases'
+import { getShopTimezone } from '@/lib/db/shop-timezone'
+import { shopDayStartUTC } from '@/lib/utils/timezone'
 import { DashboardContent } from './_components/DashboardContent'
 
 export default async function StoreDashboardPage() {
@@ -41,7 +43,9 @@ export default async function StoreDashboardPage() {
     }
   }
 
-  const today = new Date(new Date().toDateString())
+  // "Today" in the shop's own timezone so the dashboard matches what the
+  // shopkeeper considers today (and agrees with Reports).
+  const today = shopDayStartUTC(await getShopTimezone(shopId))
 
   const [shop, invoicesToday, paymentsToday, udhaarInvoicesToday, trackedProducts] = await Promise.all([
     prisma.shop.findUnique({ where: { id: shopId } }),

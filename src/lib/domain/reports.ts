@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
+import { shopDayBoundsUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
 
 export interface DailySummary {
   date: string
@@ -25,10 +26,11 @@ export interface RangeSummary {
  * Cost of goods sold for COMPLETED sales in the period = Σ(product.costPrice × qty).
  * Products without a cost price contribute 0 (profit for those can't be computed).
  */
+// `end` is exclusive (start of the day after the range).
 async function getCostOfGoods(shopId: string, start: Date, end: Date): Promise<number> {
   const lines = await prisma.invoiceLine.findMany({
     where: {
-      invoice: { shopId, status: 'COMPLETED', createdAt: { gte: start, lte: end } },
+      invoice: { shopId, status: 'COMPLETED', createdAt: { gte: start, lt: end } },
     },
     select: { quantity: true, product: { select: { costPrice: true } } },
   })
@@ -40,23 +42,27 @@ async function getCostOfGoods(shopId: string, start: Date, end: Date): Promise<n
   return Math.round(cogs * 100) / 100
 }
 
-export async function getDailySummary(shopId: string, dateISO: string): Promise<DailySummary> {
-  const start = new Date(dateISO + 'T00:00:00.000Z')
-  const end = new Date(dateISO + 'T23:59:59.999Z')
+export async function getDailySummary(
+  shopId: string,
+  dateISO: string,
+  timezone: string = DEFAULT_TIMEZONE
+): Promise<DailySummary> {
+  // The given calendar date, interpreted as the shop's local day.
+  const { start, endExclusive: end } = shopDayBoundsUTC(timezone, dateISO, dateISO)
 
   const [invoices, payments, udhaarInvoices, costOfGoods] = await Promise.all([
     prisma.invoice.aggregate({
       _sum: { total: true },
       _count: { _all: true },
-      where: { shopId, status: 'COMPLETED', createdAt: { gte: start, lte: end } },
+      where: { shopId, status: 'COMPLETED', createdAt: { gte: start, lt: end } },
     }),
     prisma.payment.aggregate({
       _sum: { amount: true },
-      where: { shopId, createdAt: { gte: start, lte: end } },
+      where: { shopId, createdAt: { gte: start, lt: end } },
     }),
     prisma.invoice.aggregate({
       _sum: { total: true },
-      where: { shopId, status: 'COMPLETED', paymentStatus: 'UDHAAR', createdAt: { gte: start, lte: end } },
+      where: { shopId, status: 'COMPLETED', paymentStatus: 'UDHAAR', createdAt: { gte: start, lt: end } },
     }),
     getCostOfGoods(shopId, start, end),
   ])
@@ -76,24 +82,26 @@ export async function getDailySummary(shopId: string, dateISO: string): Promise<
 export async function getRangeSummary(
   shopId: string,
   fromISO: string,
-  toISO: string
+  toISO: string,
+  timezone: string = DEFAULT_TIMEZONE
 ): Promise<RangeSummary> {
-  const start = new Date(fromISO + 'T00:00:00.000Z')
-  const end = new Date(toISO + 'T23:59:59.999Z')
+  // Interpret the selected dates as the shop's local days, converted to UTC
+  // instants, so the range matches the shop's calendar (not the server's).
+  const { start, endExclusive: end } = shopDayBoundsUTC(timezone, fromISO, toISO)
 
   const [invoices, payments, udhaarInvoices, costOfGoods] = await Promise.all([
     prisma.invoice.aggregate({
       _sum: { total: true },
       _count: { _all: true },
-      where: { shopId, status: 'COMPLETED', createdAt: { gte: start, lte: end } },
+      where: { shopId, status: 'COMPLETED', createdAt: { gte: start, lt: end } },
     }),
     prisma.payment.aggregate({
       _sum: { amount: true },
-      where: { shopId, createdAt: { gte: start, lte: end } },
+      where: { shopId, createdAt: { gte: start, lt: end } },
     }),
     prisma.invoice.aggregate({
       _sum: { total: true },
-      where: { shopId, status: 'COMPLETED', paymentStatus: 'UDHAAR', createdAt: { gte: start, lte: end } },
+      where: { shopId, status: 'COMPLETED', paymentStatus: 'UDHAAR', createdAt: { gte: start, lt: end } },
     }),
     getCostOfGoods(shopId, start, end),
   ])
