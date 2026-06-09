@@ -54,9 +54,12 @@ export async function middleware(request: NextRequest) {
   if (!hasValidSession && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    // Clear invalid session cookie
+    // Clear invalid session + stale shop/org selection so the next user
+    // doesn't inherit a shop they can't access.
     const response = NextResponse.redirect(url)
     response.cookies.delete('session')
+    response.cookies.delete('currentShopId')
+    response.cookies.delete('currentOrgId')
     return response
   }
 
@@ -67,6 +70,8 @@ export async function middleware(request: NextRequest) {
     if (request.nextUrl.searchParams.get('clearSession')) {
       const response = NextResponse.next()
       response.cookies.delete('session')
+      response.cookies.delete('currentShopId')
+      response.cookies.delete('currentOrgId')
       return response
     }
     const url = request.nextUrl.clone()
@@ -74,7 +79,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  return NextResponse.next()
+  // Expose the current path to server layouts (used to avoid duplicate breadcrumbs).
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', pathname)
+  return NextResponse.next({ request: { headers: requestHeaders } })
 }
 
 export const config = {

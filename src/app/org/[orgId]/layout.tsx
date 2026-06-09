@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { Breadcrumb } from '@/components/layout/Breadcrumb'
@@ -53,16 +54,23 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     redirect('/waiting-approval')
   }
 
+  // On store sub-pages the nested store layout renders a fuller breadcrumb
+  // (org › store), so skip this one to avoid a doubled bar.
+  const pathname = headers().get('x-pathname') || ''
+  const onStorePage = pathname.includes(`/org/${orgId}/stores/`)
+
   // Note: Cookies are set via API route (/api/org/select) when Platform Admin clicks "Enter Org"
   // Layouts cannot modify cookies - they can only read them
   // For Platform Admin, orgId comes from URL params, not cookies
 
   return (
     <div className="space-y-6">
-      <Breadcrumb
-        prefix={isPlatformAdmin ? 'Platform Admin · Organization' : 'Organization'}
-        items={[{ label: org.name }]}
-      />
+      {!onStorePage && (
+        <Breadcrumb
+          prefix={isPlatformAdmin ? 'Platform Admin · Organization' : 'Organization'}
+          items={[{ label: org.name }]}
+        />
+      )}
       {children}
     </div>
   )

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { suspendOrganization } from '@/lib/domain/organizations'
+import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 export async function POST(
   request: Request,
@@ -21,6 +22,18 @@ export async function POST(
     const reason = body.reason || undefined
 
     const updated = await suspendOrganization(orgId, user.id, reason)
+
+    await logActivity({
+      userId: user.id,
+      orgId,
+      action: ActivityActions.SUSPEND_ORG,
+      entityType: EntityTypes.ORGANIZATION,
+      entityId: orgId,
+      details: { name: updated?.name, reason: reason || null },
+      ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+      userAgent: request.headers.get('user-agent') || null,
+    })
+
     return NextResponse.json({ organization: updated })
   } catch (error: any) {
     console.error('Suspend organization error:', error)

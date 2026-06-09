@@ -70,6 +70,10 @@ export const ActivityActions = {
   
   // Organization actions
   UPDATE_ORG_SETTINGS: 'UPDATE_ORG_SETTINGS',
+  APPROVE_ORG: 'APPROVE_ORG',
+  SUSPEND_ORG: 'SUSPEND_ORG',
+  REJECT_ORG: 'REJECT_ORG',
+  REACTIVATE_ORG: 'REACTIVATE_ORG',
   
   // Product actions
   CREATE_PRODUCT: 'CREATE_PRODUCT',
