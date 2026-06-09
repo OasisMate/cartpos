@@ -277,28 +277,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       groups.push({ links: topLinks })
       
-      // Add org submenu for Platform Admin when viewing an organization (but not a store)
+      // Org nav for Platform Admin when viewing an organization. Icon'd links under a
+      // store-name heading (visible collapsed or expanded), consistent with the store nav.
       if (contextOrgId && !contextStoreId) {
         const orgName = orgMeta?.name || 'Organization'
+        const ico = 'h-4 w-4 flex-shrink-0 text-gray-700'
         groups.push({
-          title: `${orgName} Options`,
-          isSubmenu: true,
+          title: orgName,
           links: [
-            {
-              label: t('dashboard'),
-              href: `/org/${contextOrgId}`,
-              icon: <></>,
-            },
-            {
-              label: t('stores'),
-              href: `/org/${contextOrgId}/stores`,
-              icon: <></>,
-            },
-            {
-              label: t('users'),
-              href: `/org/${contextOrgId}/users`,
-              icon: <></>,
-            },
+            { label: t('dashboard'), href: `/org/${contextOrgId}`, icon: <LayoutDashboard className={ico} /> },
+            { label: t('stores'), href: `/org/${contextOrgId}/stores`, icon: <Store className={ico} /> },
+            { label: t('users'), href: `/org/${contextOrgId}/users`, icon: <Users className={ico} /> },
           ],
         })
       }
