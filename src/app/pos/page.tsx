@@ -1424,11 +1424,14 @@ export default function POSPage() {
             <div className="text-center py-8 text-gray-600">Cart is empty</div>
           ) : (
             <div className="space-y-2">
-              {cart.map((item) => (
+              {cart.map((item, idx) => (
                 <div
                   key={item.product.id}
-                  className="flex items-center justify-between p-3 border border-[hsl(var(--border))] rounded-lg"
+                  className="flex items-center justify-between gap-3 p-3 border border-[hsl(var(--border))] rounded-lg"
                 >
+                  <span className="w-6 shrink-0 text-center text-sm font-semibold text-[hsl(var(--muted-foreground))] tabular-nums">
+                    {idx + 1}
+                  </span>
                   <div className="flex-1 cursor-pointer" onClick={() => setEditingItem(item)}>
                     <div className="font-medium">{item.product.name}</div>
                     <div className="text-sm text-[hsl(var(--muted-foreground))]">
