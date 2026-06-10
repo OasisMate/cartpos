@@ -2,6 +2,7 @@ import type { ShopRole } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
+import { sendEmail, generateWelcomeEmail } from '@/lib/email'
 
 export interface CreateOrgByAdminInput {
   organizationName: string
@@ -190,6 +191,41 @@ export async function approveOrganization(orgId: string, adminUserId: string) {
     },
   })
   return updated
+}
+
+/**
+ * Email the org's admins a welcome + getting-started guide after approval.
+ * Best-effort: never throws into the approval flow.
+ */
+export async function sendOrgApprovedEmail(orgId: string, origin?: string): Promise<void> {
+  try {
+    const org = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    })
+    if (!org) return
+
+    const admins = await prisma.organizationUser.findMany({
+      where: { orgId, orgRole: 'ORG_ADMIN' },
+      select: { user: { select: { email: true, name: true } } },
+    })
+    if (admins.length === 0) return
+
+    const base = process.env.NEXT_PUBLIC_APP_URL || origin || 'http://localhost:3000'
+    const loginLink = `${base}/login`
+
+    await Promise.all(
+      admins.map((a) =>
+        sendEmail({
+          to: a.user.email,
+          subject: `Welcome to Cart POS - ${org.name} is approved`,
+          html: generateWelcomeEmail({ orgName: org.name, ownerName: a.user.name, loginLink }),
+        })
+      )
+    )
+  } catch (error) {
+    console.error('Failed to send approval welcome email:', error)
+  }
 }
 
 export async function rejectOrganization(orgId: string, adminUserId: string, reason?: string) {

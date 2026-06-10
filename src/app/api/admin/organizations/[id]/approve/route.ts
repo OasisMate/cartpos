@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { approveOrganization } from '@/lib/domain/organizations'
+import { approveOrganization, sendOrgApprovedEmail } from '@/lib/domain/organizations'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { notifyOrgAdmins } from '@/lib/domain/notifications'
 
@@ -37,6 +37,9 @@ export async function POST(
     body: 'Your organization has been approved. You can start using CartPOS now.',
     href: '/',
   })
+
+  // Email the owner a welcome + getting-started guide (best-effort).
+  await sendOrgApprovedEmail(orgId, new URL(request.url).origin)
 
   return NextResponse.json({ organization: updated })
 }

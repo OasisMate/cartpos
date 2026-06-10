@@ -229,3 +229,68 @@ export function generateAccessRequestEmail(params: {
     </p>`
   return emailLayout(content, `New access request: ${params.orgName}`)
 }
+
+/**
+ * Welcome email - sent when a platform admin approves an organization.
+ * Includes a short getting-started guide and the usage SOPs.
+ */
+export function generateWelcomeEmail(params: {
+  orgName: string
+  ownerName?: string | null
+  loginLink: string
+}): string {
+  const steps = [
+    ['Sign in', 'Log in with the email and password you registered.'],
+    ['Set up your shop', 'Open Settings to add your receipt header, card fee, and language.'],
+    ['Add your products', 'Create products with prices, barcodes, and opening stock.'],
+    ['Start selling', 'Use the POS screen to make cash, card, or udhaar (credit) sales.'],
+    ['Track customers & udhaar', 'Record customer balances and payments as they come in.'],
+    ['Review reports', 'Check daily sales, profit, and stock from the Reports screen.'],
+  ]
+  const stepRows = steps
+    .map(
+      ([t, d], i) => `<tr>
+        <td style="padding:8px 12px 8px 0;vertical-align:top;">
+          <span style="display:inline-block;width:24px;height:24px;line-height:24px;text-align:center;background:#f97316;color:#fff;border-radius:50%;font-size:13px;font-weight:700;">${i + 1}</span>
+        </td>
+        <td style="padding:8px 0;">
+          <span style="font-weight:600;color:#111827;font-size:14px;">${t}</span><br/>
+          <span style="color:#6b7280;font-size:13px;">${d}</span>
+        </td>
+      </tr>`
+    )
+    .join('')
+
+  const sops = [
+    'Record every sale through the POS so stock and reports stay accurate.',
+    'Keep product prices and stock counts up to date.',
+    'Do not share your login. Each staff member should have their own account.',
+    'Respect your customers’ data and use it only for your business.',
+    'Use Cart POS lawfully and in line with the terms of service.',
+  ]
+    .map(
+      (s) =>
+        `<li style="margin:0 0 6px;color:#374151;font-size:13px;line-height:1.5;">${s}</li>`
+    )
+    .join('')
+
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Welcome to Cart POS! 🎉</h1>
+    <p style="margin:0 0 12px;">${params.ownerName ? `Hello ${params.ownerName},` : 'Hello,'}</p>
+    <p style="margin:0 0 4px;">Great news - <strong>${params.orgName}</strong> has been approved. Your account is now active and ready to use.</p>
+    ${ctaButton(params.loginLink, 'Go to Dashboard')}
+
+    <h2 style="margin:24px 0 8px;font-size:16px;font-weight:700;color:#111827;">Getting started</h2>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">${stepRows}</table>
+
+    <h2 style="margin:24px 0 8px;font-size:16px;font-weight:700;color:#111827;">Standard operating procedures</h2>
+    <ul style="margin:0 0 4px;padding-left:18px;">${sops}</ul>
+    <div style="margin:12px 0 4px;padding:12px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;font-size:13px;">
+      ⚠️ Please follow these guidelines. Accounts that misuse the system or breach the terms may be suspended.
+    </div>
+
+    <p style="margin:20px 0 0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      Need help? Just reply to this email and our team will assist you.
+    </p>`
+  return emailLayout(content, `Welcome to Cart POS - ${params.orgName} is approved`)
+}
