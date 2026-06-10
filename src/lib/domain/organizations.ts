@@ -92,6 +92,7 @@ export async function createOrganizationWithOwner(
         cnic: normalizedCnic,
         password: hashed,
         role: 'NORMAL',
+        emailVerified: true, // admin-created accounts are already vetted
       },
     })
 
@@ -161,6 +162,8 @@ export async function listOrganizations() {
             phone: true,
             cnic: true,
             isWhatsApp: true,
+            emailVerified: true,
+            createdAt: true,
           },
         })
       }
@@ -371,6 +374,78 @@ export async function purgeOrganization(
     }
   }, { timeout: 30000 })
 
+  return { name: org.name }
+}
+
+/**
+ * Delete an organization whose requesting owner never verified their email.
+ * Safety: refuses if the owner IS verified or the org is ACTIVE — this path is
+ * only for clearing unverified signup junk. Removes the org, its data, the owner
+ * and any staff (mirrors purgeOrganization's FK-ordered deletes).
+ */
+export async function purgeUnverifiedOrganization(orgId: string, adminUserId: string) {
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { name: true, status: true, requestedBy: true, shops: { select: { id: true } } },
+  })
+  if (!org) throw new Error('Organization not found')
+  if (org.status === 'ACTIVE') throw new Error('Active organizations cannot be deleted here')
+
+  const ownerId = org.requestedBy
+  if (!ownerId) throw new Error('Organization has no requesting user')
+  const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { emailVerified: true } })
+  if (!owner) throw new Error('Requesting user not found')
+  if (owner.emailVerified) throw new Error('This account is verified — it cannot be removed as unverified junk')
+
+  const shopIds = org.shops.map((s) => s.id)
+
+  // Staff = everyone linked to the org's shops/org, minus the owner (handled below).
+  const [shopUsers, orgUsers] = await Promise.all([
+    prisma.userShop.findMany({ where: { shopId: { in: shopIds } }, select: { userId: true } }),
+    prisma.organizationUser.findMany({ where: { orgId }, select: { userId: true } }),
+  ])
+  const ids = new Set([...shopUsers.map((u) => u.userId), ...orgUsers.map((u) => u.userId)])
+  ids.delete(ownerId)
+  const staffIds = [...ids]
+
+  await prisma.$transaction(async (tx) => {
+    if (shopIds.length) {
+      await tx.invoiceLine.deleteMany({ where: { invoice: { shopId: { in: shopIds } } } })
+      await tx.purchaseLine.deleteMany({ where: { purchase: { shopId: { in: shopIds } } } })
+      await tx.payment.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.customerLedger.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.stockLedger.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.supplierLedger.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.invoice.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.purchase.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.product.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.customer.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.supplier.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.expense.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.shopSettings.deleteMany({ where: { shopId: { in: shopIds } } })
+      await tx.userShop.deleteMany({ where: { shopId: { in: shopIds } } })
+    }
+    await tx.activityLog.deleteMany({ where: { orgId } })
+    await tx.organizationUser.deleteMany({ where: { orgId } })
+    await tx.shop.deleteMany({ where: { orgId } })
+    await tx.organization.delete({ where: { id: orgId } })
+
+    // Delete now-orphaned accounts (owner + staff), never a platform admin.
+    for (const uid of [ownerId, ...staffIds]) {
+      const [shopCount, orgCount, u] = await Promise.all([
+        tx.userShop.count({ where: { userId: uid } }),
+        tx.organizationUser.count({ where: { userId: uid } }),
+        tx.user.findUnique({ where: { id: uid }, select: { role: true } }),
+      ])
+      if (u && u.role !== 'PLATFORM_ADMIN' && shopCount === 0 && orgCount === 0) {
+        await tx.notification.deleteMany({ where: { userId: uid } })
+        await tx.activityLog.deleteMany({ where: { userId: uid } })
+        await tx.user.delete({ where: { id: uid } })
+      }
+    }
+  }, { timeout: 30000 })
+
+  console.warn(`[PURGE_UNVERIFIED] admin=${adminUserId} org=${orgId} name="${org.name}"`)
   return { name: org.name }
 }
 

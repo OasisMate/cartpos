@@ -9,11 +9,17 @@ export interface ApiError {
 
 export class ApiException extends Error {
   status: number
+  /** Optional machine-readable code from the server (e.g. EMAIL_NOT_VERIFIED). */
+  code?: string
+  /** Full parsed error payload, for callers that need extra fields. */
+  payload?: any
 
-  constructor(message: string, status: number = 500) {
+  constructor(message: string, status: number = 500, code?: string, payload?: any) {
     super(message)
     this.name = 'ApiException'
     this.status = status
+    this.code = code
+    this.payload = payload
   }
 }
 
@@ -36,7 +42,7 @@ export async function apiRequest<T>(
   const data = await response.json().catch(() => ({ error: 'Invalid response' }))
 
   if (!response.ok) {
-    throw new ApiException(data.error || 'Request failed', response.status)
+    throw new ApiException(data.error || 'Request failed', response.status, data.code, data)
   }
 
   return data

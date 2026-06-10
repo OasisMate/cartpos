@@ -7,6 +7,7 @@ import { PASSWORD_MIN_LENGTH } from '@/constants/auth'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { withRetry } from '@/lib/db/connection-retry'
 import { isDatabaseConnectionError } from '@/lib/db/db-utils'
+import { issueVerificationEmail } from '@/lib/domain/email-verification'
 
 export async function POST(request: Request) {
   try {
@@ -166,7 +167,16 @@ export async function POST(request: Request) {
       return { userId: user.id, orgId: org.id, shopId: shop.id }
     }))
 
-    return NextResponse.json({ ok: true, ...result })
+    // Email the verification link. Account stays unverified (and hidden from the
+    // admin approval queue) until the user confirms ownership of this address.
+    await issueVerificationEmail({
+      userId: result.userId,
+      email: email.toLowerCase(),
+      name: contactName,
+      origin: new URL(request.url).origin,
+    })
+
+    return NextResponse.json({ ok: true, verifyEmail: true, ...result })
   } catch (e: any) {
     console.error('Signup error:', e)
     // Handle unique constraint violations

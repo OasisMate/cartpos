@@ -124,6 +124,7 @@ model User {
   isWhatsApp Boolean   @default(false)
   password  String      // hashed password
   role      UserRole    @default(NORMAL)
+  emailVerified Boolean  @default(false) // email ownership confirmed via verification link
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   shops            UserShop[]
@@ -133,6 +134,7 @@ model User {
   supplierLedgerEntries SupplierLedger[] @relation("SupplierLedgerCreatedBy")
   notifications    Notification[]
   passwordResets   PasswordResetToken[]
+  emailVerifications EmailVerificationToken[]
   expenses         Expense[]
   activityLogs     ActivityLog[]
 
@@ -142,6 +144,20 @@ model User {
 }
 
 model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique

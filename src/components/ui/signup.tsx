@@ -147,7 +147,8 @@ export default function Signup() {
 
       setSuccess(true)
       setTimeout(() => {
-        router.push('/waiting-approval')
+        // New signups must confirm their email before admin review.
+        router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
       }, 2000)
     } catch (err) {
       setError('An error occurred. Please try again.')

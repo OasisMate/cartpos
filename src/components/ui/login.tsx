@@ -50,6 +50,12 @@ export default function Login() {
         // Keep loading state active - it will be cleared when component unmounts on redirect
       } catch (err: any) {
         setIsRedirecting(false)
+        // Unverified email: send them to the verify screen (which offers resend).
+        if (err?.code === 'EMAIL_NOT_VERIFIED') {
+          const email = err?.payload?.email || formData.identifier
+          router.push(`/verify-email?email=${encodeURIComponent(email)}`)
+          return
+        }
         setError(err.message || 'Login failed. Please check your credentials.')
         throw err
       }

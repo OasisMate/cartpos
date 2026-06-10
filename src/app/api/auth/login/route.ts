@@ -109,6 +109,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Block sign-in until the email address is confirmed (grandfathered users
+    // are already verified, so only new unverified signups hit this).
+    if (!user.emailVerified) {
+      return NextResponse.json(
+        {
+          error: 'Please verify your email before signing in. Check your inbox for the verification link.',
+          code: 'EMAIL_NOT_VERIFIED',
+          email: user.email,
+        },
+        { status: 403 }
+      )
+    }
+
     // Successful login — reset this account's failed-attempt counter.
     clearRateLimit(acctKey)
 

@@ -19,6 +19,8 @@ interface RequestedByUser {
   phone: string | null
   cnic: string | null
   isWhatsApp: boolean
+  emailVerified: boolean
+  createdAt: string
 }
 
 interface Organization {
@@ -51,6 +53,7 @@ export default function OrganizationsPage() {
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [actioningId, setActioningId] = useState<string | null>(null)
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
@@ -265,6 +268,52 @@ export default function OrganizationsPage() {
     }
   }
 
+  // Days since the requesting user signed up, if they're still unverified.
+  function unverifiedDays(org: Organization): number | null {
+    const u = org.requestedByUser
+    if (!u || u.emailVerified) return null
+    return Math.floor((Date.now() - new Date(u.createdAt).getTime()) / (24 * 60 * 60 * 1000))
+  }
+
+  async function sendReminder(id: string) {
+    try {
+      setActioningId(id)
+      setError('')
+      setNotice('')
+      const res = await fetch(`/api/admin/organizations/${id}/send-verification-reminder`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to send reminder')
+      setNotice('Verification reminder email sent.')
+    } catch (e: any) {
+      setError(e.message || 'Failed to send reminder')
+    } finally {
+      setActioningId(null)
+    }
+  }
+
+  async function deleteUnverified(org: Organization) {
+    if (
+      !window.confirm(
+        `Permanently delete the unverified signup "${org.name}" (and its owner account)? This cannot be undone.`
+      )
+    )
+      return
+    try {
+      setActioningId(org.id)
+      setError('')
+      setNotice('')
+      const res = await fetch(`/api/admin/organizations/${org.id}/delete-unverified`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete')
+      setNotice(`Deleted unverified signup "${org.name}".`)
+      await fetchOrgs()
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete')
+    } finally {
+      setActioningId(null)
+    }
+  }
+
   // Whether a scheduled org's buffer has elapsed (purge allowed).
   function purgeEligibleDate(org: Organization): Date | null {
     if (!org.deletionScheduledAt) return null
@@ -341,6 +390,7 @@ export default function OrganizationsPage() {
       </div>
 
       {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>}
+      {notice && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">{notice}</div>}
 
       {loading ? (
         <div className="text-[hsl(var(--muted-foreground))]">Loading...</div>
@@ -367,6 +417,19 @@ export default function OrganizationsPage() {
                     >
                       {org.status}
                     </span>
+                    {org.requestedByUser && !org.requestedByUser.emailVerified && (
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                        Email not verified
+                      </span>
+                    )}
+                    {(() => {
+                      const d = unverifiedDays(org)
+                      return d !== null && d >= 7 ? (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                          Overdue · {d}d unverified
+                        </span>
+                      ) : null
+                    })()}
                   </div>
                   {org.legalName && org.legalName !== org.name && (
                     <p className="text-sm text-gray-600">Legal Name: {org.legalName}</p>
@@ -403,6 +466,26 @@ export default function OrganizationsPage() {
                         }}
                       >
                         Reject
+                      </button>
+                    </>
+                  )}
+                  {org.requestedByUser && !org.requestedByUser.emailVerified && (
+                    <>
+                      <button
+                        className="px-3 py-1 border border-orange-300 text-orange-700 rounded text-sm hover:bg-orange-50 disabled:opacity-50"
+                        disabled={actioningId === org.id}
+                        onClick={() => sendReminder(org.id)}
+                        title="Email the user a fresh verification link with the 7-day warning"
+                      >
+                        {actioningId === org.id ? 'Sending...' : 'Send reminder'}
+                      </button>
+                      <button
+                        className="px-3 py-1 border border-red-300 text-red-700 rounded text-sm hover:bg-red-50 disabled:opacity-50"
+                        disabled={actioningId === org.id}
+                        onClick={() => deleteUnverified(org)}
+                        title="Permanently delete this unverified signup and its owner account"
+                      >
+                        Delete
                       </button>
                     </>
                   )}

@@ -141,3 +141,44 @@ export function generatePasswordResetEmail(resetLink: string, userName?: string)
     </p>`
   return emailLayout(content, 'Reset your Cart POS password')
 }
+
+// Shared notice block: states the 7-day verify-or-be-removed policy.
+const SEVEN_DAY_NOTICE = `<div style="margin:8px 0 4px;padding:12px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;font-size:13px;">
+  ⚠️ Please verify within <strong>7 days</strong>. Unverified accounts are denied and permanently deleted after that.
+</div>`
+
+/**
+ * Email-verification email (confirm address ownership on signup).
+ */
+export function generateVerificationEmail(verifyLink: string, userName?: string): string {
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Confirm your email</h1>
+    <p style="margin:0 0 12px;">${userName ? `Hello ${userName},` : 'Hello,'}</p>
+    <p style="margin:0 0 4px;">Thanks for signing up for Cart POS. Please confirm this email address to continue — once verified, our team will review your account for activation.</p>
+    ${ctaButton(verifyLink, 'Verify Email')}
+    ${SEVEN_DAY_NOTICE}
+    <p style="margin:16px 0 8px;color:#6b7280;font-size:13px;">Or paste this link into your browser:</p>
+    <p style="margin:0 0 24px;word-break:break-all;"><a href="${verifyLink}" style="color:#f97316;font-size:13px;">${verifyLink}</a></p>
+    <p style="margin:0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      This link expires in 24 hours. If you didn't create a Cart POS account, you can safely ignore this email.
+    </p>`
+  return emailLayout(content, 'Confirm your Cart POS email')
+}
+
+/**
+ * Reminder email — admin nudges an account that still hasn't verified.
+ */
+export function generateVerificationReminderEmail(verifyLink: string, userName?: string): string {
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Reminder: verify your email</h1>
+    <p style="margin:0 0 12px;">${userName ? `Hello ${userName},` : 'Hello,'}</p>
+    <p style="margin:0 0 4px;">Your Cart POS account is still waiting for email verification. Please confirm your email to keep your registration active.</p>
+    ${ctaButton(verifyLink, 'Verify Email Now')}
+    ${SEVEN_DAY_NOTICE}
+    <p style="margin:16px 0 8px;color:#6b7280;font-size:13px;">Or paste this link into your browser:</p>
+    <p style="margin:0 0 24px;word-break:break-all;"><a href="${verifyLink}" style="color:#f97316;font-size:13px;">${verifyLink}</a></p>
+    <p style="margin:0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      If you didn't create a Cart POS account, you can ignore this email and the account will be removed automatically.
+    </p>`
+  return emailLayout(content, 'Reminder: verify your Cart POS email')
+}
