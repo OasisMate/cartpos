@@ -5,6 +5,7 @@ import { getCurrentUser, hashPassword } from '@/lib/auth'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 import { canManageOrgUsers, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
+import { sendEmail, generateStaffWelcomeEmail } from '@/lib/email'
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -164,6 +165,7 @@ export async function POST(request: Request) {
         password: hashed,
         role: 'NORMAL',
         isWhatsApp: false,
+        emailVerified: true, // staff are vetted by the owner; let them sign in immediately
       },
     })
 
@@ -205,6 +207,40 @@ export async function POST(request: Request) {
       assignments: assignments.map((a) => ({ shopId: a.shopId, shopRole: a.shopRole })),
     },
   })
+
+  // Email the new staff member their role + how to sign in (best-effort).
+  try {
+    const [org, shops, addedBy] = await Promise.all([
+      prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } }),
+      assignments.length
+        ? prisma.shop.findMany({ where: { id: { in: assignments.map((a) => a.shopId) } }, select: { name: true } })
+        : Promise.resolve([] as { name: string }[]),
+      prisma.user.findUnique({ where: { id: user.id }, select: { name: true } }),
+    ])
+    const roleLabel = orgRole === 'ORG_ADMIN'
+      ? 'Organization Admin'
+      : hasStoreManagerRole
+      ? 'Store Manager'
+      : hasCashierRole
+      ? 'Cashier'
+      : 'Team Member'
+    const base = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
+    await sendEmail({
+      to: result.email,
+      subject: `You've been added to ${org?.name || 'Cart POS'} on Cart POS`,
+      html: generateStaffWelcomeEmail({
+        staffName: result.name,
+        orgName: org?.name || 'Cart POS',
+        roleLabel,
+        shopNames: shops.map((s) => s.name),
+        addedByName: addedBy?.name,
+        loginEmail: result.email,
+        loginLink: `${base}/login`,
+      }),
+    })
+  } catch (e) {
+    console.error('Failed to send staff welcome email:', e)
+  }
 
   return NextResponse.json({ user: { id: result.id } })
 }

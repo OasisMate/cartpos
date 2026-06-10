@@ -55,6 +55,7 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
         phone: null, // Admin should provide via UI
         cnic: null, // Admin should provide via UI
         isWhatsApp: false,
+        emailVerified: true, // admin-created accounts are already vetted
       },
     })
 

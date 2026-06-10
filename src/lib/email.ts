@@ -294,3 +294,40 @@ export function generateWelcomeEmail(params: {
     </p>`
   return emailLayout(content, `Welcome to Cart POS - ${params.orgName} is approved`)
 }
+
+/**
+ * New-staff email - sent when an owner/admin adds a team member.
+ * Tells them their role, shop(s), and how to sign in.
+ */
+export function generateStaffWelcomeEmail(params: {
+  staffName?: string | null
+  orgName: string
+  roleLabel: string
+  shopNames?: string[]
+  addedByName?: string | null
+  loginEmail: string
+  loginLink: string
+}): string {
+  const rows = [
+    detailRow('Business', params.orgName),
+    detailRow('Your role', params.roleLabel),
+    params.shopNames && params.shopNames.length ? detailRow('Store(s)', params.shopNames.join(', ')) : '',
+    detailRow('Sign-in email', params.loginEmail),
+  ].join('')
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">You've been added to Cart POS</h1>
+    <p style="margin:0 0 12px;">${params.staffName ? `Hello ${params.staffName},` : 'Hello,'}</p>
+    <p style="margin:0 0 4px;">${params.addedByName ? `${params.addedByName} has` : 'You have been'} added you to <strong>${params.orgName}</strong> on Cart POS. Here are your account details:</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:18px 0;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
+      ${rows}
+    </table>
+    ${ctaButton(params.loginLink, 'Sign In')}
+    <p style="margin:8px 0 0;color:#6b7280;font-size:13px;">
+      Your manager has set a password for you - ask them for it, then change it from Settings after your first sign-in.
+      Forgot it later? Use "Forgot password" on the login page.
+    </p>
+    <p style="margin:16px 0 0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      If you weren't expecting this, you can ignore this email.
+    </p>`
+  return emailLayout(content, `You've been added to ${params.orgName} on Cart POS`)
+}
