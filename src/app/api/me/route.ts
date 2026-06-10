@@ -25,6 +25,7 @@ export async function GET() {
       currentOrgId: user.currentOrgId,
       shops: user.shops,
       currentShopId: user.currentShopId,
+      isDemoOrg: user.isDemoOrg,
     },
   })
 }

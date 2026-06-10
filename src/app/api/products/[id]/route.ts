@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { DemoBlockedResponse } from '@/lib/demo'
 import { updateProduct, getProduct, deleteProduct, UpdateProductInput } from '@/lib/domain/products'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
@@ -143,6 +144,8 @@ export async function DELETE(
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+
+    if (user.isDemoOrg) return DemoBlockedResponse()
 
     const deleted = await deleteProduct(params.id, user.id)
 

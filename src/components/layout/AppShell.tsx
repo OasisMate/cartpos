@@ -699,6 +699,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto bg-gray-50">
+          {user?.isDemoOrg && (
+            <div className="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-6 py-2 text-center font-medium">
+              Demo mode — explore freely. Destructive actions (delete, void) are disabled.
+            </div>
+          )}
           <div className="p-6">{children}</div>
         </main>
       </div>

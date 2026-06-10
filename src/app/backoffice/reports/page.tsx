@@ -105,6 +105,12 @@ export default function ReportsPage() {
               </span>
             </p>
           )}
+          <a
+            href={`/store/records/cashbook?from=${from}&to=${to}`}
+            className="mt-1 inline-block text-sm font-medium text-orange-600 hover:underline"
+          >
+            Cash Book (printable) →
+          </a>
         </div>
         <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
           <div className="inline-flex rounded-md shadow-sm border bg-white overflow-hidden">

@@ -33,6 +33,9 @@ model Organization {
   ntn              String?
   strn             String?
   status           OrgStatus       @default(PENDING)
+  // Demo/test fixture org. When true, destructive API actions are blocked org-wide
+  // (see lib/demo.ts + route guards); reset via scripts/reset-demo-org.ts.
+  isDemo           Boolean         @default(false)
   requestedBy      String?
   approvedBy       String?
   approvedAt       DateTime?

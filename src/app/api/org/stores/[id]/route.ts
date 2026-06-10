@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { DemoBlockedResponse } from '@/lib/demo'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 function ensureOrgAdmin(user: any) {
@@ -155,7 +156,9 @@ export async function DELETE(
 ) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  
+
+  if (user.isDemoOrg) return DemoBlockedResponse()
+
   try {
     ensureOrgAdmin(user)
   } catch {

@@ -32,6 +32,7 @@ interface User {
     }
   }>
   currentShopId?: string | null
+  isDemoOrg?: boolean
 }
 
 interface AuthContextType {

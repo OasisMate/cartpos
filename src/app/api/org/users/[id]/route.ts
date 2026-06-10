@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { DemoBlockedResponse } from '@/lib/demo'
 import { normalizePhone, validatePhone, normalizeCNIC, validateCNIC } from '@/lib/validation'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { canManageOrgUsers, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
@@ -374,6 +375,8 @@ export async function DELETE(
 ) {
   const user = await getCurrentUser()
   if (!user) return UnauthorizedResponse()
+
+  if (user.isDemoOrg) return DemoBlockedResponse()
 
   const userId = params.id
   const orgId = user.currentOrgId

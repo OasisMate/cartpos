@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { DemoBlockedResponse } from '@/lib/demo'
 import { updateSupplier, getSupplier, deleteSupplier, UpdateSupplierInput } from '@/lib/domain/suppliers'
 
 // GET: Get single supplier
@@ -66,6 +67,8 @@ export async function DELETE(
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+
+    if (user.isDemoOrg) return DemoBlockedResponse()
 
     await deleteSupplier(params.id, user.id)
 

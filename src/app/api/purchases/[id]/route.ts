@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { DemoBlockedResponse } from '@/lib/demo'
 import { getPurchase, updatePurchase, deletePurchase, UpdatePurchaseInput } from '@/lib/domain/purchases'
 
 // GET: Get single purchase
@@ -71,6 +72,8 @@ export async function DELETE(
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+
+    if (user.isDemoOrg) return DemoBlockedResponse()
 
     await deletePurchase(params.id, user.id)
 

@@ -121,7 +121,7 @@ export async function getCurrentUser() {
             },
             shops: {
               include: {
-                shop: true,
+                shop: { include: { organization: { select: { isDemo: true } } } },
               },
             },
           },
@@ -164,6 +164,13 @@ export async function getCurrentUser() {
       currentOrgId,
       shops,
       currentShopId,
+      // True when the current org is a demo/test fixture → destructive actions blocked (see lib/demo.ts).
+      // Store managers / cashiers have no OrganizationUser row, so derive demo status from the
+      // current SHOP's org (their actual context); fall back to org membership for org admins.
+      isDemoOrg:
+        shops.find((s) => s.shopId === currentShopId)?.shop?.organization?.isDemo ??
+        organizations.find((o) => o.orgId === currentOrgId)?.organization?.isDemo ??
+        false,
     }
   } catch (error) {
     // Log database connection errors but don't crash

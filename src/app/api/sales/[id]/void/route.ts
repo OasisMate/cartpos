@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { DemoBlockedResponse } from '@/lib/demo'
 import { voidSale } from '@/lib/domain/sales'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
@@ -15,6 +16,8 @@ export async function POST(
     if (!user.currentShopId) {
       return NextResponse.json({ error: 'No shop selected' }, { status: 400 })
     }
+
+    if (user.isDemoOrg) return DemoBlockedResponse()
 
     const result = await voidSale(user.currentShopId, params.id, user.id)
 
