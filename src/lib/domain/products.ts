@@ -18,12 +18,16 @@ export interface CreateProductInput {
 
 export interface UpdateProductInput extends Partial<CreateProductInput> {}
 
+export type ProductSortBy = 'name' | 'price' | 'costPrice' | 'sku' | 'createdAt' | 'updatedAt'
+
 export interface ProductFilters {
   search?: string
   category?: string
   trackStock?: boolean
   page?: number
   limit?: number
+  sortBy?: ProductSortBy
+  sortDir?: 'asc' | 'desc'
 }
 
 // Check if user has permission to manage products in a shop
@@ -286,10 +290,15 @@ export async function listProducts(shopId: string, filters: ProductFilters = {})
     where.trackStock = filters.trackStock
   }
 
+  // Sorting (DB columns only; stock is computed from the ledger so it isn't sortable here)
+  const sortableColumns: ProductSortBy[] = ['name', 'price', 'costPrice', 'sku', 'createdAt', 'updatedAt']
+  const sortBy = filters.sortBy && sortableColumns.includes(filters.sortBy) ? filters.sortBy : 'createdAt'
+  const sortDir = filters.sortDir === 'asc' ? 'asc' : 'desc'
+
   const [products, total] = await Promise.all([
     prisma.product.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [sortBy]: sortDir },
       skip,
       take: limit,
     }),

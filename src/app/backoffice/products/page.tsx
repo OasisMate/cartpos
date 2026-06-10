@@ -43,6 +43,9 @@ interface ProductsResponse {
 
 const COMMON_UNITS = ['pcs', 'kg', 'g', 'L', 'mL', 'pack', 'box', 'dozen']
 
+// Columns the server can sort by (real DB columns). Others fall back to page-local client sort.
+const SERVER_SORT_COLUMNS = ['name', 'price', 'costPrice', 'sku']
+
 export default function ProductsPage() {
   const { user } = useAuth()
   const { show } = useToast()
@@ -53,6 +56,7 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   // Monotonic id so a slow/older /api/products response can't overwrite a newer one.
   const searchReqIdRef = useRef(0)
   const [pagination, setPagination] = useState({
@@ -102,6 +106,8 @@ export default function ProductsPage() {
       setSortColumn(column)
       setSortDirection('asc')
     }
+    // server-sortable columns sort the whole catalog — restart from page 1.
+    if (SERVER_SORT_COLUMNS.includes(column)) setCurrentPage(1)
   }
 
   // Sort products
@@ -188,10 +194,15 @@ export default function ProductsPage() {
         try {
           const params = new URLSearchParams({
             page: currentPage.toString(),
-            limit: '50',
+            limit: pageSize.toString(),
           })
           if (debouncedSearch) {
             params.append('search', debouncedSearch)
+          }
+          // Server-side sort for DB columns (sorts the whole catalog, not just this page).
+          if (sortColumn && SERVER_SORT_COLUMNS.includes(sortColumn)) {
+            params.append('sortBy', sortColumn)
+            params.append('sortDir', sortDirection)
           }
 
           const response = await fetch(`/api/products?${params}`)
@@ -253,7 +264,7 @@ export default function ProductsPage() {
     } finally {
       if (!isStale()) setLoading(false)
     }
-  }, [user?.currentShopId, currentPage, debouncedSearch])
+  }, [user?.currentShopId, currentPage, pageSize, debouncedSearch, sortColumn, sortDirection])
 
   // Debounce the search box: wait 300ms after typing stops, then search from page 1.
   // Prevents a request per keystroke (was 7 calls for "shampoo").
@@ -317,8 +328,8 @@ export default function ProductsPage() {
     setShowForm(true)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(e?: React.FormEvent, keepOpen = false) {
+    e?.preventDefault()
     setError('')
     setSubmitting(true)
 
@@ -447,14 +458,27 @@ export default function ProductsPage() {
         }))
       }
 
-      // Reset form
-      setShowForm(false)
-      setEditingProduct(null)
-      
+      const wasEditing = !!editingProduct
+
+      if (keepOpen && !wasEditing) {
+        // Fast bulk entry: keep modal open, clear fields but keep unit + track-stock
+        // preference, and refocus the name field for the next item.
+        setFormData({
+          name: '', sku: '', barcode: '', unit: formData.unit, price: '',
+          cartonPrice: '', costPrice: '', trackStock: formData.trackStock,
+          reorderLevel: '', cartonSize: '', cartonBarcode: '', initialStock: '',
+        })
+        setError('')
+        setTimeout(() => nameInputRef.current?.focus(), 0)
+      } else {
+        setShowForm(false)
+        setEditingProduct(null)
+      }
+
       // Refresh in background to ensure data consistency (non-blocking)
       fetchProducts().catch(err => console.error('Background refresh failed:', err))
-      
-      show({ message: editingProduct ? 'Product updated' : 'Product created', variant: 'success' })
+
+      show({ message: wasEditing ? 'Product updated' : 'Product created', variant: 'success' })
     } catch (err) {
       setError('An error occurred. Please try again.')
       show({ title: 'Error', message: 'Unexpected error', variant: 'destructive' })
@@ -839,6 +863,16 @@ export default function ProductsPage() {
                 >
                   Cancel
                 </Button>
+                {!editingProduct && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={submitting}
+                    onClick={() => handleSubmit(undefined, true)}
+                  >
+                    {submitting ? 'Saving...' : 'Save & Add Another'}
+                  </Button>
+                )}
                 <Button type="submit" disabled={submitting}>
                   {submitting ? 'Saving...' : editingProduct ? 'Update' : 'Create'}
                 </Button>
@@ -1026,12 +1060,31 @@ export default function ProductsPage() {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {pagination.totalPages > 1 && (
-            <div className="mt-4 flex justify-between items-center">
-              <div className="text-sm text-gray-600">
+          {/* Pagination + page size */}
+          <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <span>
                 Showing {products.length} of {pagination.total} products
-              </div>
+              </span>
+              <label className="flex items-center gap-1">
+                <span>Per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="border border-gray-300 rounded px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {[25, 50, 100, 200].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {pagination.totalPages > 1 && (
               <div className="flex gap-2 items-center">
                 <Button
                   variant="outline"
@@ -1053,8 +1106,8 @@ export default function ProductsPage() {
                   Next
                 </Button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
 
