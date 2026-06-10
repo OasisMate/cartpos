@@ -295,6 +295,29 @@ export function generateWelcomeEmail(params: {
   return emailLayout(content, `Welcome to Cart POS - ${params.orgName} is approved`)
 }
 
+/** Escape user-authored text and preserve line breaks for HTML email. */
+function escapeAndBreak(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br/>')
+}
+
+/**
+ * Broadcast/announcement email sent by a platform admin.
+ */
+export function generateBroadcastEmail(subject: string, message: string, recipientName?: string | null): string {
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">${escapeAndBreak(subject)}</h1>
+    ${recipientName ? `<p style="margin:0 0 12px;">Hello ${escapeAndBreak(recipientName)},</p>` : ''}
+    <div style="margin:0 0 4px;color:#374151;font-size:14px;line-height:1.6;">${escapeAndBreak(message)}</div>
+    <p style="margin:20px 0 0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      This message was sent by the Cart POS team.
+    </p>`
+  return emailLayout(content, subject)
+}
+
 /**
  * New-staff email - sent when an owner/admin adds a team member.
  * Tells them their role, shop(s), and how to sign in.

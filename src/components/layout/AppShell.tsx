@@ -27,6 +27,7 @@ import {
   UserCircle,
   ChevronDown,
   History,
+  Megaphone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
@@ -254,6 +255,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           label: t('stores'),
           href: '/admin/shops',
           icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+        },
+        {
+          label: 'Broadcast',
+          href: '/admin/broadcast',
+          icon: <Megaphone className="h-4 w-4 flex-shrink-0 text-gray-700" />,
         },
       ]
       // Users + Settings go in a bottom group so they never split the store section.
