@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
@@ -63,6 +63,56 @@ interface ReceiptData {
   change?: number
   customerName?: string
 }
+
+// How many products to render in the tappable browse grid. With large catalogs
+// (1,800+) rendering every product froze POS for seconds on each cart change.
+// The search box/dropdown still reaches the full catalog by scan/name/SKU.
+const POS_GRID_LIMIT = 60
+
+// Memoized so adding to cart (which changes cart state) does NOT re-render the
+// product grid. Re-renders only when items / stock / the select handler change.
+const ProductGrid = memo(function ProductGrid({
+  items,
+  productStock,
+  onSelect,
+}: {
+  items: Product[]
+  productStock: Record<string, number>
+  onSelect: (product: Product) => void
+}) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 p-3">
+      {items.map((product) => {
+        const hasCarton = !!(product.cartonSize && product.cartonSize > 0 && product.cartonPrice)
+        const stock = productStock[product.id] ?? null
+        const showStock = product.trackStock && stock !== null
+        return (
+          <button
+            key={product.id}
+            onClick={() => onSelect(product)}
+            className="flex flex-col min-h-[84px] p-3 border border-[hsl(var(--border))] rounded-lg hover:bg-[hsl(var(--muted))] hover:border-blue-400 hover:shadow-sm transition-all text-left cursor-pointer active:scale-95"
+            title={hasCarton ? 'Click to add (piece or carton)' : 'Click to add to cart'}
+          >
+            <div className="font-medium text-sm leading-snug mb-1 line-clamp-2">{product.name}</div>
+            <div className="mt-auto flex items-center justify-between gap-1">
+              <div className="font-bold text-base">{formatCurrency(product.price)}</div>
+              {showStock && (
+                <div className={`text-xs shrink-0 ${stock <= 0 ? 'text-red-600 font-semibold' : stock <= ((product as any).reorderLevel || 0) ? 'text-orange-600' : 'text-gray-500'}`}>
+                  {formatNumber(stock)} {product.unit}
+                </div>
+              )}
+            </div>
+            {hasCarton && (
+              <div className="text-xs text-[hsl(var(--muted-foreground))] truncate mt-0.5">
+                Carton: {formatCurrency(product.cartonPrice!)}
+              </div>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+})
 
 export default function POSPage() {
   const { user } = useAuth()
@@ -1187,6 +1237,22 @@ export default function POSPage() {
     performSearch()
   }, [barcodeInput, products, user?.currentShopId, isOnline])
 
+  // Keep a stable reference to addToCart so the memoized grid's onSelect identity
+  // never changes (addToCart closes over cart/stock and is recreated each render).
+  const addToCartRef = useRef<(p: Product, q?: number, c?: boolean) => void>(() => {})
+  addToCartRef.current = addToCart
+  const handleProductSelect = useCallback((product: Product) => {
+    const hasCarton = !!(product.cartonSize && product.cartonSize > 0 && product.cartonPrice)
+    if (hasCarton) {
+      setQuickAddProduct(product)
+      setQuickAddQuantity('1')
+    } else {
+      addToCartRef.current(product, 1, false)
+    }
+  }, [])
+  // Cap the tappable grid; scanning / the search dropdown still reach every product.
+  const gridItems = useMemo(() => products.slice(0, POS_GRID_LIMIT), [products])
+
   if (!user?.currentShopId) {
     return (
       <div className="p-6">
@@ -1323,45 +1389,14 @@ export default function POSPage() {
               No products available
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 p-3">
-              {products.map((product) => {
-                const hasCarton = product.cartonSize && product.cartonSize > 0 && product.cartonPrice
-                const stock = productStock[product.id] ?? null
-                const showStock = product.trackStock && stock !== null
-                return (
-                  <button
-                    key={product.id}
-                    onClick={() => {
-                      if (hasCarton) {
-                        // For products with cartons, show quick add modal
-                        setQuickAddProduct(product)
-                        setQuickAddQuantity('1')
-                      } else {
-                        // For regular products, add directly
-                        addToCart(product, 1, false)
-                      }
-                    }}
-                    className="flex flex-col min-h-[84px] p-3 border border-[hsl(var(--border))] rounded-lg hover:bg-[hsl(var(--muted))] hover:border-blue-400 hover:shadow-sm transition-all text-left cursor-pointer active:scale-95"
-                    title={hasCarton ? "Click to add (piece or carton)" : "Click to add to cart"}
-                  >
-                    <div className="font-medium text-sm leading-snug mb-1 line-clamp-2">{product.name}</div>
-                    <div className="mt-auto flex items-center justify-between gap-1">
-                      <div className="font-bold text-base">{formatCurrency(product.price)}</div>
-                      {showStock && (
-                        <div className={`text-xs shrink-0 ${stock <= 0 ? 'text-red-600 font-semibold' : stock <= ((product as any).reorderLevel || 0) ? 'text-orange-600' : 'text-gray-500'}`}>
-                          {formatNumber(stock)} {product.unit}
-                        </div>
-                      )}
-                    </div>
-                    {hasCarton && (
-                      <div className="text-xs text-[hsl(var(--muted-foreground))] truncate mt-0.5">
-                        Carton: {formatCurrency(product.cartonPrice!)}
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <ProductGrid items={gridItems} productStock={productStock} onSelect={handleProductSelect} />
+              {products.length > gridItems.length && (
+                <div className="px-3 pb-3 text-center text-xs text-[hsl(var(--muted-foreground))]">
+                  Showing {gridItems.length} of {products.length} products — scan or search above to add any product.
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
