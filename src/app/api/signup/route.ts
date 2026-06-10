@@ -3,7 +3,7 @@ import type { ShopRole } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
-import { PASSWORD_MIN_LENGTH } from '@/constants/auth'
+import { passwordPolicyError } from '@/lib/validation/password'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { withRetry } from '@/lib/db/connection-retry'
 import { isDatabaseConnectionError } from '@/lib/db/db-utils'
@@ -52,11 +52,9 @@ export async function POST(request: Request) {
     }
 
     // Enforce password strength server-side (client validation can be bypassed)
-    if (typeof password !== 'string' || password.length < PASSWORD_MIN_LENGTH) {
-      return NextResponse.json(
-        { error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` },
-        { status: 400 }
-      )
+    const pwError = passwordPolicyError(password)
+    if (pwError) {
+      return NextResponse.json({ error: pwError }, { status: 400 })
     }
 
     // Validate and normalize phone

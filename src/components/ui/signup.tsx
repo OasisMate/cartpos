@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
+import { validatePassword } from '@/lib/validation/password'
+import { PasswordStrength } from '@/components/ui/PasswordStrength'
 
 export default function Signup() {
   const router = useRouter()
@@ -106,8 +108,9 @@ export default function Signup() {
       return
     }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters')
+    const pw = validatePassword(formData.password)
+    if (!pw.ok) {
+      setError(`Password must: ${pw.errors.join('; ')}.`)
       return
     }
 
@@ -582,6 +585,7 @@ export default function Signup() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  <PasswordStrength value={formData.password} />
                 </div>
                 <div>
                   <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">

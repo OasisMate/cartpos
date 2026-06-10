@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 import { sendEmail, generateWelcomeEmail } from '@/lib/email'
+import { passwordPolicyError } from '@/lib/validation/password'
 
 export interface CreateOrgByAdminInput {
   organizationName: string
@@ -51,8 +52,9 @@ export async function createOrganizationWithOwner(
   if (!organizationName || !organizationType || !city || !ownerName || !ownerEmail || !ownerPassword) {
     throw new Error('Missing required fields: organization name, type, city, owner name, email, password')
   }
-  if (ownerPassword.length < 8) {
-    throw new Error('Owner password must be at least 8 characters')
+  const ownerPwError = passwordPolicyError(ownerPassword)
+  if (ownerPwError) {
+    throw new Error(ownerPwError)
   }
 
   // Optional phone/cnic - validate only if provided

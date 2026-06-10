@@ -8,7 +8,9 @@ import { AuthFormContainer } from '@/components/auth/AuthFormContainer'
 import { PasswordInput } from '@/components/ui/PasswordInput'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { SubmitButton } from '@/components/ui/SubmitButton'
-import { AUTH_HERO, PASSWORD_MIN_LENGTH } from '@/constants/auth'
+import { AUTH_HERO } from '@/constants/auth'
+import { validatePassword } from '@/lib/validation/password'
+import { PasswordStrength } from '@/components/ui/PasswordStrength'
 
 function ResetInner() {
   const router = useRouter()
@@ -22,8 +24,9 @@ function ResetInner() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`)
+    const pw = validatePassword(password)
+    if (!pw.ok) {
+      setError(`Password must: ${pw.errors.join('; ')}.`)
       return
     }
     if (password !== confirm) {
@@ -89,6 +92,7 @@ function ResetInner() {
           disabled={loading}
           autoComplete="new-password"
         />
+        <PasswordStrength value={password} />
         <PasswordInput
           label="Confirm new password"
           name="confirm"

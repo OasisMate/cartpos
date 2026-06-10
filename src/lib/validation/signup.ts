@@ -1,4 +1,5 @@
 import { VALIDATION_MESSAGES } from '@/constants/auth'
+import { validatePassword } from '@/lib/validation/password'
 
 export interface SignupFormData {
   firstName: string
@@ -37,9 +38,10 @@ export function validateSignupForm(values: SignupFormData): Partial<Record<keyof
     errors.email = VALIDATION_MESSAGES.email
   }
 
-  // Password validation
-  if (values.password && values.password.length < 8) {
-    errors.password = VALIDATION_MESSAGES.passwordMinLength
+  // Password validation (full strict policy)
+  if (values.password) {
+    const { ok, errors: pwErrors } = validatePassword(values.password)
+    if (!ok) errors.password = `Password must: ${pwErrors.join('; ')}.`
   }
 
   // Password match

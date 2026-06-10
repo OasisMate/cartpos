@@ -11,7 +11,8 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { CodeInput } from '@/components/ui/CodeInput'
 import { AUTH_HERO } from '@/constants/auth'
-import { PASSWORD_MIN_LENGTH } from '@/constants/auth'
+import { validatePassword } from '@/lib/validation/password'
+import { PasswordStrength } from '@/components/ui/PasswordStrength'
 
 export default function ForgotPasswordPage() {
   const router = useRouter()
@@ -50,8 +51,9 @@ export default function ForgotPasswordPage() {
       setError('Enter the 6-digit code from your email.')
       return
     }
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`)
+    const pw = validatePassword(password)
+    if (!pw.ok) {
+      setError(`Password must: ${pw.errors.join('; ')}.`)
       return
     }
     if (password !== confirm) {
@@ -135,6 +137,7 @@ export default function ForgotPasswordPage() {
               disabled={loading}
               autoComplete="new-password"
             />
+            <PasswordStrength value={password} />
             <PasswordInput
               label="Confirm new password"
               name="confirm"

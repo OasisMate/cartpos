@@ -6,6 +6,7 @@ import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityL
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 import { canManageOrgUsers, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
 import { sendEmail, generateStaffWelcomeEmail } from '@/lib/email'
+import { passwordPolicyError } from '@/lib/validation/password'
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -102,6 +103,11 @@ export async function POST(request: Request) {
 
   if (!name || !email || !password) {
     return NextResponse.json({ error: 'Missing required fields: name, email, password' }, { status: 400 })
+  }
+
+  const pwError = passwordPolicyError(password)
+  if (pwError) {
+    return NextResponse.json({ error: pwError }, { status: 400 })
   }
 
   // VALIDATION: If user is being assigned as STORE_MANAGER or CASHIER, they should NOT get org role

@@ -7,6 +7,8 @@ import { useLanguage } from '@/contexts/LanguageContext'
 import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer, Globe } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
 import { COMMON_TIMEZONES } from '@/lib/utils/timezone'
+import { validatePassword } from '@/lib/validation/password'
+import { PasswordStrength } from '@/components/ui/PasswordStrength'
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
@@ -185,9 +187,10 @@ export default function SettingsPage() {
     setError('')
     setSuccess('')
 
-    // Validation
-    if (passwordData.newPassword.length < 8) {
-      setError('New password must be at least 8 characters')
+    // Validation (strict policy)
+    const pw = validatePassword(passwordData.newPassword)
+    if (!pw.ok) {
+      setError(`Password must: ${pw.errors.join('; ')}.`)
       setSaving(false)
       return
     }
@@ -531,13 +534,11 @@ export default function SettingsPage() {
                 value={passwordData.newPassword}
                 onChange={handlePasswordChange}
                 required
-                minLength={6}
+                minLength={10}
                 disabled={saving}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
               />
-              <p className="mt-1 text-xs text-gray-500">
-                Must be at least 8 characters long
-              </p>
+              <PasswordStrength value={passwordData.newPassword} />
             </div>
 
             <div>
@@ -551,7 +552,7 @@ export default function SettingsPage() {
                 value={passwordData.confirmPassword}
                 onChange={handlePasswordChange}
                 required
-                minLength={6}
+                minLength={10}
                 disabled={saving}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
               />
