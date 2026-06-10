@@ -1,10 +1,14 @@
-// Redirect /store to /shop (using shop internally but exposing store in URL)
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { getProductStockBatch } from '@/lib/domain/purchases'
-import { shopDayStartUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
-import { DashboardContent } from './_components/DashboardContent'
+import { DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
+import {
+  getManagerDashboard,
+  getCashierDashboard,
+  getOrgStoresToday,
+} from '@/lib/domain/dashboard'
+import { ManagerDashboard } from './_components/ManagerDashboard'
+import { CashierDashboard } from './_components/CashierDashboard'
 
 export default async function StoreDashboardPage() {
   const user = await getCurrentUser()
@@ -18,17 +22,17 @@ export default async function StoreDashboardPage() {
   }
 
   const isPlatform = user.role === 'PLATFORM_ADMIN'
-  const isOrgAdmin = user.organizations?.some((o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN')
+  const isOrgAdmin = user.organizations?.some(
+    (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
+  )
   const shopRole = user.shops?.find((s: any) => s.shopId === shopId)?.shopRole
-  const isCashier = user.shops?.some((s: any) => s.shopId === shopId && s.shopRole === 'CASHIER')
+  const isCashier = shopRole === 'CASHIER'
 
-  if (!isPlatform && !isOrgAdmin && !shopRole && !isCashier) {
+  if (!isPlatform && !isOrgAdmin && !shopRole) {
     redirect('/')
   }
 
-  // One round-trip: shop name + org status (for the access gate) + timezone.
-  // Folding these together (instead of 3 sequential queries) matters a lot
-  // because the DB is cross-region from the function.
+  // Shop name + org status (access gate) + timezone in one round-trip.
   const shop = await prisma.shop.findUnique({
     where: { id: shopId },
     select: {
@@ -42,48 +46,21 @@ export default async function StoreDashboardPage() {
     redirect('/waiting-approval')
   }
 
-  // "Today" in the shop's own timezone so the dashboard matches what the
-  // shopkeeper considers today (and agrees with Reports).
-  const today = shopDayStartUTC(shop?.settings?.timezone || DEFAULT_TIMEZONE)
+  const timezone = shop?.settings?.timezone || DEFAULT_TIMEZONE
+  const shopName = shop?.name || 'Store'
 
-  const [invoicesToday, paymentsToday, udhaarInvoicesToday, trackedProducts] = await Promise.all([
-    prisma.invoice.count({
-      where: { shopId, createdAt: { gte: today }, status: 'COMPLETED' },
-    }),
-    prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: { shopId, createdAt: { gte: today } },
-    }),
-    // Udhaar given today = total of COMPLETED udhaar invoices today.
-    // Sourced from invoices (not the ledger) so VOIDed sales are excluded - matches Reports.
-    prisma.invoice.aggregate({
-      _sum: { total: true },
-      where: { shopId, createdAt: { gte: today }, status: 'COMPLETED', paymentStatus: 'UDHAAR' },
-    }),
-    // Candidates for low-stock: tracked products that have a reorder level set.
-    prisma.product.findMany({
-      where: { shopId, trackStock: true, reorderLevel: { not: null } },
-      select: { id: true, reorderLevel: true },
-    }),
-  ])
+  // Cashiers get the lean operational view (no profit/receivables/payables).
+  if (isCashier && !isOrgAdmin && !isPlatform) {
+    const data = await getCashierDashboard(shopId, timezone)
+    return <CashierDashboard shopName={shopName} data={data} />
+  }
 
-  // Low stock = on-hand quantity at or below the reorder level (not just "has a reorder level").
-  const stockMap = await getProductStockBatch(
-    shopId,
-    trackedProducts.map((p) => p.id)
-  )
-  const lowStockCount = trackedProducts.filter((p) => {
-    const onHand = stockMap.get(p.id) ?? 0
-    return p.reorderLevel != null && onHand <= p.reorderLevel
-  }).length
+  // Managers / org owners / platform admins get the full insight dashboard.
+  const data = await getManagerDashboard(shopId, timezone)
+  const orgStores =
+    (isOrgAdmin || isPlatform) && user.currentOrgId
+      ? await getOrgStoresToday(user.currentOrgId, timezone)
+      : undefined
 
-  return (
-    <DashboardContent
-      shopName={shop?.name || 'Store'}
-      invoicesToday={invoicesToday}
-      paymentsToday={Number(paymentsToday._sum.amount || 0)}
-      udhaarCreatedToday={Number(udhaarInvoicesToday._sum.total || 0)}
-      lowStockCount={lowStockCount}
-    />
-  )
+  return <ManagerDashboard shopName={shopName} data={data} orgStores={orgStores} />
 }

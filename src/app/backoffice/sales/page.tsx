@@ -10,6 +10,7 @@ import Modal from '@/components/ui/Modal'
 import IconButton from '@/components/ui/IconButton'
 import { Printer, Ban, Trash2 } from 'lucide-react'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface SaleLine {
   id: string
@@ -358,7 +359,9 @@ export default function BackofficeSalesPage() {
       >
         {voiding ? (
           <div className="flex flex-col items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mb-4"></div>
+            <div className="mb-4">
+              <BrandSpinner size={48} />
+            </div>
             <p className="text-gray-700 text-center">
               Processing... Please wait
             </p>

@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { useEffect, useRef, useState, useTransition } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { Sidebar, SidebarBody, SidebarLink } from '@/components/ui/sidebar'
@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 import Link from 'next/link'
 import NotificationBell from '@/components/layout/NotificationBell'
 
@@ -85,9 +86,39 @@ interface NavGroup {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, logout, selectOrg, selectShop } = useAuth()
   const { t, language, setLanguage, isRTL } = useLanguage()
   const [open, setOpen] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  // Switching shop/org sets a cookie server-side, then re-renders the server
+  // components (dashboard etc.) for the new selection. We track both the fetch
+  // and the refresh so a loader stays up until the new data is actually on screen.
+  const switchBusy = switching || isPending
+
+  async function changeShop(shopId: string) {
+    if (!shopId || shopId === user?.currentShopId) return
+    setSwitching(true)
+    try {
+      await selectShop(shopId)
+    } finally {
+      setSwitching(false)
+    }
+    startTransition(() => router.refresh())
+  }
+
+  async function changeOrg(orgId: string) {
+    if (!orgId || orgId === user?.currentOrgId) return
+    setSwitching(true)
+    try {
+      await selectOrg(orgId)
+    } finally {
+      setSwitching(false)
+    }
+    startTransition(() => router.refresh())
+  }
   const [orgMeta, setOrgMeta] = useState<{ id: string; name: string } | null>(null)
   const [storeMeta, setStoreMeta] = useState<{ id: string; name: string } | null>(null)
   const [orgAdminStoreMeta, setOrgAdminStoreMeta] = useState<{ id: string; name: string } | null>(null)
@@ -663,8 +694,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     {user.organizations && user.organizations.length > 1 && (
                       <select
                         value={user.currentOrgId || ''}
-                        onChange={(e) => selectOrg(e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onChange={(e) => changeOrg(e.target.value)}
+                        disabled={switchBusy}
+                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                       >
                         {user.organizations.map((o) => (
                           <option key={o.orgId} value={o.orgId}>
@@ -676,8 +708,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     {user.shops && user.shops.length > 1 && (
                       <select
                         value={user.currentShopId || ''}
-                        onChange={(e) => selectShop(e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onChange={(e) => changeShop(e.target.value)}
+                        disabled={switchBusy}
+                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                       >
                         {user.shops.map((s) => (
                           <option key={s.shopId} value={s.shopId}>
@@ -698,13 +731,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto bg-gray-50">
+        <main className="relative flex-1 overflow-y-auto bg-gray-50">
           {user?.isDemoOrg && (
             <div className="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-6 py-2 text-center font-medium">
-              Demo mode — explore freely. Destructive actions (delete, void) are disabled.
+              Demo mode. Explore freely. Destructive actions (delete, void) are disabled.
             </div>
           )}
           <div className="p-6">{children}</div>
+
+          {switchBusy && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/60 backdrop-blur-[1px]">
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-white px-6 py-5 shadow-lg">
+                <BrandSpinner size={40} />
+                <span className="text-sm font-medium text-gray-700">Switching store...</span>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

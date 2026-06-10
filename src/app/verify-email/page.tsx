@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { CodeInput } from '@/components/ui/CodeInput'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 type View = 'checking' | 'sent' | 'verified' | 'already' | 'expired' | 'invalid'
 
@@ -88,7 +89,9 @@ function VerifyEmailInner() {
   if (view === 'checking') {
     return (
       <div className="w-full max-w-md text-center">
-        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4" />
+        <div className="mb-4 flex justify-center">
+          <BrandSpinner size={48} />
+        </div>
         <p className="text-gray-600">Verifying your email…</p>
       </div>
     )

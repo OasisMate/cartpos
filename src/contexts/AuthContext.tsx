@@ -106,7 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Failed to select shop')
       }
 
-      // Update user state directly instead of full refresh to avoid extra API calls
+      // Update client state for components that read it directly. The caller is
+      // responsible for re-rendering server components (router.refresh in a
+      // transition) so it can show a loader until the new shop's data arrives.
       if (user) {
         setUser({ ...user, currentShopId: shopId })
       }
@@ -129,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Failed to select organization')
       }
 
-      // Update user state directly
+      // Update client state; caller re-renders server components in a transition.
       if (user) {
         setUser({ ...user, currentOrgId: orgId })
       }

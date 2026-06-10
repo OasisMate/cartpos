@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface OrganizationStatus {
   id: string
@@ -59,7 +60,9 @@ export default function WaitingApprovalPage() {
     return (
       <div className="w-full min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
+          <div className="mb-4 flex justify-center">
+            <BrandSpinner size={48} />
+          </div>
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>

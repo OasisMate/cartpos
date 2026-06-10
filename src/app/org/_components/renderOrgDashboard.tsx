@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { isDatabaseConnectionError } from '@/lib/db/db-utils'
 import { withRetry } from '@/lib/db/connection-retry'
+import { getOrgDashboard } from '@/lib/domain/dashboard'
 import { OrgDashboardContent } from './OrgDashboardContent'
 
 export async function renderOrgDashboard(orgIdOverride?: string) {
@@ -61,62 +62,9 @@ export async function renderOrgDashboard(orgIdOverride?: string) {
     redirect('/waiting-approval')
   }
 
-  const [shops, usersInOrg] = await Promise.all([
-    withRetry(
-      () =>
-        prisma.shop.findMany({
-          where: { orgId },
-          select: { id: true, name: true },
-        }),
-      { maxRetries: 2, initialDelay: 200 }
-    ),
-    withRetry(
-      () => prisma.organizationUser.count({ where: { orgId } }),
-      { maxRetries: 2, initialDelay: 200 }
-    ),
-  ])
+  const data = await withRetry(() => getOrgDashboard(orgId), { maxRetries: 2, initialDelay: 200 })
 
-  const shopIds = shops.map((s) => s.id)
-
-  const [productsCount, customersCount, invoicesTodayCount, outstandingUdhaar] = await Promise.all([
-    withRetry(
-      () => prisma.product.count({ where: { shopId: { in: shopIds } } }),
-      { maxRetries: 2, initialDelay: 200 }
-    ),
-    withRetry(
-      () => prisma.customer.count({ where: { shopId: { in: shopIds } } }),
-      { maxRetries: 2, initialDelay: 200 }
-    ),
-    withRetry(
-      () =>
-        prisma.invoice.count({
-          where: {
-            shopId: { in: shopIds },
-            createdAt: { gte: new Date(new Date().toDateString()) },
-            status: 'COMPLETED',
-          },
-        }),
-      { maxRetries: 2, initialDelay: 200 }
-    ),
-    withRetry(
-      () =>
-        prisma.customerLedger.aggregate({
-          _sum: { amount: true },
-          where: { shopId: { in: shopIds }, direction: 'DEBIT' },
-        }),
-      { maxRetries: 2, initialDelay: 200 }
-    ),
-  ])
-
-    return (
-      <OrgDashboardContent
-        shopsCount={shops.length}
-        usersInOrg={usersInOrg}
-        productsCount={productsCount}
-        invoicesTodayCount={invoicesTodayCount}
-        outstandingUdhaar={Number(outstandingUdhaar._sum.amount || 0)}
-      />
-    )
+    return <OrgDashboardContent data={data} />
   } catch (error) {
     console.error('Error rendering org dashboard:', error)
     
