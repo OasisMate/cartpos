@@ -128,18 +128,34 @@ function ctaButton(href: string, label: string): string {
 /**
  * Password reset email.
  */
-export function generatePasswordResetEmail(resetLink: string, userName?: string): string {
+export function generatePasswordResetEmail(resetLink: string, code: string, userName?: string): string {
   const content = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Reset your password</h1>
     <p style="margin:0 0 12px;">${userName ? `Hello ${userName},` : 'Hello,'}</p>
     <p style="margin:0 0 4px;">We received a request to reset the password for your Cart POS account. Click the button below to choose a new one.</p>
     ${ctaButton(resetLink, 'Reset Password')}
-    <p style="margin:0 0 8px;color:#6b7280;font-size:13px;">Or paste this link into your browser:</p>
+    ${codeBlock(code)}
+    <p style="margin:16px 0 8px;color:#6b7280;font-size:13px;">Or paste this link into your browser:</p>
     <p style="margin:0 0 24px;word-break:break-all;"><a href="${resetLink}" style="color:#f97316;font-size:13px;">${resetLink}</a></p>
     <p style="margin:0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
-      This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.
+      This link and code expire in 1 hour. If you didn't request a password reset, you can safely ignore this email.
     </p>`
   return emailLayout(content, 'Reset your Cart POS password')
+}
+
+/**
+ * Login 2FA code email (opt-in two-step sign-in).
+ */
+export function generateLoginCodeEmail(code: string, userName?: string): string {
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Your sign-in code</h1>
+    <p style="margin:0 0 12px;">${userName ? `Hello ${userName},` : 'Hello,'}</p>
+    <p style="margin:0 0 4px;">Use this code to finish signing in to Cart POS:</p>
+    ${codeBlock(code)}
+    <p style="margin:16px 0 0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      This code expires in 10 minutes. If you didn't try to sign in, please change your password.
+    </p>`
+  return emailLayout(content, 'Your Cart POS sign-in code')
 }
 
 // Shared notice block: states the 7-day verify-or-be-removed policy.

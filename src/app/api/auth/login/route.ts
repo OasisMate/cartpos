@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomInt } from 'crypto'
 import { prisma } from '@/lib/db/prisma'
-import { verifyPassword, createSession } from '@/lib/auth'
+import { verifyPassword, createSession, createPreAuthToken } from '@/lib/auth'
+import { sendEmail, generateLoginCodeEmail } from '@/lib/email'
 import { normalizePhone, normalizeCNIC, validatePhone } from '@/lib/validation'
 import { withRetry } from '@/lib/db/connection-retry'
 import { rateLimit, clearRateLimit, getClientIp } from '@/lib/rate-limit'
@@ -122,8 +124,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Successful login - reset this account's failed-attempt counter.
+    // Successful password - reset this account's failed-attempt counter.
     clearRateLimit(acctKey)
+
+    // Opt-in 2FA: don't create a session yet; email a code and return a
+    // short-lived pre-auth token the client exchanges for a session.
+    if (user.twoFactorEnabled) {
+      const code = String(randomInt(100000, 1000000))
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+      await prisma.loginCode.updateMany({ where: { userId: user.id, used: false }, data: { used: true } })
+      await prisma.loginCode.create({ data: { userId: user.id, code, expiresAt } })
+      await sendEmail({
+        to: user.email,
+        subject: 'Your Cart POS sign-in code',
+        html: generateLoginCodeEmail(code, user.name),
+      })
+      const preAuthToken = await createPreAuthToken(user.id)
+      return NextResponse.json({ twoFactor: true, preAuthToken, email: user.email })
+    }
 
     // Create session with remember me option
     await createSession(user.id, user.email, user.role, rememberMe)

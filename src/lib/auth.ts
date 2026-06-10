@@ -47,6 +47,28 @@ export async function createSession(userId: string, email: string, role: string,
   })
 }
 
+/**
+ * Short-lived token proving the password step passed, pending a 2FA code.
+ * Not a session - cannot access anything; only used to complete login.
+ */
+export async function createPreAuthToken(userId: string): Promise<string> {
+  return new SignJWT({ userId, pending2fa: true })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(new Date(Date.now() + 10 * 60 * 1000)) // 10 minutes
+    .sign(encodedKey)
+}
+
+export async function verifyPreAuthToken(token: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, encodedKey, { algorithms: ['HS256'] })
+    if (payload.pending2fa !== true || !payload.userId) return null
+    return payload.userId as string
+  } catch {
+    return null
+  }
+}
+
 export async function deleteSession() {
   const cookieStore = await cookies()
   cookieStore.delete('session')
@@ -137,6 +159,7 @@ export async function getCurrentUser() {
       cnic: user.cnic,
       isWhatsApp: user.isWhatsApp,
       role: user.role,
+      twoFactorEnabled: user.twoFactorEnabled,
       organizations,
       currentOrgId,
       shops,

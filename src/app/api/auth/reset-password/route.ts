@@ -5,11 +5,11 @@ import { PASSWORD_MIN_LENGTH } from '@/constants/auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, password } = await request.json()
+    const { token, email, code, password } = await request.json()
 
-    if (!token || !password) {
+    if (!password || (!token && !(email && code))) {
       return NextResponse.json(
-        { error: 'Token and password are required' },
+        { error: 'Provide a reset token (or email + code) and a new password' },
         { status: 400 }
       )
     }
@@ -21,11 +21,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find valid reset token
-    const resetToken = await prisma.passwordResetToken.findUnique({
-      where: { token },
-      include: { user: true },
-    })
+    // Find the reset token by opaque token, or by the user's email + 6-digit code.
+    let resetToken = null
+    if (token) {
+      resetToken = await prisma.passwordResetToken.findUnique({
+        where: { token },
+        include: { user: true },
+      })
+    } else {
+      const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase() } })
+      if (user && /^\d{6}$/.test(String(code))) {
+        resetToken = await prisma.passwordResetToken.findFirst({
+          where: { userId: user.id, code: String(code), used: false },
+          orderBy: { createdAt: 'desc' },
+          include: { user: true },
+        })
+      }
+    }
 
     if (!resetToken) {
       return NextResponse.json(

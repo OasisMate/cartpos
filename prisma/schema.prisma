@@ -125,6 +125,7 @@ model User {
   password  String      // hashed password
   role      UserRole    @default(NORMAL)
   emailVerified Boolean  @default(false) // email ownership confirmed via verification link
+  twoFactorEnabled Boolean @default(false) // opt-in email 2FA on login
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   shops            UserShop[]
@@ -135,6 +136,7 @@ model User {
   notifications    Notification[]
   passwordResets   PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
+  loginCodes       LoginCode[]
   expenses         Expense[]
   activityLogs     ActivityLog[]
 
@@ -147,12 +149,27 @@ model PasswordResetToken {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique
+  code      String?  // 6-digit code; alternative to the reset link
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Short-lived 6-digit codes for opt-in login 2FA.
+model LoginCode {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([expiresAt])
 }

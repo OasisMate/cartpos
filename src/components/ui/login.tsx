@@ -13,10 +13,18 @@ import { SubmitButton } from '@/components/ui/SubmitButton'
 import { useForm } from '@/hooks/useForm'
 import { apiPost } from '@/lib/api'
 import { AUTH_HERO, AUTH_FORM } from '@/constants/auth'
+import { CodeInput } from '@/components/ui/CodeInput'
 
 interface LoginFormData {
   identifier: string
   password: string
+}
+
+interface LoginResponse {
+  twoFactor?: boolean
+  preAuthToken?: string
+  email?: string
+  user?: { id: string; name: string; email: string; role: string }
 }
 
 export default function Login() {
@@ -24,6 +32,17 @@ export default function Login() {
   const { refreshUser } = useAuth()
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
+  // 2FA second step
+  const [twoFA, setTwoFA] = useState<{ preAuthToken: string; email: string } | null>(null)
+  const [codeError, setCodeError] = useState('')
+  const [verifying, setVerifying] = useState(false)
+
+  async function finishLogin() {
+    await refreshUser()
+    setIsRedirecting(true)
+    router.push('/')
+    router.refresh()
+  }
 
   const { values, error, loading, handleChange, handleSubmit, setError } = useForm<LoginFormData>({
     initialValues: {
@@ -32,22 +51,19 @@ export default function Login() {
     },
     onSubmit: async (formData) => {
       try {
-        await apiPost('/api/auth/login', {
+        const res = await apiPost<LoginResponse>('/api/auth/login', {
           identifier: formData.identifier,
           password: formData.password,
           rememberMe,
         })
 
-        await refreshUser()
-        
-        // Set redirecting state to keep loader active
-        setIsRedirecting(true)
-        
-        // Navigate and wait for it to complete
-        router.push('/')
-        router.refresh()
-        
-        // Keep loading state active - it will be cleared when component unmounts on redirect
+        // 2FA enabled: switch to the code step instead of completing login.
+        if (res?.twoFactor && res.preAuthToken) {
+          setTwoFA({ preAuthToken: res.preAuthToken, email: res.email || '' })
+          return
+        }
+
+        await finishLogin()
       } catch (err: any) {
         setIsRedirecting(false)
         // Unverified email: send them to the verify screen (which offers resend).
@@ -62,8 +78,54 @@ export default function Login() {
     },
   })
 
+  async function submitCode(code: string) {
+    if (!twoFA) return
+    setVerifying(true)
+    setCodeError('')
+    try {
+      await apiPost('/api/auth/login/verify-2fa', {
+        preAuthToken: twoFA.preAuthToken,
+        code,
+        rememberMe,
+      })
+      await finishLogin()
+    } catch (err: any) {
+      setVerifying(false)
+      setCodeError(err.message || 'Invalid code. Please try again.')
+    }
+  }
+
   // Combined loading state - true if form is loading OR redirecting
   const isLoading = loading || isRedirecting
+
+  // 2FA code step
+  if (twoFA) {
+    return (
+      <div className="w-full min-h-screen flex flex-col md:flex-row" dir="ltr">
+        <AuthHero {...AUTH_HERO.login} />
+        <AuthFormContainer title="Two-step verification" subtitle="Enter the code we emailed you">
+          <div className="text-center">
+            <p className="text-sm text-gray-600 mb-1">
+              We sent a 6-digit code to {twoFA.email ? <strong>{twoFA.email}</strong> : 'your email'}.
+            </p>
+            <p className="text-xs text-gray-400 mb-5">It expires in 10 minutes.</p>
+            <CodeInput onComplete={submitCode} disabled={verifying || isRedirecting} />
+            {verifying && <p className="text-sm text-gray-500 mt-3">Verifying…</p>}
+            {codeError && <p className="text-sm text-red-600 mt-3">{codeError}</p>}
+            <button
+              onClick={() => {
+                setTwoFA(null)
+                setCodeError('')
+              }}
+              className="block mx-auto mt-5 text-blue-600 hover:text-blue-700 font-semibold text-sm"
+            >
+              Back to login
+            </button>
+          </div>
+        </AuthFormContainer>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full min-h-screen flex flex-col md:flex-row" dir="ltr">
@@ -106,6 +168,9 @@ export default function Login() {
               />
               <span className="ml-2 text-sm text-gray-600">Remember me</span>
             </label>
+            <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700 font-semibold">
+              Forgot password?
+            </Link>
           </div>
 
           <SubmitButton loading={isLoading} loadingText={isRedirecting ? "Redirecting..." : "Signing in..."}>

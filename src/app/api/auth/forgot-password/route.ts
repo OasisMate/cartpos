@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { sendEmail, generatePasswordResetEmail } from '@/lib/email'
-import { randomBytes } from 'crypto'
+import { randomBytes, randomInt } from 'crypto'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
 const ONE_HOUR = 60 * 60 * 1000
@@ -38,8 +38,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Generate secure token
+    // Generate secure token + a short 6-digit code (alternative to the link)
     const token = randomBytes(32).toString('hex')
+    const code = String(randomInt(100000, 1000000))
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
 
     // Invalidate any existing reset tokens for this user
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         token,
+        code,
         expiresAt,
       },
     })
@@ -70,7 +72,7 @@ export async function POST(request: NextRequest) {
     const emailResult = await sendEmail({
       to: user.email,
       subject: 'Reset Your CartPOS Password',
-      html: generatePasswordResetEmail(resetLink, user.name),
+      html: generatePasswordResetEmail(resetLink, code, user.name),
     })
 
     if (!emailResult.success) {

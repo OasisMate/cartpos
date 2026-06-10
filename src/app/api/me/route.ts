@@ -20,6 +20,7 @@ export async function GET() {
       cnic: user.cnic,
       isWhatsApp: user.isWhatsApp,
       role: user.role,
+      twoFactorEnabled: user.twoFactorEnabled,
       organizations: user.organizations,
       currentOrgId: user.currentOrgId,
       shops: user.shops,
