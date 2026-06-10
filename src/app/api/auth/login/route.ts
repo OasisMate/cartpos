@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Successful login — reset this account's failed-attempt counter.
+    // Successful login - reset this account's failed-attempt counter.
     clearRateLimit(acctKey)
 
     // Create session with remember me option

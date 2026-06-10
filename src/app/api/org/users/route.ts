@@ -20,7 +20,7 @@ export async function GET() {
 
   // Users belong to an org two ways: an org-level role (OrganizationUser, i.e. ORG_ADMIN)
   // and/or a shop-level role (UserShop on a shop in this org, i.e. STORE_MANAGER / CASHIER).
-  // We must union BOTH — otherwise store managers and cashiers (created with only a shop
+  // We must union BOTH - otherwise store managers and cashiers (created with only a shop
   // assignment, no OrganizationUser row) never appear in the list.
   const userSelect = { id: true, name: true, email: true, phone: true, cnic: true, role: true }
 

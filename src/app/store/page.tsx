@@ -55,7 +55,7 @@ export default async function StoreDashboardPage() {
       where: { shopId, createdAt: { gte: today } },
     }),
     // Udhaar given today = total of COMPLETED udhaar invoices today.
-    // Sourced from invoices (not the ledger) so VOIDed sales are excluded — matches Reports.
+    // Sourced from invoices (not the ledger) so VOIDed sales are excluded - matches Reports.
     prisma.invoice.aggregate({
       _sum: { total: true },
       where: { shopId, createdAt: { gte: today }, status: 'COMPLETED', paymentStatus: 'UDHAAR' },

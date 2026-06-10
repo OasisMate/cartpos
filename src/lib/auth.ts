@@ -14,7 +14,7 @@ if (!secretKey || secretKey.length < 32) {
 const encodedKey = new TextEncoder().encode(secretKey)
 
 export async function hashPassword(password: string): Promise<string> {
-  // Cost factor 12 (was 10) — stronger against offline cracking; ~250ms/hash is acceptable.
+  // Cost factor 12 (was 10) - stronger against offline cracking; ~250ms/hash is acceptable.
   return bcrypt.hash(password, 12)
 }
 

@@ -15,7 +15,7 @@ interface CreateNotificationInput extends NotificationContent {
 
 /**
  * Create one notification for a single recipient.
- * Never throws — notifications must not break the main flow.
+ * Never throws - notifications must not break the main flow.
  */
 export async function createNotification(input: CreateNotificationInput): Promise<void> {
   try {

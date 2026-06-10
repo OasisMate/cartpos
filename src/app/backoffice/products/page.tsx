@@ -106,7 +106,7 @@ export default function ProductsPage() {
       setSortColumn(column)
       setSortDirection('asc')
     }
-    // server-sortable columns sort the whole catalog — restart from page 1.
+    // server-sortable columns sort the whole catalog - restart from page 1.
     if (SERVER_SORT_COLUMNS.includes(column)) setCurrentPage(1)
   }
 

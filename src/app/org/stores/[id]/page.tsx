@@ -288,11 +288,11 @@ export default function StoreDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <span className="text-sm font-medium text-gray-700">City:</span>
-                    <p className="text-gray-900">{store.city || '—'}</p>
+                    <p className="text-gray-900">{store.city || '-'}</p>
                   </div>
                   <div>
                     <span className="text-sm font-medium text-gray-700">Phone:</span>
-                    <p className="text-gray-900">{store.phone || '—'}</p>
+                    <p className="text-gray-900">{store.phone || '-'}</p>
                   </div>
                 </div>
                 {store.addressLine1 && (

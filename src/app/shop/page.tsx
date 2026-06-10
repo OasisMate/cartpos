@@ -64,7 +64,7 @@ export default async function ShopDashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">{shop?.name} — Dashboard</h1>
+      <h1 className="text-2xl font-bold mb-2">{shop?.name} - Dashboard</h1>
       <p className="text-[hsl(var(--muted-foreground))] mb-6">Today&apos;s snapshot and quick actions</p>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

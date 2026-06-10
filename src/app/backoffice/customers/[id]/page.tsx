@@ -22,7 +22,7 @@ async function getData(customerId: string, userId: string) {
   if (!customer) return null
 
   // Balance = DEBIT - CREDIT (all credits reduce what's owed, incl. void reversals).
-  // "Payments received" must count only actual payments (type PAYMENT_RECEIVED) —
+  // "Payments received" must count only actual payments (type PAYMENT_RECEIVED) -
   // void/opening adjustments are credits too but are NOT money received.
   const [debits, credits, payments, lastPayment] = await Promise.all([
     prisma.customerLedger.aggregate({
@@ -70,7 +70,7 @@ export default async function CustomerDetailPage({
         <div>
           <h1 className="text-2xl font-bold mb-1">{customer.name}</h1>
           <p className="text-[hsl(var(--muted-foreground))]">
-            {customer.phone || '—'}
+            {customer.phone || '-'}
             {customer.notes && (
               <>
                 {' · '}

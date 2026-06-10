@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { clearNotifications } from '@/lib/domain/notifications'
 
-// POST: delete notifications. Body { ids?: string[] } — omit ids to clear all.
+// POST: delete notifications. Body { ids?: string[] } - omit ids to clear all.
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()

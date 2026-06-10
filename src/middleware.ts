@@ -63,7 +63,7 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // If valid session exists and on login page, redirect to home —
+  // If valid session exists and on login page, redirect to home -
   // UNLESS ?clearSession=1 is present, which means a downstream page detected a
   // stale/deleted-user session and is asking us to clear it (prevents redirect loops).
   if (hasValidSession && pathname === '/login') {

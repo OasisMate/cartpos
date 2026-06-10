@@ -96,7 +96,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Close the user menu when clicking outside it. Detect "inside" via a DOM attribute
   // (not a ref): the sidebar renders the user section twice (desktop + mobile), so a
   // single shared ref points at only one copy and would misread clicks on the other as
-  // "outside" — closing the menu the same tick the click opens it.
+  // "outside" - closing the menu the same tick the click opens it.
   useEffect(() => {
     if (!userMenuOpen) return
     function handleClickOutside(event: MouseEvent) {

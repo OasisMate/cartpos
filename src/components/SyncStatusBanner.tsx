@@ -26,7 +26,7 @@ export function SyncStatusBanner({ shopId }: Props) {
       setSummary(next)
       if (next.total === 0) setLastError(null)
     } catch {
-      /* IndexedDB unavailable — ignore */
+      /* IndexedDB unavailable - ignore */
     }
   }, [shopId])
 
@@ -77,7 +77,7 @@ export function SyncStatusBanner({ shopId }: Props) {
               {summary.total} item{summary.total === 1 ? '' : 's'} waiting to sync
             </span>
             {detail ? (
-              <span className="block text-amber-900/80 sm:inline sm:before:content-['—_']">{detail}</span>
+              <span className="block text-amber-900/80 sm:inline sm:before:content-['-_']">{detail}</span>
             ) : null}
             {!isOnline ? (
               <span className="mt-0.5 block text-xs text-amber-800/90">Reconnect to upload to the server.</span>

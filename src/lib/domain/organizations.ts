@@ -54,7 +54,7 @@ export async function createOrganizationWithOwner(
     throw new Error('Owner password must be at least 8 characters')
   }
 
-  // Optional phone/cnic — validate only if provided
+  // Optional phone/cnic - validate only if provided
   let normalizedPhone: string | null = null
   if (ownerPhone) {
     normalizedPhone = normalizePhone(ownerPhone, 'PK')
@@ -379,7 +379,7 @@ export async function purgeOrganization(
 
 /**
  * Delete an organization whose requesting owner never verified their email.
- * Safety: refuses if the owner IS verified or the org is ACTIVE — this path is
+ * Safety: refuses if the owner IS verified or the org is ACTIVE - this path is
  * only for clearing unverified signup junk. Removes the org, its data, the owner
  * and any staff (mirrors purgeOrganization's FK-ordered deletes).
  */
@@ -395,7 +395,7 @@ export async function purgeUnverifiedOrganization(orgId: string, adminUserId: st
   if (!ownerId) throw new Error('Organization has no requesting user')
   const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { emailVerified: true } })
   if (!owner) throw new Error('Requesting user not found')
-  if (owner.emailVerified) throw new Error('This account is verified — it cannot be removed as unverified junk')
+  if (owner.emailVerified) throw new Error('This account is verified - it cannot be removed as unverified junk')
 
   const shopIds = org.shops.map((s) => s.id)
 

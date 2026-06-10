@@ -646,7 +646,7 @@ export default function PurchasesPage() {
                       onChange={(e) => setFormData({ ...formData, onCredit: e.target.checked })}
                       className="h-4 w-4 rounded border-gray-300"
                     />
-                    <span>Purchase on credit — add total to supplier balance</span>
+                    <span>Purchase on credit - add total to supplier balance</span>
                   </label>
                   <p className="mt-1 ml-6 text-xs text-[hsl(var(--muted-foreground))]">
                     {formData.supplierId

@@ -124,7 +124,7 @@ function VerifyEmailInner() {
       </h2>
       <p className="text-gray-600 mb-5">
         {view === 'expired'
-          ? 'This verification link has expired — use the code from a fresh email, or resend below.'
+          ? 'This verification link has expired - use the code from a fresh email, or resend below.'
           : view === 'invalid'
           ? 'This link is invalid or already used. Enter your code below, or resend a new one.'
           : 'We sent a verification link and a 6-digit code to your email.'}

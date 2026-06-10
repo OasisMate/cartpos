@@ -68,7 +68,7 @@ export default function ExpensesPage() {
                 </Link>
             </div>
 
-            {/* Pending sync — only shown when there is something waiting to upload. */}
+            {/* Pending sync - only shown when there is something waiting to upload. */}
             {(loading || pendingExpenses.length > 0) && (
                 <div className="bg-[hsl(var(--card))] rounded-lg border border-[hsl(var(--border))] p-4 mb-6">
                     <h2 className="text-lg font-semibold mb-4">Pending Sync ({pendingExpenses.length})</h2>
@@ -100,7 +100,7 @@ export default function ExpensesPage() {
                 </div>
             )}
 
-            {/* Recorded expenses — synced to the server. */}
+            {/* Recorded expenses - synced to the server. */}
             <div className="bg-[hsl(var(--card))] rounded-lg border border-[hsl(var(--border))] p-4">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">Recorded Expenses</h2>

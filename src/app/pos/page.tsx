@@ -766,7 +766,7 @@ export default function POSPage() {
   }
 
   function handleProductSearch(product: Product) {
-    // Add straight to the cart (qty 1) — no extra quantity modal. The cashier adjusts
+    // Add straight to the cart (qty 1) - no extra quantity modal. The cashier adjusts
     // quantity with the +/- buttons or the number box in the cart.
     addToCart(product, 1, false)
     setBarcodeInput('')
@@ -1395,7 +1395,7 @@ export default function POSPage() {
               <ProductGrid items={gridItems} productStock={productStock} onSelect={handleProductSelect} />
               {products.length > gridItems.length && (
                 <div className="px-3 pb-3 text-center text-xs text-[hsl(var(--muted-foreground))]">
-                  Showing {gridItems.length} of {products.length} products — scan or search above to add any product.
+                  Showing {gridItems.length} of {products.length} products - scan or search above to add any product.
                 </div>
               )}
             </>

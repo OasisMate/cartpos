@@ -281,7 +281,7 @@ export default function CustomersPage() {
                 customers.map((c) => (
                   <TR key={c.id}>
                     <TD>{c.name}</TD>
-                    <TD>{c.phone || '—'}</TD>
+                    <TD>{c.phone || '-'}</TD>
                     <TD className="text-right">{formatCurrency(c.balance ?? 0)}</TD>
                     <TD className="text-right">
                       <div className="flex gap-2 justify-end">

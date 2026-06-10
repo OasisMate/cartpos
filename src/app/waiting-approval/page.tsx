@@ -208,7 +208,7 @@ export default function WaitingApprovalPage() {
           </p>
           <p className="text-base md:text-lg text-blue-200">
             An administrator needs to approve your request before you can sign in. This page updates on its own
-            when your status changes — keep it open or check back later.
+            when your status changes - keep it open or check back later.
           </p>
         </div>
       </div>

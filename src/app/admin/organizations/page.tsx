@@ -650,7 +650,7 @@ export default function OrganizationsPage() {
 
               {org.deletionScheduledAt && (
                 <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
-                  ⏳ Scheduled for deletion — can be permanently deleted on{' '}
+                  ⏳ Scheduled for deletion - can be permanently deleted on{' '}
                   <span className="font-medium">{purgeEligibleDate(org)?.toLocaleDateString()}</span>.
                   Click <span className="font-medium">Cancel deletion</span> to restore it any time before then.
                 </div>

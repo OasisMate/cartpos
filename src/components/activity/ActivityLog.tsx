@@ -83,7 +83,7 @@ function describeDetails(d: Record<string, any> | null): string {
   if (d.name) parts.push(String(d.name))
   if (d.number) parts.push(`#${d.number}`)
   if (d.reference) parts.push(String(d.reference))
-  if (d.reason) parts.push(`— ${d.reason}`)
+  if (d.reason) parts.push(`- ${d.reason}`)
   return parts.join(' ')
 }
 
@@ -130,7 +130,7 @@ export default function ActivityLog() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Activity Log</h1>
         <p className="text-sm text-gray-600 mt-1">
-          Who did what, and when — across all stores in this organization.
+          Who did what, and when - across all stores in this organization.
         </p>
       </div>
 
@@ -197,7 +197,7 @@ export default function ActivityLog() {
                       {format(new Date(a.createdAt), 'MMM d, yyyy h:mm a')}
                     </TD>
                     <TD className="text-sm">
-                      <div className="font-medium text-gray-900">{a.user?.name || '—'}</div>
+                      <div className="font-medium text-gray-900">{a.user?.name || '-'}</div>
                       {a.user?.email && <div className="text-xs text-gray-400">{a.user.email}</div>}
                     </TD>
                     <TD>
@@ -205,8 +205,8 @@ export default function ActivityLog() {
                         {humanizeAction(a.action)}
                       </span>
                     </TD>
-                    <TD className="text-sm text-gray-700">{describeDetails(a.details) || '—'}</TD>
-                    <TD className="text-sm text-gray-600">{a.shop?.name || '—'}</TD>
+                    <TD className="text-sm text-gray-700">{describeDetails(a.details) || '-'}</TD>
+                    <TD className="text-sm text-gray-600">{a.shop?.name || '-'}</TD>
                   </TR>
                 ))}
               </tbody>

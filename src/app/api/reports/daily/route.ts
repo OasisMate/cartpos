@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     if (!user.currentShopId) {
       return NextResponse.json({ error: 'No shop selected' }, { status: 400 })
     }
-    // Cashiers must not see financial reports — only managers/owners/admins.
+    // Cashiers must not see financial reports - only managers/owners/admins.
     if (!canViewReports(user, user.currentShopId)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

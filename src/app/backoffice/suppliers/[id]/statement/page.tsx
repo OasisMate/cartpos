@@ -114,13 +114,13 @@ export default async function SupplierStatementPage({
                   <td className="py-1.5">{new Date(r.createdAt).toLocaleDateString()}</td>
                   <td className="py-1.5">
                     {entryLabel(r.type)}
-                    {r.note ? ` — ${r.note}` : ''}
+                    {r.note ? ` - ${r.note}` : ''}
                   </td>
                   <td className="text-right py-1.5">
-                    {r.direction === 'CREDIT' ? formatCurrency(r.amount) : '—'}
+                    {r.direction === 'CREDIT' ? formatCurrency(r.amount) : '-'}
                   </td>
                   <td className="text-right py-1.5">
-                    {r.direction === 'DEBIT' ? formatCurrency(r.amount) : '—'}
+                    {r.direction === 'DEBIT' ? formatCurrency(r.amount) : '-'}
                   </td>
                   <td className="text-right py-1.5 font-medium">{formatCurrency(r.running)}</td>
                 </tr>

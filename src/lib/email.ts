@@ -1,5 +1,5 @@
 /**
- * Email service utility — Brevo (https://www.brevo.com) transactional email.
+ * Email service utility - Brevo (https://www.brevo.com) transactional email.
  *
  * Setup:
  * 1. Create a Brevo account and connect your sender email.
@@ -31,7 +31,7 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
   // No key configured: in dev, log the email so flows can be tested without sending.
   if (!apiKey) {
     if (process.env.NODE_ENV === 'development') {
-      console.log('📧 Email (not sent — BREVO_API_KEY missing):', {
+      console.log('📧 Email (not sent - BREVO_API_KEY missing):', {
         to: options.to,
         subject: options.subject,
       })
@@ -75,7 +75,7 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
 }
 
 /**
- * Shared email shell — clean, modern, brand-consistent.
+ * Shared email shell - clean, modern, brand-consistent.
  * All CartPOS emails wrap their body content with this so they look uniform.
  * `preview` sets the inbox preview snippet (hidden in the body).
  */
@@ -162,7 +162,7 @@ export function generateVerificationEmail(verifyLink: string, code: string, user
   const content = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Confirm your email</h1>
     <p style="margin:0 0 12px;">${userName ? `Hello ${userName},` : 'Hello,'}</p>
-    <p style="margin:0 0 4px;">Thanks for signing up for Cart POS. Please confirm this email address to continue — once verified, our team will review your account for activation.</p>
+    <p style="margin:0 0 4px;">Thanks for signing up for Cart POS. Please confirm this email address to continue - once verified, our team will review your account for activation.</p>
     ${ctaButton(verifyLink, 'Verify Email')}
     ${codeBlock(code)}
     ${SEVEN_DAY_NOTICE}
@@ -175,7 +175,7 @@ export function generateVerificationEmail(verifyLink: string, code: string, user
 }
 
 /**
- * Reminder email — admin nudges an account that still hasn't verified.
+ * Reminder email - admin nudges an account that still hasn't verified.
  */
 export function generateVerificationReminderEmail(verifyLink: string, code: string, userName?: string): string {
   const content = `

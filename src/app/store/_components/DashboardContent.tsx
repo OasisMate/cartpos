@@ -22,7 +22,7 @@ export function DashboardContent({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">{shopName} — {t('dashboard')}</h1>
+      <h1 className="text-2xl font-bold mb-2">{shopName} - {t('dashboard')}</h1>
       <p className="text-[hsl(var(--muted-foreground))] mb-6">{t('todays_snapshot')}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

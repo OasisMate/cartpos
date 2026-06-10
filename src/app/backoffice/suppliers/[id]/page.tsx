@@ -44,7 +44,7 @@ export default async function SupplierDetailPage({
         <div>
           <h1 className="text-2xl font-bold mb-1">{supplier.name}</h1>
           <p className="text-[hsl(var(--muted-foreground))]">
-            {supplier.phone || '—'}
+            {supplier.phone || '-'}
             {supplier.notes && (
               <>
                 {' · '}
