@@ -766,9 +766,11 @@ export default function POSPage() {
   }
 
   function handleProductSearch(product: Product) {
-    // Show quick add modal for quantity input
-    setQuickAddProduct(product)
-    setQuickAddQuantity('1')
+    // Add straight to the cart (qty 1) — no extra quantity modal. The cashier adjusts
+    // quantity with the +/- buttons or the number box in the cart.
+    addToCart(product, 1, false)
+    setBarcodeInput('')
+    if (barcodeInputRef.current) barcodeInputRef.current.focus()
   }
 
   function handleQuickAdd() {
