@@ -40,7 +40,8 @@ export async function middleware(request: NextRequest) {
 
   // Public routes that don't require authentication
   const publicRoutes = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password', '/api/health']
-  const isPublicRoute = publicRoutes.includes(pathname)
+  // /r/<token> = public shareable receipt (no login); token is signed, so it's unguessable.
+  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/r/')
 
   // Allow API routes to handle their own auth
   if (pathname.startsWith('/api/')) {

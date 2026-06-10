@@ -79,9 +79,17 @@ export default async function CustomerDetailPage({
             )}
           </p>
         </div>
-        <Link href="/store/customers" className="btn btn-outline h-9 px-4">
-          Back to Customers
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href={`/store/customers/${customer.id}/statement`}
+            className="btn btn-outline h-9 px-4"
+          >
+            Print Statement
+          </Link>
+          <Link href="/store/customers" className="btn btn-outline h-9 px-4">
+            Back to Customers
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

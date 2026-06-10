@@ -12,9 +12,12 @@ export default function ConditionalLayout({
   const isLoginPage = pathname === '/login'
   const isSignupPage = pathname === '/signup'
   const isWaitingApprovalPage = pathname === '/waiting-approval'
+  // Public shareable receipt (/r/<token>): no login, no app chrome — the
+  // customer should see only the receipt, not the shop's navigation.
+  const isPublicReceipt = pathname.startsWith('/r/')
 
-  // Don't wrap auth pages with AppShell
-  if (isLoginPage || isSignupPage || isWaitingApprovalPage) {
+  // Don't wrap auth / public pages with AppShell
+  if (isLoginPage || isSignupPage || isWaitingApprovalPage || isPublicReceipt) {
     return <>{children}</>
   }
 
