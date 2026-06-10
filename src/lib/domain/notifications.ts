@@ -90,6 +90,30 @@ export async function notifyOrgAdmins(
   }
 }
 
+/** Fan a notification out to every platform admin. */
+export async function notifyPlatformAdmins(content: NotificationContent): Promise<void> {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: 'PLATFORM_ADMIN' },
+      select: { id: true },
+    })
+    if (admins.length === 0) return
+    await prisma.notification.createMany({
+      data: admins.map((a) => ({
+        userId: a.id,
+        orgId: null,
+        shopId: null,
+        type: content.type,
+        title: content.title,
+        body: content.body ?? null,
+        href: content.href ?? null,
+      })),
+    })
+  } catch (error) {
+    console.error('Failed to notify platform admins:', error)
+  }
+}
+
 export async function listNotifications(userId: string, limit = 20) {
   const [items, unread] = await Promise.all([
     prisma.notification.findMany({

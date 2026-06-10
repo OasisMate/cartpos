@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
     // Link path: verify by opaque token.
     if (token && typeof token === 'string') {
-      const result = await verifyEmailToken(token)
+      const result = await verifyEmailToken(token, request.nextUrl.origin)
       const ok = result.status === 'verified' || result.status === 'already'
       return NextResponse.json(result, { status: ok ? 200 : 400 })
     }
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
           { status: 429 }
         )
       }
-      const result = await verifyEmailCode(String(email), String(code))
+      const result = await verifyEmailCode(String(email), String(code), request.nextUrl.origin)
       const ok = result.status === 'verified' || result.status === 'already'
       return NextResponse.json(result, { status: ok ? 200 : 400 })
     }

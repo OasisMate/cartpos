@@ -192,3 +192,40 @@ export function generateVerificationReminderEmail(verifyLink: string, code: stri
     </p>`
   return emailLayout(content, 'Reminder: verify your Cart POS email')
 }
+
+/** Simple label/value row for the details box. */
+function detailRow(label: string, value: string): string {
+  return `<tr>
+    <td style="padding:6px 0;color:#6b7280;font-size:13px;width:120px;vertical-align:top;">${label}</td>
+    <td style="padding:6px 0;color:#111827;font-size:13px;font-weight:600;">${value}</td>
+  </tr>`
+}
+
+/**
+ * Notify a platform admin that a verified signup is awaiting approval.
+ */
+export function generateAccessRequestEmail(params: {
+  orgName: string
+  ownerName?: string | null
+  ownerEmail?: string | null
+  city?: string | null
+  reviewLink: string
+}): string {
+  const rows = [
+    detailRow('Business', params.orgName),
+    params.ownerName ? detailRow('Owner', params.ownerName) : '',
+    params.ownerEmail ? detailRow('Email', params.ownerEmail) : '',
+    params.city ? detailRow('City', params.city) : '',
+  ].join('')
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">New access request</h1>
+    <p style="margin:0 0 4px;">A new business has signed up and verified their email. It is now waiting for your review and approval.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:18px 0;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
+      ${rows}
+    </table>
+    ${ctaButton(params.reviewLink, 'Review Request')}
+    <p style="margin:8px 0 0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      You're receiving this because you're a Cart POS platform administrator.
+    </p>`
+  return emailLayout(content, `New access request: ${params.orgName}`)
+}

@@ -1,6 +1,12 @@
 import { prisma } from '@/lib/db/prisma'
 import { randomBytes, randomInt } from 'crypto'
-import { sendEmail, generateVerificationEmail, generateVerificationReminderEmail } from '@/lib/email'
+import {
+  sendEmail,
+  generateVerificationEmail,
+  generateVerificationReminderEmail,
+  generateAccessRequestEmail,
+} from '@/lib/email'
+import { notifyPlatformAdmins } from '@/lib/domain/notifications'
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000
 
@@ -11,6 +17,55 @@ function generateCode(): string {
 
 function baseUrl(originFallback?: string): string {
   return process.env.NEXT_PUBLIC_APP_URL || originFallback || 'http://localhost:3000'
+}
+
+/**
+ * After a signup verifies their email, alert platform admins (in-app + email)
+ * that the PENDING organisation is now awaiting approval. Never throws.
+ */
+async function notifyAdminsOfAccessRequest(userId: string, origin?: string): Promise<void> {
+  try {
+    const org = await prisma.organization.findFirst({
+      where: { requestedBy: userId, status: 'PENDING' },
+      select: { id: true, name: true, city: true },
+    })
+    if (!org) return // not a fresh signup request (e.g. admin-created / already handled)
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    })
+
+    await notifyPlatformAdmins({
+      type: 'ORG_ACCESS_REQUEST',
+      title: 'New access request',
+      body: `${org.name}${user?.name ? ` (${user.name})` : ''} verified their email and is awaiting approval.`,
+      href: '/admin/organizations',
+    })
+
+    const admins = await prisma.user.findMany({
+      where: { role: 'PLATFORM_ADMIN' },
+      select: { email: true },
+    })
+    const reviewLink = `${baseUrl(origin)}/admin/organizations`
+    await Promise.all(
+      admins.map((a) =>
+        sendEmail({
+          to: a.email,
+          subject: `New Cart POS access request: ${org.name}`,
+          html: generateAccessRequestEmail({
+            orgName: org.name,
+            ownerName: user?.name,
+            ownerEmail: user?.email,
+            city: org.city,
+            reviewLink,
+          }),
+        })
+      )
+    )
+  } catch (error) {
+    console.error('Failed to notify admins of access request:', error)
+  }
 }
 
 /**
@@ -58,7 +113,8 @@ export async function issueVerificationEmail(params: {
  * Returns a coarse status so the UI can show the right message.
  */
 export async function verifyEmailToken(
-  token: string
+  token: string,
+  origin?: string
 ): Promise<{ status: 'verified' | 'already' | 'invalid' | 'expired' }> {
   if (!token) return { status: 'invalid' }
 
@@ -77,6 +133,7 @@ export async function verifyEmailToken(
     prisma.emailVerificationToken.update({ where: { id: record.id }, data: { used: true } }),
   ])
 
+  await notifyAdminsOfAccessRequest(record.userId, origin)
   return { status: 'verified' }
 }
 
@@ -86,7 +143,8 @@ export async function verifyEmailToken(
  */
 export async function verifyEmailCode(
   email: string,
-  code: string
+  code: string,
+  origin?: string
 ): Promise<{ status: 'verified' | 'already' | 'invalid' | 'expired' }> {
   if (!email || !/^\d{6}$/.test(code || '')) return { status: 'invalid' }
 
@@ -111,5 +169,6 @@ export async function verifyEmailCode(
     prisma.emailVerificationToken.update({ where: { id: record.id }, data: { used: true } }),
   ])
 
+  await notifyAdminsOfAccessRequest(user.id, origin)
   return { status: 'verified' }
 }
