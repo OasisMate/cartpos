@@ -51,7 +51,10 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  // Monotonic id so a slow/older /api/products response can't overwrite a newer one.
+  const searchReqIdRef = useRef(0)
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
@@ -174,9 +177,12 @@ export default function ProductsPage() {
   const fetchProducts = useCallback(async () => {
     if (!user?.currentShopId) return
 
+    const reqId = ++searchReqIdRef.current
+    const isStale = () => reqId !== searchReqIdRef.current
+
     try {
       setLoading(true)
-      
+
       // Try API first if online
       if (typeof navigator !== 'undefined' && navigator.onLine) {
         try {
@@ -184,13 +190,14 @@ export default function ProductsPage() {
             page: currentPage.toString(),
             limit: '50',
           })
-          if (searchTerm) {
-            params.append('search', searchTerm)
+          if (debouncedSearch) {
+            params.append('search', debouncedSearch)
           }
 
           const response = await fetch(`/api/products?${params}`)
           if (response.ok) {
             const data: ProductsResponse = await response.json()
+            if (isStale()) return // a newer search/page started; drop this result
             setProducts(data.products || [])
             setPagination(data.pagination)
             setLoading(false)
@@ -200,6 +207,7 @@ export default function ProductsPage() {
           console.warn('API failed, falling back to cache:', apiError)
         }
       }
+      if (isStale()) return
       
       // Offline or API failed: use cached products (basic info only)
       const { getProductsWithCache } = await import('@/lib/offline/products')
@@ -224,14 +232,15 @@ export default function ProductsPage() {
       }))
       
       // Apply search filter
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase()
-        rows = rows.filter((p) => 
+      if (debouncedSearch) {
+        const term = debouncedSearch.toLowerCase()
+        rows = rows.filter((p) =>
           p.name.toLowerCase().includes(term) ||
           (p.barcode && p.barcode.toLowerCase().includes(term))
         )
       }
-      
+
+      if (isStale()) return
       setProducts(rows)
       setPagination({
         page: 1,
@@ -242,9 +251,19 @@ export default function ProductsPage() {
     } catch (err) {
       console.error('Failed to fetch products:', err)
     } finally {
-      setLoading(false)
+      if (!isStale()) setLoading(false)
     }
-  }, [user?.currentShopId, currentPage, searchTerm])
+  }, [user?.currentShopId, currentPage, debouncedSearch])
+
+  // Debounce the search box: wait 300ms after typing stops, then search from page 1.
+  // Prevents a request per keystroke (was 7 calls for "shampoo").
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim())
+      setCurrentPage(1)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchTerm])
 
   useEffect(() => {
     if (user?.currentShopId) {
@@ -446,8 +465,10 @@ export default function ProductsPage() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
+    // Apply the search immediately (bypass the 300ms debounce); the fetch effect
+    // re-runs off debouncedSearch + currentPage.
     setCurrentPage(1)
-    fetchProducts()
+    setDebouncedSearch(searchTerm.trim())
   }
 
   const openAdjustmentModal = (product: Product) => {
