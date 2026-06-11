@@ -7,6 +7,7 @@ export interface CreateProductInput {
   barcode?: string
   unit: string
   price: number
+  tradePrice?: number
   cartonPrice?: number
   costPrice?: number
   trackStock?: boolean
@@ -144,6 +145,7 @@ export async function createProduct(
         barcode: input.barcode || null,
         unit: input.unit,
         price: new Decimal(input.price),
+        tradePrice: input.tradePrice ? new Decimal(input.tradePrice) : null,
         cartonPrice: input.cartonPrice ? new Decimal(input.cartonPrice) : null,
         costPrice: input.costPrice ? new Decimal(input.costPrice) : null,
         trackStock: input.trackStock ?? true,
@@ -244,6 +246,9 @@ export async function updateProduct(
       ...(input.barcode !== undefined && { barcode: input.barcode || null }),
       ...(input.unit && { unit: input.unit }),
       ...(input.price !== undefined && { price: new Decimal(input.price) }),
+      ...(input.tradePrice !== undefined && {
+        tradePrice: input.tradePrice ? new Decimal(input.tradePrice) : null,
+      }),
       ...(input.cartonPrice !== undefined && {
         cartonPrice: input.cartonPrice ? new Decimal(input.cartonPrice) : null,
       }),
@@ -409,6 +414,7 @@ export async function getProductsForPOS(shopId: string) {
       barcode: true,
       unit: true,
       price: true,
+      tradePrice: true,
       cartonPrice: true,
       trackStock: true,
       cartonSize: true,
@@ -423,6 +429,7 @@ export async function getProductsForPOS(shopId: string) {
     barcode: p.barcode,
     unit: p.unit,
     price: parseFloat(p.price.toString()),
+    tradePrice: p.tradePrice ? parseFloat(p.tradePrice.toString()) : null,
     cartonPrice: p.cartonPrice ? parseFloat(p.cartonPrice.toString()) : null,
     trackStock: p.trackStock,
     cartonSize: p.cartonSize,

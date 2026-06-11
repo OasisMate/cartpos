@@ -14,6 +14,7 @@ export interface CachedProduct {
   barcode: string | null
   unit: string
   price: number
+  tradePrice?: number | null
   cartonPrice?: number | null
   trackStock: boolean
   cartonSize?: number | null

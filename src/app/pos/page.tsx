@@ -75,10 +75,12 @@ const ProductGrid = memo(function ProductGrid({
   items,
   productStock,
   onSelect,
+  priceMode,
 }: {
   items: Product[]
   productStock: Record<string, number>
   onSelect: (product: Product) => void
+  priceMode: 'RETAIL' | 'TRADE'
 }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 p-3">
@@ -86,6 +88,8 @@ const ProductGrid = memo(function ProductGrid({
         const hasCarton = !!(product.cartonSize && product.cartonSize > 0 && product.cartonPrice)
         const stock = productStock[product.id] ?? null
         const showStock = product.trackStock && stock !== null
+        const usingTrade = priceMode === 'TRADE' && product.tradePrice != null
+        const displayPrice = usingTrade ? product.tradePrice! : product.price
         return (
           <button
             key={product.id}
@@ -95,7 +99,10 @@ const ProductGrid = memo(function ProductGrid({
           >
             <div className="font-medium text-sm leading-snug mb-1 line-clamp-2">{product.name}</div>
             <div className="mt-auto flex items-center justify-between gap-1">
-              <div className="font-bold text-base">{formatCurrency(product.price)}</div>
+              <div className={`font-bold text-base ${usingTrade ? 'text-blue-700' : ''}`}>
+                {formatCurrency(displayPrice)}
+                {usingTrade && <span className="ml-1 text-[10px] font-semibold uppercase text-blue-600">trade</span>}
+              </div>
               {showStock && (
                 <div className={`text-xs shrink-0 ${stock <= 0 ? 'text-red-600 font-semibold' : stock <= ((product as any).reorderLevel || 0) ? 'text-orange-600' : 'text-gray-500'}`}>
                   {formatNumber(stock)} {product.unit}
@@ -126,6 +133,8 @@ export default function POSPage() {
   const [loading, setLoading] = useState(true)
   const [cart, setCart] = useState<CartItem[]>([])
   const [barcodeInput, setBarcodeInput] = useState('')
+  // Retail vs trade (wholesale) pricing. Trade uses product.tradePrice when set, else falls back to retail.
+  const [priceMode, setPriceMode] = useState<'RETAIL' | 'TRADE'>('RETAIL')
   const [discount, setDiscount] = useState(0)
   // Discount can be entered as a fixed amount (Rs) or a percentage of subtotal.
   // `discount` always holds the resolved rupee amount used everywhere downstream.
@@ -228,6 +237,7 @@ export default function POSPage() {
               barcode: p.barcode,
               unit: p.unit,
               price: p.price,
+              tradePrice: p.tradePrice,
               cartonPrice: p.cartonPrice,
               trackStock: p.trackStock,
               cartonSize: p.cartonSize,
@@ -489,9 +499,11 @@ export default function POSPage() {
   }, [products])
 
   async function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
-    // Determine price based on carton vs piece
-    const unitPrice = isCarton && product.cartonPrice 
-      ? product.cartonPrice 
+    // Determine price: carton overrides; otherwise trade rate when in trade mode (falls back to retail).
+    const unitPrice = isCarton && product.cartonPrice
+      ? product.cartonPrice
+      : priceMode === 'TRADE' && product.tradePrice != null
+      ? product.tradePrice
       : product.price
     
     // If adding carton, quantity should be in cartons, not pieces
@@ -720,6 +732,7 @@ export default function POSPage() {
             barcode: cachedProduct.barcode,
             unit: cachedProduct.unit,
             price: cachedProduct.price,
+            tradePrice: cachedProduct.tradePrice,
             cartonPrice: cachedProduct.cartonPrice,
             trackStock: cachedProduct.trackStock,
             cartonSize: cachedProduct.cartonSize,
@@ -1204,6 +1217,8 @@ export default function POSPage() {
             barcode: p.barcode,
             unit: p.unit,
             price: p.price,
+            tradePrice: p.tradePrice,
+            cartonPrice: p.cartonPrice,
             trackStock: p.trackStock,
             cartonSize: p.cartonSize,
             cartonBarcode: p.cartonBarcode,
@@ -1282,6 +1297,31 @@ export default function POSPage() {
           <h1 className="text-2xl font-bold mb-4">{t('pos')}</h1>
 
           {/* Barcode Input */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Pricing</span>
+            <div className="inline-flex overflow-hidden rounded-md border border-[hsl(var(--border))]">
+              {(['RETAIL', 'TRADE'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setPriceMode(mode)}
+                  className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    priceMode === mode
+                      ? mode === 'TRADE'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-800 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {mode === 'RETAIL' ? 'Retail' : 'Trade'}
+                </button>
+              ))}
+            </div>
+            {priceMode === 'TRADE' && (
+              <span className="text-xs text-blue-600">Trade rates applied (retail used where no trade price is set).</span>
+            )}
+          </div>
+
           <form onSubmit={handleBarcodeSubmit} className="mb-4">
             <Input
               ref={barcodeInputRef}
@@ -1392,7 +1432,7 @@ export default function POSPage() {
             </div>
           ) : (
             <>
-              <ProductGrid items={gridItems} productStock={productStock} onSelect={handleProductSelect} />
+              <ProductGrid items={gridItems} productStock={productStock} onSelect={handleProductSelect} priceMode={priceMode} />
               {products.length > gridItems.length && (
                 <div className="px-3 pb-3 text-center text-xs text-[hsl(var(--muted-foreground))]">
                   Showing {gridItems.length} of {products.length} products - scan or search above to add any product.

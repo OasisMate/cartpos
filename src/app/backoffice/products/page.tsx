@@ -20,6 +20,7 @@ interface Product {
   barcode: string | null
   unit: string
   price: string
+  tradePrice: string | null
   costPrice: string | null
   category: string | null
   trackStock: boolean
@@ -71,6 +72,7 @@ export default function ProductsPage() {
     barcode: '',
     unit: 'pcs',
     price: '',
+    tradePrice: '',
     cartonPrice: '',
     costPrice: '',
     trackStock: false,
@@ -230,6 +232,7 @@ export default function ProductsPage() {
         barcode: p.barcode,
         unit: p.unit,
         price: p.price.toString(),
+        tradePrice: p.tradePrice?.toString() || null,
         costPrice: null,
         category: null,
         trackStock: p.trackStock,
@@ -290,6 +293,7 @@ export default function ProductsPage() {
       barcode: '',
       unit: 'pcs',
       price: '',
+      tradePrice: '',
       cartonPrice: '',
       costPrice: '',
       trackStock: false,
@@ -316,6 +320,7 @@ export default function ProductsPage() {
       barcode: product.barcode || '',
       unit: product.unit,
       price: product.price,
+      tradePrice: (product as any).tradePrice || '',
       cartonPrice: (product as any).cartonPrice || '',
       costPrice: product.costPrice || '',
       trackStock: product.trackStock,
@@ -377,6 +382,21 @@ export default function ProductsPage() {
         }
       }
 
+      // Validate trade (wholesale) price if provided
+      if (formData.tradePrice) {
+        const tradePrice = parseFloat(formData.tradePrice)
+        if (isNaN(tradePrice) || tradePrice <= 0) {
+          setError('Trade price must be a valid positive number')
+          setSubmitting(false)
+          return
+        }
+        if (tradePrice >= 100000000) {
+          setError('Trade price must be less than 100,000,000')
+          setSubmitting(false)
+          return
+        }
+      }
+
       const url = editingProduct
         ? `/api/products/${editingProduct.id}`
         : '/api/products'
@@ -396,6 +416,7 @@ export default function ProductsPage() {
       if (formData.cartonSize) payload.cartonSize = formData.cartonSize
       if (formData.cartonBarcode) payload.cartonBarcode = formData.cartonBarcode
       if (formData.cartonPrice) payload.cartonPrice = formData.cartonPrice
+      if (formData.tradePrice) payload.tradePrice = formData.tradePrice
       
       // Add initial stock only when creating new product
       if (!editingProduct && formData.initialStock && formData.trackStock) {
@@ -430,6 +451,7 @@ export default function ProductsPage() {
         barcode: apiProduct.barcode || null,
         unit: apiProduct.unit,
         price: apiProduct.price.toString(),
+        tradePrice: apiProduct.tradePrice ? apiProduct.tradePrice.toString() : null,
         costPrice: apiProduct.costPrice ? apiProduct.costPrice.toString() : null,
         category: null,
         trackStock: apiProduct.trackStock,
@@ -465,7 +487,7 @@ export default function ProductsPage() {
         // preference, and refocus the name field for the next item.
         setFormData({
           name: '', sku: '', barcode: '', unit: formData.unit, price: '',
-          cartonPrice: '', costPrice: '', trackStock: formData.trackStock,
+          tradePrice: '', cartonPrice: '', costPrice: '', trackStock: formData.trackStock,
           reorderLevel: '', cartonSize: '', cartonBarcode: '', initialStock: '',
         })
         setError('')
@@ -765,6 +787,20 @@ export default function ProductsPage() {
                     step="0.01"
                     value={formData.costPrice}
                     onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Trade Price
+                    <span className="text-xs text-gray-500 ml-2">(optional wholesale rate)</span>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="For contractors / bulk"
+                    value={formData.tradePrice}
+                    onChange={(e) => setFormData({ ...formData, tradePrice: e.target.value })}
                   />
                 </div>
 

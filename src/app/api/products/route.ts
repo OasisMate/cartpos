@@ -144,12 +144,31 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // Validate trade (wholesale) price if provided
+    let tradePrice: number | undefined
+    if (body.tradePrice !== undefined && body.tradePrice !== null && body.tradePrice !== '') {
+      tradePrice = parseFloat(body.tradePrice)
+      if (isNaN(tradePrice) || tradePrice <= 0) {
+        return NextResponse.json(
+          { error: 'Trade price must be a valid positive number' },
+          { status: 400 }
+        )
+      }
+      if (tradePrice >= 100000000) {
+        return NextResponse.json(
+          { error: 'Trade price must be less than 100,000,000' },
+          { status: 400 }
+        )
+      }
+    }
+
     const input: CreateProductInput = {
       name: body.name,
       sku: body.sku,
       barcode: body.barcode,
       unit: body.unit,
       price: price,
+      tradePrice: tradePrice,
       costPrice: costPrice,
       trackStock: body.trackStock !== undefined ? body.trackStock : false,
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,

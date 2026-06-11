@@ -37,7 +37,7 @@ The things a live shop touches every single day that we still lack. Smallest eff
 
 ## Milestone 2 — Mughal counter go-live (hardware retail fit)
 What a hardware/sanitary shop needs that a kiryana doesn't.
-- [ ] **Sell by unit** (per foot / kg / piece) cleanly + **bulk / tiered pricing** (trade rate vs retail rate).
+- [x] **Sell by unit** (already worked: free-text unit + decimal qty) + **trade/retail pricing** — BUILT 2026-06-11 (pending live-test). Optional `Product.tradePrice`; POS Retail/Trade toggle applies trade rate (falls back to retail). Carton pricing unchanged.
 - [ ] **Large-catalog handling:** fast product search + **bulk product import (CSV)** so onboarding isn't manual entry of thousands of SKUs.
 
 **M2 done when:** Mughal can ring up a hardware counter sale with correct unit + trade pricing, and their catalog was imported, not hand-typed.

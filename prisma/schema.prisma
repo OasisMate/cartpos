@@ -281,6 +281,7 @@ model Product {
   barcode      String?
   unit         String
   price        Decimal        @db.Decimal(10, 2)
+  tradePrice   Decimal?       @db.Decimal(10, 2)  // Optional wholesale/trade per-unit rate (contractors)
   cartonPrice  Decimal?       @db.Decimal(10, 2)  // Price for full carton
   costPrice    Decimal?       @db.Decimal(10, 2)
   category     String?
