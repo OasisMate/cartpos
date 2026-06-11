@@ -337,6 +337,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             { label: `${t('dashboard')}`, href: base, icon: <Store className={ico} /> },
             { label: t('pos'), href: `${base}/pos`, icon: <ShoppingCart className={ico} /> },
             { label: t('sales'), href: `${base}/sales`, icon: <TrendingUp className={ico} /> },
+            { label: 'Quotations', href: `${base}/quotations`, icon: <FileText className={ico} /> },
             { label: t('customers'), href: `${base}/customers`, icon: <UserCircle className={ico} /> },
             { label: t('products'), href: `${base}/products`, icon: <Package className={ico} /> },
             { label: t('stock_adjustments'), href: `${base}/stock-adjustments`, icon: <Repeat className={ico} /> },
@@ -466,6 +467,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             label: t('sales'),
             href: '/store/sales',
             icon: <TrendingUp className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Quotations',
+            href: '/store/quotations',
+            icon: <FileText className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
           {
             label: t('customers'),

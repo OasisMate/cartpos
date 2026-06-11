@@ -40,12 +40,12 @@ What a hardware/sanitary shop needs that a kiryana doesn't.
 - [x] **Sell by unit** (already worked: free-text unit + decimal qty) + **trade/retail pricing** — BUILT 2026-06-11 (pending live-test). Optional `Product.tradePrice`; POS Retail/Trade toggle applies trade rate (falls back to retail). Carton pricing unchanged.
 - [x] **Large-catalog handling** — BUILT 2026-06-11 (pending live-test). Fast search already existed (debounced server-side paginated list + POS indexed search). New: **bulk CSV import** (`product-import.ts`, `/api/products/import`, `ImportProductsModal`) with template, preview, dedup by barcode, batched createMany (catalog only, no stock). Demo-locked.
 
-**M2 done when:** Mughal can ring up a hardware counter sale with correct unit + trade pricing, and their catalog was imported, not hand-typed.
+**M2 done when:** Mughal can ring up a hardware counter sale with correct unit + trade pricing, and their catalog was imported, not hand-typed. ← DONE + live-tested 2026-06-11.
 
 ## Milestone 3 — Mughal B2B layer
-- [ ] **Quotation / estimate** document → convert to a sale. Credit customers already exist (udhaar). Optional delivery note.
+- [x] **Quotation / estimate → convert to sale** — BUILT 2026-06-11 (pending live-test). `Quotation`/`QuotationLine` (no stock/money until converted), builder + list + printable/shareable view, Convert dialog (Cash/Card/Udhaar) routes through `createSale` so stock + ledger + reports flow. `lib/domain/quotations.ts`, `/api/quotations/*`, `quotations` pages.
 
-**M3 done when:** Mughal can issue a quote for a large order and convert it to an invoice + udhaar entry.
+**M3 done when:** Mughal can issue a quote for a large order and convert it to an invoice + udhaar entry. ← built; awaiting live-test.
 
 ---
 

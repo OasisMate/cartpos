@@ -115,6 +115,7 @@ model Shop {
   expenses    Expense[]
   activityLogs ActivityLog[]
   saleReturns SaleReturn[]
+  quotations  Quotation[]
 
   @@index([orgId, name])
 }
@@ -144,6 +145,7 @@ model User {
   expenses         Expense[]
   activityLogs     ActivityLog[]
   createdReturns   SaleReturn[]  @relation("SaleReturnCreatedBy")
+  createdQuotations Quotation[]  @relation("QuotationCreatedBy")
 
   @@index([phone])
   @@index([cnic])
@@ -296,6 +298,7 @@ model Product {
   purchaseLines PurchaseLine[]
   stockLedger  StockLedger[]
   saleReturnLines SaleReturnLine[]
+  quotationLines QuotationLine[]
 
   @@index([shopId, name])
   @@unique([shopId, barcode], map: "unique_barcode_per_shop")
@@ -434,6 +437,7 @@ model Customer {
   ledger    CustomerLedger[]
   payments  Payment[]
   saleReturns SaleReturn[]
+  quotations Quotation[]
 
   @@unique([shopId, clientId])
   @@index([shopId, name])
@@ -501,6 +505,52 @@ model Invoice {
   @@index([shopId, status])
   @@index([shopId, paymentStatus])
   @@index([shopId, paymentStatus, createdAt])
+}
+
+enum QuotationStatus {
+  OPEN
+  CONVERTED
+  CANCELLED
+}
+
+/// Pre-sale estimate/quotation. Holds no stock or money until converted to a sale.
+model Quotation {
+  id              String          @id @default(cuid())
+  shopId          String
+  customerId      String?
+  customerName    String?         // free-text (e.g. a company not in the customer list)
+  number          String?         // human-readable quote no., e.g. Q000001
+  status          QuotationStatus @default(OPEN)
+  subtotal        Decimal         @db.Decimal(10, 2)
+  discount        Decimal         @default(0) @db.Decimal(10, 2)
+  total           Decimal         @db.Decimal(10, 2)
+  validUntil      DateTime?
+  note            String?
+  convertedInvoiceId String?      // set when converted (plain reference; no FK)
+  convertedAt     DateTime?
+  createdByUserId String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  shop            Shop            @relation(fields: [shopId], references: [id])
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  createdBy       User?           @relation("QuotationCreatedBy", fields: [createdByUserId], references: [id])
+  lines           QuotationLine[]
+
+  @@index([shopId, createdAt])
+  @@index([shopId, status])
+}
+
+model QuotationLine {
+  id          String    @id @default(cuid())
+  quotationId String
+  productId   String
+  quantity    Decimal   @db.Decimal(10, 3)
+  unitPrice   Decimal   @db.Decimal(10, 2)
+  lineTotal   Decimal   @db.Decimal(10, 2)
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@index([quotationId])
 }
 
 model InvoiceLine {
