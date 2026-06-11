@@ -1,7 +1,7 @@
 import { Receipt, Wallet, HandCoins, FileText, Store, Users, Package, UserSquare } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/money'
 import type { OrgDashboard } from '@/lib/domain/dashboard'
-import { StatCard, SectionCard, AreaTrend } from '@/app/store/_components/DashboardParts'
+import { StatCard, SectionCard, AreaTrend } from '@/components/dashboard/DashboardParts'
 
 function MiniStat({ label, value, icon: Icon }: { label: string; value: number; icon: typeof Store }) {
   return (

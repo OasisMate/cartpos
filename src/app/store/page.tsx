@@ -7,8 +7,8 @@ import {
   getCashierDashboard,
   getOrgStoresToday,
 } from '@/lib/domain/dashboard'
-import { ManagerDashboard } from './_components/ManagerDashboard'
-import { CashierDashboard } from './_components/CashierDashboard'
+import { ManagerDashboard } from '@/components/dashboard/ManagerDashboard'
+import { CashierDashboard } from '@/components/dashboard/CashierDashboard'
 
 export default async function StoreDashboardPage() {
   const user = await getCurrentUser()

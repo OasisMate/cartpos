@@ -8,10 +8,14 @@ export function ManagerDashboard({
   shopName,
   data,
   orgStores,
+  basePath = '/store',
 }: {
   shopName: string
   data: ManagerData
   orgStores?: OrgStoreToday[]
+  /** Route prefix for in-dashboard links. `/store` for the manager's own store,
+   *  `/org/{orgId}/stores/{storeId}` when an admin drills into a specific store. */
+  basePath?: string
 }) {
   const { today, yesterday, trend, receivables, payables, lowStock, lowStockCount, topProducts, recentSales } = data
 
@@ -64,7 +68,7 @@ export function ManagerDashboard({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* 7-day trend */}
         <div className="lg:col-span-2">
-          <SectionCard title="Last 7 days sales" action={{ label: 'Reports', href: '/store/reports' }}>
+          <SectionCard title="Last 7 days sales" action={{ label: 'Reports', href: `${basePath}/reports` }}>
             <AreaTrend data={trend} />
           </SectionCard>
         </div>
@@ -111,7 +115,7 @@ export function ManagerDashboard({
         {/* Low stock */}
         <SectionCard
           title={`Low stock${lowStockCount > 0 ? ` (${lowStockCount})` : ''}`}
-          action={{ label: 'Products', href: '/store/products' }}
+          action={{ label: 'Products', href: `${basePath}/products` }}
         >
           {lowStock.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-emerald-700">
@@ -164,15 +168,15 @@ export function ManagerDashboard({
         <div>
           <h2 className="mb-3 font-semibold">Quick actions</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <QuickAction href="/store/pos" label="Open POS" icon={ShoppingCart} primary />
-            <QuickAction href="/store/customers" label="Receive Udhaar" icon={HandCoins} />
-            <QuickAction href="/store/products" label="Add Product" icon={PackagePlus} />
-            <QuickAction href="/store/customers" label="Customers" icon={Users} />
+            <QuickAction href={`${basePath}/pos`} label="Open POS" icon={ShoppingCart} primary />
+            <QuickAction href={`${basePath}/customers`} label="Receive Udhaar" icon={HandCoins} />
+            <QuickAction href={`${basePath}/products`} label="Add Product" icon={PackagePlus} />
+            <QuickAction href={`${basePath}/customers`} label="Customers" icon={Users} />
           </div>
         </div>
 
         {/* Recent sales */}
-        <SectionCard title="Recent sales" action={{ label: 'All sales', href: '/store/sales' }}>
+        <SectionCard title="Recent sales" action={{ label: 'All sales', href: `${basePath}/sales` }}>
           <RecentSalesList sales={recentSales} />
         </SectionCard>
       </div>

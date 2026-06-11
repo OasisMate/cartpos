@@ -6,9 +6,12 @@ import { StatCard, SectionCard, QuickAction, RecentSalesList } from './Dashboard
 export function CashierDashboard({
   shopName,
   data,
+  basePath = '/store',
 }: {
   shopName: string
   data: CashierData
+  /** Route prefix for in-dashboard links. See ManagerDashboard. */
+  basePath?: string
 }) {
   return (
     <div className="space-y-6">
@@ -42,13 +45,13 @@ export function CashierDashboard({
       <div>
         <h2 className="mb-3 font-semibold">Quick actions</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <QuickAction href="/store/pos" label="Open POS" icon={ShoppingCart} primary />
-          <QuickAction href="/store/customers" label="Receive Udhaar" icon={HandCoins} />
-          <QuickAction href="/store/customers" label="Add Customer" icon={UserPlus} />
+          <QuickAction href={`${basePath}/pos`} label="Open POS" icon={ShoppingCart} primary />
+          <QuickAction href={`${basePath}/customers`} label="Receive Udhaar" icon={HandCoins} />
+          <QuickAction href={`${basePath}/customers`} label="Add Customer" icon={UserPlus} />
         </div>
       </div>
 
-      <SectionCard title="Recent sales" action={{ label: 'All sales', href: '/store/sales' }}>
+      <SectionCard title="Recent sales" action={{ label: 'All sales', href: `${basePath}/sales` }}>
         <RecentSalesList sales={data.recentSales} />
       </SectionCard>
     </div>
