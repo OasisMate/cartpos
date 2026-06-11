@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { formatNumber, formatCurrency } from '@/lib/utils/money'
 import { Pencil, Trash2, Package, Loader2, Plus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import IconButton from '@/components/ui/IconButton'
+import ImportProductsModal from '@/components/products/ImportProductsModal'
 
 interface Product {
   id: string
@@ -53,6 +54,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -650,11 +652,22 @@ export default function ProductsPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Products</h1>
-        <Button onClick={openCreateForm} className="flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          <span>Add Product</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowImport(true)} className="flex items-center gap-2">
+            <span>Import CSV</span>
+          </Button>
+          <Button onClick={openCreateForm} className="flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            <span>Add Product</span>
+          </Button>
+        </div>
       </div>
+
+      <ImportProductsModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onDone={() => fetchProducts()}
+      />
 
       {/* Search */}
       <form onSubmit={handleSearch} className="mb-4">
