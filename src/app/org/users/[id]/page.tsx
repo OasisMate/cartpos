@@ -454,7 +454,7 @@ export default function UserDetailPage() {
                 <Store className="h-5 w-5" />
                 Store Assignments
               </h2>
-              {availableShops.length > 0 && (
+              {availableShops.length > 0 ? (
                 <button
                   onClick={() => setShowAssignForm(!showAssignForm)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 text-sm flex items-center gap-2"
@@ -462,6 +462,10 @@ export default function UserDetailPage() {
                   <Plus className="h-4 w-4" />
                   Assign Store
                 </button>
+              ) : (
+                <span className="text-xs text-gray-500">
+                  Assigned to all stores in this organization
+                </span>
               )}
             </div>
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { UserPlus, Edit, Trash2, Mail, Eye, EyeOff, Phone, Fingerprint } from 'lucide-react'
+import { UserPlus, Edit, Trash2, Mail, Eye, EyeOff, Phone, Fingerprint, Shield, Store } from 'lucide-react'
 import IconButton from '@/components/ui/IconButton'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
 
@@ -401,7 +401,7 @@ export default function OrgUsersPage() {
                     Contact
                   </th>
                   <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                    Role
+                    Org Role
                   </th>
                   <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
                     Store Assignments
@@ -456,9 +456,17 @@ export default function OrgUsersPage() {
                       )}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium">
-                        {u.orgRole === 'ORG_ADMIN' ? 'Organization Admin' : u.orgRole || 'No Role'}
-                      </span>
+                      {u.orgRole === 'ORG_ADMIN' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium" title="Full organization-wide access">
+                          <Shield className="h-3.5 w-3.5" />
+                          Organization Admin
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium" title="No org-wide access. See Store Assignments for this user's store role.">
+                          <Store className="h-3.5 w-3.5" />
+                          Shop-level only
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-4 text-base">
                       {u.shops.length === 0 ? (
