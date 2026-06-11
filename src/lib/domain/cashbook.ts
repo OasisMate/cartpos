@@ -4,7 +4,7 @@ import { shopDayBoundsUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
 export interface CashBookRow {
   id: string
   date: Date
-  kind: 'SALE' | 'UDHAAR_PAYMENT' | 'SUPPLIER_PAYMENT' | 'EXPENSE'
+  kind: 'SALE' | 'UDHAAR_PAYMENT' | 'SUPPLIER_PAYMENT' | 'EXPENSE' | 'REFUND'
   label: string
   ref: string | null
   amount: number
@@ -42,6 +42,7 @@ export async function getCashBook(
       select: {
         id: true,
         amount: true,
+        note: true,
         createdAt: true,
         invoiceId: true,
         invoice: { select: { number: true } },
@@ -61,24 +62,40 @@ export async function getCashBook(
     }),
   ])
 
-  const inflows: CashBookRow[] = payments.map((p) => {
+  // Positive cash payments are inflows; negative ones are refunds/reversals (cash out).
+  const inflows: CashBookRow[] = []
+  const refundOutflows: CashBookRow[] = []
+  for (const p of payments) {
+    const amt = Number(p.amount)
     const isSale = !!p.invoiceId
-    return {
-      id: p.id,
-      date: p.createdAt,
-      kind: isSale ? 'SALE' : 'UDHAAR_PAYMENT',
-      label: isSale ? 'Cash sale' : `Udhaar payment${p.customer?.name ? ` — ${p.customer.name}` : ''}`,
-      ref: isSale ? (p.invoice?.number ? `#${p.invoice.number}` : null) : null,
-      amount: Number(p.amount),
+    if (amt >= 0) {
+      inflows.push({
+        id: p.id,
+        date: p.createdAt,
+        kind: isSale ? 'SALE' : 'UDHAAR_PAYMENT',
+        label: p.note || (isSale ? 'Cash sale' : `Udhaar payment${p.customer?.name ? ` (${p.customer.name})` : ''}`),
+        ref: isSale ? (p.invoice?.number ? `#${p.invoice.number}` : null) : null,
+        amount: amt,
+      })
+    } else {
+      refundOutflows.push({
+        id: p.id,
+        date: p.createdAt,
+        kind: 'REFUND',
+        label: p.note || 'Refund',
+        ref: p.invoice?.number ? `#${p.invoice.number}` : null,
+        amount: Math.abs(amt),
+      })
     }
-  })
+  }
 
   const outflows: CashBookRow[] = [
+    ...refundOutflows,
     ...supplierPayments.map((s) => ({
       id: s.id,
       date: s.createdAt,
       kind: 'SUPPLIER_PAYMENT' as const,
-      label: `Supplier payment${s.supplier?.name ? ` — ${s.supplier.name}` : ''}${s.note ? ` (${s.note})` : ''}`,
+      label: `Supplier payment${s.supplier?.name ? ` (${s.supplier.name})` : ''}${s.note ? ` (${s.note})` : ''}`,
       ref: null,
       amount: Number(s.amount),
     })),
@@ -86,7 +103,7 @@ export async function getCashBook(
       id: e.id,
       date: e.date,
       kind: 'EXPENSE' as const,
-      label: `Expense — ${e.category}${e.description ? ` (${e.description})` : ''}`,
+      label: `Expense: ${e.category}${e.description ? ` (${e.description})` : ''}`,
       ref: null,
       amount: Number(e.amount),
     })),

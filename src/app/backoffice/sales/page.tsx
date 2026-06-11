@@ -8,8 +8,9 @@ import EmptyState from '@/components/ui/EmptyState'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import IconButton from '@/components/ui/IconButton'
-import { Printer, Ban, Trash2 } from 'lucide-react'
+import { Printer, Ban, Trash2, Undo2 } from 'lucide-react'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
+import ReturnModal from '@/components/returns/ReturnModal'
 import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface SaleLine {
@@ -57,6 +58,12 @@ export default function BackofficeSalesPage() {
   const [voiding, setVoiding] = useState(false)
   const [receiptModalOpen, setReceiptModalOpen] = useState(false)
   const [receiptInvoice, setReceiptInvoice] = useState<any>(null)
+  const [returnSaleId, setReturnSaleId] = useState<string | null>(null)
+
+  const isManager =
+    user?.role === 'PLATFORM_ADMIN' ||
+    user?.shops?.some((s) => s.shopId === user.currentShopId && s.shopRole === 'STORE_MANAGER') ||
+    user?.organizations?.some((o) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN')
 
   const fetchSales = useCallback(async () => {
     if (!user?.currentShopId) return
@@ -299,6 +306,11 @@ export default function BackofficeSalesPage() {
                         >
                           <Printer className="h-4 w-4" />
                         </IconButton>
+                        {isManager && s.status !== 'VOID' && (
+                          <IconButton variant="neutral" label="Return / refund" onClick={() => setReturnSaleId(s.id)}>
+                            <Undo2 className="h-4 w-4" />
+                          </IconButton>
+                        )}
                         {s.status === 'VOID' ? (
                           <IconButton variant="danger" label="Delete voided sale" onClick={() => deleteSale(s.id)}>
                             <Trash2 className="h-4 w-4" />
@@ -385,6 +397,16 @@ export default function BackofficeSalesPage() {
           </>
         )}
       </Modal>
+
+      {/* Return / Refund / Exchange Modal */}
+      {returnSaleId && (
+        <ReturnModal
+          saleId={returnSaleId}
+          isOpen={!!returnSaleId}
+          onClose={() => setReturnSaleId(null)}
+          onDone={() => fetchSales()}
+        />
+      )}
 
       {/* Receipt Modal */}
       {receiptModalOpen && receiptInvoice && (
