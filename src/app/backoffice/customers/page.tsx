@@ -13,6 +13,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import IconButton from '@/components/ui/IconButton'
 import { Pencil, Eye } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/money'
+import UdhaarReminderButton from '@/components/customers/UdhaarReminderButton'
 
 interface Customer {
   id: string
@@ -34,6 +35,7 @@ export default function CustomersPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({ name: '', phone: '', notes: '', openingBalance: '' })
   const [submitting, setSubmitting] = useState(false)
+  const currentShopName = user?.shops?.find((s) => s.shopId === user?.currentShopId)?.shop.name ?? null
 
   useEffect(() => {
     if (user?.currentShopId) {
@@ -285,6 +287,14 @@ export default function CustomersPage() {
                     <TD className="text-right">{formatCurrency(c.balance ?? 0)}</TD>
                     <TD className="text-right">
                       <div className="flex gap-2 justify-end">
+                        {(c.balance ?? 0) > 0 && (
+                          <UdhaarReminderButton
+                            name={c.name}
+                            phone={c.phone}
+                            balance={c.balance ?? 0}
+                            shopName={currentShopName}
+                          />
+                        )}
                         <IconButton
                           variant="neutral"
                           label="Edit customer"

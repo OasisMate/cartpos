@@ -3,12 +3,14 @@ import { getCurrentUser } from '@/lib/auth'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import CustomerInvoicesCard from '@/components/customers/CustomerInvoicesCard'
+import UdhaarReminderButton from '@/components/customers/UdhaarReminderButton'
 import { formatCurrency } from '@/lib/utils/money'
 
 async function getData(customerId: string, userId: string) {
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
     include: {
+      shop: { select: { name: true } },
       invoices: {
         orderBy: { createdAt: 'desc' },
         take: 10,
@@ -79,7 +81,15 @@ export default async function CustomerDetailPage({
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {balance > 0 && (
+            <UdhaarReminderButton
+              name={customer.name}
+              phone={customer.phone}
+              balance={balance}
+              shopName={customer.shop?.name}
+            />
+          )}
           <Link
             href={`/store/customers/${customer.id}/statement`}
             className="btn btn-outline h-9 px-4"

@@ -30,10 +30,10 @@ This is the **committed plan**, not a feature menu. We work it top to bottom. Th
 
 ## ▶ Milestone 1 — Daily-ops close (CURRENT, helps BOTH shops)
 The things a live shop touches every single day that we still lack. Smallest effort, universal value.
-- [x] **End-of-day Z-report** — BUILT 2026-06-11 (pending user live-test). Sales-by-method + cash drawer + receivables + profit + returns, printable + WhatsApp share. `lib/domain/zreport.ts`, `records/zreport` page.
-- [ ] **WhatsApp udhaar reminders** — chase receivables from the customer/receivables view via `wa.me`. Reuses receipt-share plumbing.
+- [x] **End-of-day Z-report** — DONE 2026-06-11 (tested + committed). Sales-by-method + cash drawer + receivables + profit + returns, printable + WhatsApp share. `lib/domain/zreport.ts`, `records/zreport` page.
+- [x] **WhatsApp udhaar reminders** — BUILT 2026-06-11 (pending user live-test). Reminder action on customers list (rows with balance) + customer detail header; opens `wa.me` with a polite Roman-Urdu balance reminder. Shared `lib/utils/whatsapp.ts`.
 
-**M1 done when:** Rose Mart's owner can close the till each night from one screen and send an udhaar reminder in one tap.
+**M1 done when:** Rose Mart's owner can close the till each night from one screen and send an udhaar reminder in one tap. ← both pieces built; awaiting live-test.
 
 ## Milestone 2 — Mughal counter go-live (hardware retail fit)
 What a hardware/sanitary shop needs that a kiryana doesn't.

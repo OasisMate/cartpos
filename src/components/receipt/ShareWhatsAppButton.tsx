@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { MessageCircle } from 'lucide-react'
 import { formatNumber } from '@/lib/utils/money'
+import { waUrl } from '@/lib/utils/whatsapp'
 
 interface ShareInvoice {
   id: string
@@ -12,17 +13,6 @@ interface ShareInvoice {
   paymentStatus: 'PAID' | 'UDHAAR'
   payments?: Array<{ amount: string | number }>
   shop?: { name?: string | null } | null
-}
-
-/** PK numbers stored as 03xxxxxxxxx → wa.me wants international 92xxxxxxxxx. */
-function toWaNumber(phone: string | null): string {
-  if (!phone) return ''
-  const digits = phone.replace(/\D/g, '')
-  if (!digits) return ''
-  if (digits.startsWith('0')) return '92' + digits.slice(1)
-  if (digits.startsWith('92')) return digits
-  if (digits.length === 10) return '92' + digits // bare 3xxxxxxxxx
-  return digits
 }
 
 export default function ShareWhatsAppButton({ invoice }: { invoice: ShareInvoice }) {
@@ -51,10 +41,7 @@ export default function ShareWhatsAppButton({ invoice }: { invoice: ShareInvoice
       if (unpaid > 0.01) lines.push(`Unpaid (this bill): Rs.${formatNumber(unpaid)}`)
       lines.push(`Receipt: ${link}`, 'Shukriya!')
 
-      const text = encodeURIComponent(lines.join('\n'))
-      const wa = toWaNumber(data.customerPhone)
-      const url = wa ? `https://wa.me/${wa}?text=${text}` : `https://wa.me/?text=${text}`
-      window.open(url, '_blank', 'noopener,noreferrer')
+      window.open(waUrl(data.customerPhone, lines.join('\n')), '_blank', 'noopener,noreferrer')
     } catch (err) {
       console.error('WhatsApp share failed:', err)
       alert('Could not create the share link. Please try again.')
