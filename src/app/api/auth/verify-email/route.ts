@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
     // Code path: verify by email + 6-digit code (throttled against brute force).
     if (email && code) {
       const ip = getClientIp(request)
-      const ipLimit = rateLimit(`verify-code:ip:${ip}`, 20, FIFTEEN_MIN)
-      const emailLimit = rateLimit(`verify-code:email:${String(email).toLowerCase()}`, 8, FIFTEEN_MIN)
+      const ipLimit = await rateLimit(`verify-code:ip:${ip}`, 20, FIFTEEN_MIN)
+      const emailLimit = await rateLimit(`verify-code:email:${String(email).toLowerCase()}`, 8, FIFTEEN_MIN)
       if (!ipLimit.ok || !emailLimit.ok) {
         return NextResponse.json(
           { status: 'invalid', error: 'Too many attempts. Please wait a few minutes and try again.' },

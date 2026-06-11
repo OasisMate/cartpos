@@ -50,12 +50,12 @@ What a hardware/sanitary shop needs that a kiryana doesn't.
 ---
 
 ## After the milestones (do NOT pull forward)
-**Security hardening gate — clear before charging money** (SECURITY_AUDIT: "must be fixed before selling")
-- Rate-limit on shared store (Upstash) for login/forgot/signup (in-memory is ineffective on Vercel).
-- Session revoke on password reset/change (`tokenVersion`).
-- Reset-token email-binding; verify `assign-store` tenant check.
-- Admin org actions → ActivityLog (audit trail).
-- `Number()` → `Decimal` consistency; oversell race (row-lock in tx).
+**Security hardening gate — clear before charging money** (SECURITY_AUDIT: "must be fixed before selling"). In value order:
+- [x] Rate-limit on shared store (Upstash) — BUILT 2026-06-11. `rate-limit.ts` uses Upstash REST when env set, else in-memory fallback. **Action: add `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` to .env + Vercel to activate in prod.**
+- [ ] Session revoke on password reset/change (`tokenVersion`). ← NEXT
+- [ ] Reset-token email-binding.
+- [ ] `Number()` → `Decimal` consistency; oversell race (row-lock in tx).
+- ~~verify `assign-store` tenant check~~ ✅ already enforced (org-scoped checks present). ~~Admin org actions → ActivityLog~~ ✅ `logActivity` already wired.
 
 **Then:** CSV export/backup, route-tree consolidation (tech debt), FBR tax (evaluate), billing/trial (when commercializing).
 

@@ -17,8 +17,8 @@ export async function POST(request: NextRequest) {
 
     // Throttle to prevent inbox flooding / probing.
     const ip = getClientIp(request)
-    const ipLimit = rateLimit(`verify-resend:ip:${ip}`, 5, ONE_HOUR)
-    const emailLimit = rateLimit(`verify-resend:email:${email.toLowerCase()}`, 3, ONE_HOUR)
+    const ipLimit = await rateLimit(`verify-resend:ip:${ip}`, 5, ONE_HOUR)
+    const emailLimit = await rateLimit(`verify-resend:email:${email.toLowerCase()}`, 3, ONE_HOUR)
     if (!ipLimit.ok || !emailLimit.ok) {
       return NextResponse.json(GENERIC)
     }

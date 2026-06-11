@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
 
     // Throttle reset requests to prevent inbox flooding / enumeration probing.
     const ip = getClientIp(request)
-    const ipLimit = rateLimit(`forgot:ip:${ip}`, 5, ONE_HOUR)
-    const emailLimit = rateLimit(`forgot:email:${String(email).toLowerCase()}`, 3, ONE_HOUR)
+    const ipLimit = await rateLimit(`forgot:ip:${ip}`, 5, ONE_HOUR)
+    const emailLimit = await rateLimit(`forgot:email:${String(email).toLowerCase()}`, 3, ONE_HOUR)
     if (!ipLimit.ok || !emailLimit.ok) {
       // Generic success-style message so we don't reveal throttling per-account.
       return NextResponse.json({

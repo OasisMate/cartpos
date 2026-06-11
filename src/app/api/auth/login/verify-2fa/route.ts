@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
 
     // Throttle code attempts.
     const ip = getClientIp(request)
-    const ipLimit = rateLimit(`2fa:ip:${ip}`, 20, FIFTEEN_MIN)
-    const userLimit = rateLimit(`2fa:user:${userId}`, 8, FIFTEEN_MIN)
+    const ipLimit = await rateLimit(`2fa:ip:${ip}`, 20, FIFTEEN_MIN)
+    const userLimit = await rateLimit(`2fa:user:${userId}`, 8, FIFTEEN_MIN)
     if (!ipLimit.ok || !userLimit.ok) {
       return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
     }

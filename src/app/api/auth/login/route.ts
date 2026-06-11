@@ -36,9 +36,9 @@ export async function POST(request: NextRequest) {
 
     // Brute-force protection: coarse per-IP cap + per-account cap (cleared on success).
     const ip = getClientIp(request)
-    const ipLimit = rateLimit(`login:ip:${ip}`, 40, FIFTEEN_MIN)
+    const ipLimit = await rateLimit(`login:ip:${ip}`, 40, FIFTEEN_MIN)
     const acctKey = `login:id:${String(identifier).toLowerCase()}`
-    const acctLimit = rateLimit(acctKey, 8, FIFTEEN_MIN)
+    const acctLimit = await rateLimit(acctKey, 8, FIFTEEN_MIN)
     if (!ipLimit.ok || !acctLimit.ok) {
       const retryAfter = Math.max(ipLimit.retryAfter, acctLimit.retryAfter)
       return NextResponse.json(
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Successful password - reset this account's failed-attempt counter.
-    clearRateLimit(acctKey)
+    await clearRateLimit(acctKey)
 
     // Opt-in 2FA: don't create a session yet; email a code and return a
     // short-lived pre-auth token the client exchanges for a session.
