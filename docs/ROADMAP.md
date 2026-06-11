@@ -1,75 +1,66 @@
-# CartPOS Roadmap (as of 2026-06-11)
+# CartPOS Roadmap (committed plan, as of 2026-06-11)
 
-Single source of truth for remaining work. Most of v1 and the "elevate early" backlog is **done** (details in `TESTING_LOG.md`). Work from here is categorized by **benefit**, and executed in that order: day-to-day UX first, then commercial-readiness, then nice-to-haves.
+This is the **committed plan**, not a feature menu. We work it top to bottom. The point of this file is to stop us from circling: pulling a new idea every session and abandoning the last one.
 
-> The Session-2 status table in `TESTING_LOG.md` is historical and stale (it lists supplier payables / financial records / email as "not started" — all shipped since). This file supersedes it for planning.
+## Operating rules (non-negotiable)
+1. **One thing in flight.** We do not start the next item until the current one is **built + documented + tested live by the user**. New ideas that surface mid-task go to "Parking lot" silently. They are NOT pitched mid-stream.
+2. **Milestones are defined by a real user going fully live**, not by feature count. A milestone is done when the named shop can do the named job without reaching for another tool or a paper notebook.
+3. **Anchored to the two real users below.** If a proposed feature does not serve Rose Mart or Mughal Corp's stated scope, it does not get built now.
+
+## The two real users
+| User | Business | Status | "Done" condition |
+|------|----------|--------|------------------|
+| **Rose Mart** | Kiryana / general retail | LIVE | Runs + closes a full day with no other tool |
+| **Mughal Corp** | Hardware + sanitary counter, plus B2B (bulk orders, quotations, credit customers) | Onboarding | Sells at counter AND quotes/invoices a large trade order end to end |
+
+> Mughal also does machinery manufacturing for cattle farms. That is **out of scope** (manufacturing/BOM/job-costing is not a POS). Parked deliberately.
 
 ---
 
 ## ✅ Done (high level)
 - **Core retail:** POS, sales, customers (udhaar), suppliers (payables ledger), purchases, expenses, products + stock tracking.
+- **Returns/refunds/exchange:** restock + ledger settlement, reports + cash book netting (2026-06-11).
 - **Money/reporting:** daily & range reports with profit/COGS, Cash Book, customer + supplier statements (printable).
 - **Receipts:** thermal print + WhatsApp share + public `/r/<token>` link (shared `ReceiptDocument`, udhaar balance line).
-- **Dashboards:** role-aware store dashboard (manager/owner vs cashier) + org dashboard, vibrant visuals, store/org switcher with loader.
+- **Dashboards:** role-aware store dashboard + org dashboard, vibrant visuals, store/org switcher with loader.
 - **Auth/comms:** JWT sessions, 2FA, password reset, strong password policy; emails (welcome/SOPs, new-staff, broadcast); in-app notifications.
 - **Platform:** offline-first sync (idempotent), region-pinned perf, PWA, demo/test org with destructive-action lockdown, branded loaders.
 
 ---
 
-## Tier 1 — Elevate day-to-day UX (DO FIRST)
-What shop staff touch every day. Drives delight + retention.
+## ▶ Milestone 1 — Daily-ops close (CURRENT, helps BOTH shops)
+The things a live shop touches every single day that we still lack. Smallest effort, universal value.
+- [x] **End-of-day Z-report** — BUILT 2026-06-11 (pending user live-test). Sales-by-method + cash drawer + receivables + profit + returns, printable + WhatsApp share. `lib/domain/zreport.ts`, `records/zreport` page.
+- [ ] **WhatsApp udhaar reminders** — chase receivables from the customer/receivables view via `wa.me`. Reuses receipt-share plumbing.
 
-| # | Task | Why it matters | Effort |
-|---|------|----------------|--------|
-| 1 | ~~**Returns / refunds / exchange**~~ ✅ BUILT 2026-06-11 (see TESTING_LOG) | Shops handle returns *daily*; today we only have void. Real, recurring gap. | Med-High |
-| 2 | **WhatsApp udhaar reminders** | Chase receivables — the #1 cash-flow pain for PK shops. Reuses receivables + `wa.me` already built. | Low |
-| 3 | **End-of-day Z-report** | Shopkeepers close the till every night; printable/shareable daily summary. Reuses `getDailySummary`. | Low |
-| 4 | **POS: split payment + item-level discount** | Common real checkout cases (part cash/part card, discount one line). Removes daily friction. | Med |
-| 5 | **UX polish: products + customers screens** | Daily screens should match the new dashboard quality. | Med |
+**M1 done when:** Rose Mart's owner can close the till each night from one screen and send an udhaar reminder in one tap.
 
-## Tier 2 — Commercial-readiness (so you can pitch to businesses)
-Needed before selling to / onboarding paying businesses at scale.
+## Milestone 2 — Mughal counter go-live (hardware retail fit)
+What a hardware/sanitary shop needs that a kiryana doesn't.
+- [ ] **Sell by unit** (per foot / kg / piece) cleanly + **bulk / tiered pricing** (trade rate vs retail rate).
+- [ ] **Large-catalog handling:** fast product search + **bulk product import (CSV)** so onboarding isn't manual entry of thousands of SKUs.
 
-**2A. Security hardening gate — MUST clear before paid launch** (SECURITY_AUDIT: "must be fixed before selling")
-- Rate-limit on shared store (Upstash) — login/forgot/signup brute-force (currently in-memory, ineffective on Vercel).
-- Session revoke on password reset/change (`tokenVersion` on User).
-- Reset-token email-binding; verify `assign-store` tenant check.
-- Admin org actions (approve/suspend) → ActivityLog (audit trail).
-- Cashier financial-mutation authz policy (opening-balance / udhaar-payment role gate) — **decision needed**.
-- `Number()` → `Decimal` consistency; oversell TOCTOU race (row-lock in tx).
+**M2 done when:** Mughal can ring up a hardware counter sale with correct unit + trade pricing, and their catalog was imported, not hand-typed.
 
-**2B. Business features**
-- **CSV export / backup** (products, sales, customers) — data ownership = trust; businesses expect it. *(Low effort, high trust.)*
-- **/org/users staff management** — verify owners can add/manage shop staff (managers/cashiers) at scale, not just view.
-- **Trial / billing** — the monetization gate; build when you're ready to charge.
-- **FBR tax compliance (PK)** — strong selling point for tax-registered shops; evaluate scope before committing. *(Heavy.)*
-- Manual invoice-level udhaar payment allocation UI.
+## Milestone 3 — Mughal B2B layer
+- [ ] **Quotation / estimate** document → convert to a sale. Credit customers already exist (udhaar). Optional delivery note.
 
-## Tier 3 — Nice-to-have (low value-to-effort right now)
-- Records hub page (glue; statements/cash book already reachable).
-- Advanced reports/analytics; advanced costing (FIFO / average cost).
-- Real-time multi-device sync / better conflict resolution.
-- Defense-in-depth: zod validation layer, strict CSP, CSRF tokens, logo magic-byte check.
-
-## Cross-cutting — Tech debt / maintainability
-- **Route-tree consolidation** — `backoffice` / `store` / `org` duplicate route trees + re-exports; consolidate before piling on features.
-- zod as the shared validation layer (also a Tier-3 security item).
-
-## Deferred (explicitly parked by user)
-- Barcode-sticker printing (no client printer yet).
-- Multi-country / currency / full Urdu bilingual i18n.
-- (Billing/trial parked until going commercial — see 2B.)
+**M3 done when:** Mughal can issue a quote for a large order and convert it to an invoice + udhaar entry.
 
 ---
 
-## Recommended execution order
-1. **Returns/refunds** (T1) — biggest daily gap.
-2. **WhatsApp udhaar reminders** (T1) — high value, low effort.
-3. **Z-report** (T1) — quick daily-close win.
-4. **POS split payment + item discount** (T1) — checkout completeness.
-5. **UX polish products + customers** (T1).
-6. **Security hardening gate** (T2A) — clear before any paid pitch.
-7. **CSV export/backup** + **/org/users staff mgmt** (T2B) — trust + scale.
-8. **Route-tree consolidation** (tech debt) — before more features.
-9. Then evaluate **FBR**, **billing/trial** when ready to commercialize.
-10. Tier 3 items as time allows.
+## After the milestones (do NOT pull forward)
+**Security hardening gate — clear before charging money** (SECURITY_AUDIT: "must be fixed before selling")
+- Rate-limit on shared store (Upstash) for login/forgot/signup (in-memory is ineffective on Vercel).
+- Session revoke on password reset/change (`tokenVersion`).
+- Reset-token email-binding; verify `assign-store` tenant check.
+- Admin org actions → ActivityLog (audit trail).
+- `Number()` → `Decimal` consistency; oversell race (row-lock in tx).
+
+**Then:** CSV export/backup, route-tree consolidation (tech debt), FBR tax (evaluate), billing/trial (when commercializing).
+
+## Parking lot
+All explored-but-not-now ideas live in **`docs/BACKLOG.md`** with rationale + effort, grouped (POS completeness, returns fast-follows, hardware vertical, security gate, commercialization, tech debt, etc). We discuss + promote from there after M1-M3. Nothing is discarded.
+
+## Deferred (explicitly parked by user)
+- Barcode-sticker printing; multi-country/currency/full Urdu i18n; machinery manufacturing/BOM.

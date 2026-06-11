@@ -105,12 +105,20 @@ export default function ReportsPage() {
               </span>
             </p>
           )}
-          <a
-            href={`/store/records/cashbook?from=${from}&to=${to}`}
-            className="mt-1 inline-block text-sm font-medium text-orange-600 hover:underline"
-          >
-            Cash Book (printable) →
-          </a>
+          <div className="mt-1 flex flex-wrap gap-4">
+            <a
+              href={`/store/records/cashbook?from=${from}&to=${to}`}
+              className="inline-block text-sm font-medium text-orange-600 hover:underline"
+            >
+              Cash Book (printable) →
+            </a>
+            <a
+              href={`/store/records/zreport?date=${preset === 'YESTERDAY' ? from : today}`}
+              className="inline-block text-sm font-medium text-orange-600 hover:underline"
+            >
+              Day Close / Z-Report →
+            </a>
+          </div>
         </div>
         <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
           <div className="inline-flex rounded-md shadow-sm border bg-white overflow-hidden">
