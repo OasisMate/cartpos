@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { DemoBlockedResponse } from '@/lib/demo'
-import { updateProduct, getProduct, deleteProduct, UpdateProductInput } from '@/lib/domain/products'
+import { updateProduct, getProduct, deleteProduct, archiveProduct, unarchiveProduct, UpdateProductInput } from '@/lib/domain/products'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 // GET: Get single product
@@ -146,6 +146,52 @@ export async function PUT(
     return NextResponse.json({ product })
   } catch (error: any) {
     console.error('Update product error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to update product' },
+      { status: 400 }
+    )
+  }
+}
+
+// PATCH: Archive or restore a product (soft hide; preserves sales history)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
+    if (user.isDemoOrg) return DemoBlockedResponse()
+
+    const body = await request.json()
+    if (body.archived !== true && body.archived !== false) {
+      return NextResponse.json({ error: 'Provide { archived: boolean }' }, { status: 400 })
+    }
+
+    const result = body.archived
+      ? await archiveProduct(params.id, user.id)
+      : await unarchiveProduct(params.id, user.id)
+
+    if (user.currentOrgId) {
+      await logActivity({
+        userId: user.id,
+        orgId: user.currentOrgId,
+        shopId: result.shopId,
+        action: ActivityActions.UPDATE_PRODUCT,
+        entityType: EntityTypes.PRODUCT,
+        entityId: params.id,
+        details: { name: result.name, archived: body.archived },
+        ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+        userAgent: request.headers.get('user-agent') || null,
+      })
+    }
+
+    return NextResponse.json({ success: true, archived: result.archived })
+  } catch (error: any) {
+    console.error('Archive product error:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to update product' },
       { status: 400 }

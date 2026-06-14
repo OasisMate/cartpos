@@ -141,14 +141,14 @@ export function ManagerDashboard({
           )}
         </SectionCard>
 
-        {/* Top products this week */}
-        <SectionCard title="Top products this week">
+        {/* Sales volume this week (by units sold) */}
+        <SectionCard title="Sales volume this week">
           {topProducts.length === 0 ? (
             <div className="text-sm text-[hsl(var(--muted-foreground))]">No sales in the last 7 days.</div>
           ) : (
             <ul className="divide-y divide-[hsl(var(--border))]">
               {topProducts.map((p, i) => (
-                <li key={p.name} className="flex items-center justify-between py-2 text-sm">
+                <li key={`${p.name}-${i}`} className="flex items-center justify-between py-2 text-sm">
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] w-4">{i + 1}</span>
                     <span className="truncate font-medium">{p.name}</span>

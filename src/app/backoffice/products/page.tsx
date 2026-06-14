@@ -10,7 +10,7 @@ import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatNumber, formatCurrency } from '@/lib/utils/money'
-import { Pencil, Trash2, Package, Loader2, Plus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Pencil, Trash2, Package, Loader2, Plus, ArrowUpDown, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react'
 import IconButton from '@/components/ui/IconButton'
 import ImportProductsModal from '@/components/products/ImportProductsModal'
 
@@ -29,6 +29,7 @@ interface Product {
   cartonSize: number | null
   cartonBarcode: string | null
   stock: number | null
+  archivedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -97,6 +98,8 @@ export default function ProductsPage() {
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivingId, setArchivingId] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
@@ -203,6 +206,9 @@ export default function ProductsPage() {
           if (debouncedSearch) {
             params.append('search', debouncedSearch)
           }
+          if (showArchived) {
+            params.append('includeArchived', 'true')
+          }
           // Server-side sort for DB columns (sorts the whole catalog, not just this page).
           if (sortColumn && SERVER_SORT_COLUMNS.includes(sortColumn)) {
             params.append('sortBy', sortColumn)
@@ -243,6 +249,7 @@ export default function ProductsPage() {
         cartonSize: p.cartonSize ?? null,
         cartonBarcode: p.cartonBarcode ?? null,
         cartonPrice: p.cartonPrice?.toString() || null,
+        archivedAt: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }))
@@ -269,7 +276,7 @@ export default function ProductsPage() {
     } finally {
       if (!isStale()) setLoading(false)
     }
-  }, [user?.currentShopId, currentPage, pageSize, debouncedSearch, sortColumn, sortDirection])
+  }, [user?.currentShopId, currentPage, pageSize, debouncedSearch, sortColumn, sortDirection, showArchived])
 
   // Debounce the search box: wait 300ms after typing stops, then search from page 1.
   // Prevents a request per keystroke (was 7 calls for "shampoo").
@@ -460,6 +467,7 @@ export default function ProductsPage() {
         reorderLevel: apiProduct.reorderLevel || null,
         cartonSize: apiProduct.cartonSize || null,
         cartonBarcode: apiProduct.cartonBarcode || null,
+        archivedAt: apiProduct.archivedAt || null,
         stock: null, // Will be loaded on refresh
         createdAt: apiProduct.createdAt || new Date().toISOString(),
         updatedAt: apiProduct.updatedAt || new Date().toISOString(),
@@ -595,6 +603,28 @@ export default function ProductsPage() {
     setShowDeleteConfirm(true)
   }
 
+  const handleArchiveToggle = async (product: Product) => {
+    const archive = !product.archivedAt
+    setArchivingId(product.id)
+    try {
+      const response = await fetch(`/api/products/${product.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: archive }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to update product')
+      }
+      show({ message: archive ? 'Product archived' : 'Product restored', variant: 'success' })
+      await fetchProducts()
+    } catch (err: any) {
+      show({ title: 'Error', message: err.message || 'Failed to update product', variant: 'destructive' })
+    } finally {
+      setArchivingId(null)
+    }
+  }
+
   const handleDeleteConfirm = async () => {
     if (!productToDelete) return
 
@@ -681,6 +711,15 @@ export default function ProductsPage() {
           />
           <Button type="submit" variant="outline">Search</Button>
         </div>
+        <label className="mt-2 inline-flex items-center gap-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => { setShowArchived(e.target.checked); setCurrentPage(1) }}
+            className="w-4 h-4"
+          />
+          <span>Show archived products</span>
+        </label>
       </form>
 
       {/* Product Form Modal */}
@@ -1043,8 +1082,17 @@ export default function ProductsPage() {
                     const isOutOfStock = product.trackStock && stock <= 0
                     
                     return (
-                      <TR key={product.id}>
-                        <TD>{product.name}</TD>
+                      <TR key={product.id} className={product.archivedAt ? 'opacity-60' : undefined}>
+                        <TD>
+                          <span className="flex items-center gap-2">
+                            {product.name}
+                            {product.archivedAt && (
+                              <span className="rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-xs font-medium text-[hsl(var(--muted-foreground))]">
+                                Archived
+                              </span>
+                            )}
+                          </span>
+                        </TD>
                         <TD>{product.sku || '-'}</TD>
                         <TD>{product.barcode || '-'}</TD>
                         <TD>{product.unit}</TD>
@@ -1086,6 +1134,20 @@ export default function ProductsPage() {
                             )}
                             <IconButton variant="neutral" label="Edit product" onClick={() => openEditForm(product)}>
                               <Pencil className="h-4 w-4" />
+                            </IconButton>
+                            <IconButton
+                              variant="neutral"
+                              label={product.archivedAt ? 'Restore product' : 'Archive product'}
+                              onClick={() => handleArchiveToggle(product)}
+                              disabled={archivingId === product.id}
+                            >
+                              {archivingId === product.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : product.archivedAt ? (
+                                <ArchiveRestore className="h-4 w-4" />
+                              ) : (
+                                <Archive className="h-4 w-4" />
+                              )}
                             </IconButton>
                             <IconButton
                               variant="danger"
@@ -1272,7 +1334,7 @@ export default function ProductsPage() {
               Are you sure you want to delete <span className="font-semibold">{productToDelete.name}</span>?
             </p>
             <p className="text-sm text-red-600 mb-6">
-              This action cannot be undone. Products that have been used in sales cannot be deleted.
+              This action cannot be undone. Products used in sales cannot be deleted. Archive them instead to hide them everywhere while keeping their sales history.
             </p>
             <div className="flex gap-2 justify-end">
               <Button

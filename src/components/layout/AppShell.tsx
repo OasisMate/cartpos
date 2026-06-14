@@ -550,8 +550,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     // Exact match
     if (pathname === href) return true
 
-    // For dashboard routes
-    if (href === '/' || href === '/org' || href === '/store' || href === '/admin' || href === '/cashier/dashboard') {
+    // For dashboard routes (incl. the store-drilldown root /org/{id}/stores/{id}),
+    // match exactly so sub-pages like /pos don't keep Dashboard highlighted.
+    const isStoreRoot = /^\/org\/[^/]+\/stores\/[^/]+$/.test(href)
+    if (href === '/' || href === '/org' || href === '/store' || href === '/admin' || href === '/cashier/dashboard' || isStoreRoot) {
       return pathname === href
     }
 

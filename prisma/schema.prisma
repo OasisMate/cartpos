@@ -291,6 +291,7 @@ model Product {
   reorderLevel Int?
   cartonSize   Int?           // Number of pieces in a carton
   cartonBarcode String?
+  archivedAt   DateTime?      // Non-null = hidden from POS/lists/dashboard; history preserved
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   shop         Shop           @relation(fields: [shopId], references: [id])

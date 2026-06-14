@@ -111,12 +111,12 @@ export async function getManagerDashboard(
     prisma.supplierLedger.aggregate({ _sum: { amount: true }, where: { shopId, direction: 'CREDIT' } }),
     prisma.supplierLedger.aggregate({ _sum: { amount: true }, where: { shopId, direction: 'DEBIT' } }),
     prisma.product.findMany({
-      where: { shopId, trackStock: true, reorderLevel: { not: null } },
+      where: { shopId, trackStock: true, reorderLevel: { not: null }, archivedAt: null },
       select: { id: true, name: true, reorderLevel: true },
     }),
     prisma.invoiceLine.findMany({
-      where: { invoice: { shopId, status: 'COMPLETED', createdAt: { gte: weekStart } } },
-      select: { quantity: true, lineTotal: true, product: { select: { name: true } } },
+      where: { invoice: { shopId, status: 'COMPLETED', createdAt: { gte: weekStart } }, product: { archivedAt: null } },
+      select: { quantity: true, lineTotal: true, productId: true, product: { select: { name: true } } },
     }),
     prisma.invoice.findMany({
       where: { shopId, status: 'COMPLETED' },
@@ -145,18 +145,19 @@ export async function getManagerDashboard(
     .sort((a, b) => b.reorderLevel - b.onHand - (a.reorderLevel - a.onHand))
   const lowStock = lowAll.slice(0, 6)
 
-  // Top products this week by revenue.
-  const byProduct = new Map<string, { qty: number; revenue: number }>()
+  // Top products this week by units sold (sales volume).
+  // Grouped by productId, not name: distinct products can share a name and
+  // must not be merged into one inflated row.
+  const byProduct = new Map<string, { name: string; qty: number; revenue: number }>()
   for (const l of weekLines) {
-    const name = l.product.name
-    const cur = byProduct.get(name) || { qty: 0, revenue: 0 }
+    const cur = byProduct.get(l.productId) || { name: l.product.name, qty: 0, revenue: 0 }
     cur.qty += Number(l.quantity)
     cur.revenue += Number(l.lineTotal)
-    byProduct.set(name, cur)
+    byProduct.set(l.productId, cur)
   }
-  const topProducts: TopProduct[] = Array.from(byProduct.entries())
-    .map(([name, v]) => ({ name, qty: Math.round(v.qty * 1000) / 1000, revenue: Math.round(v.revenue * 100) / 100 }))
-    .sort((a, b) => b.revenue - a.revenue)
+  const topProducts: TopProduct[] = Array.from(byProduct.values())
+    .map((v) => ({ name: v.name, qty: Math.round(v.qty * 1000) / 1000, revenue: Math.round(v.revenue * 100) / 100 }))
+    .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
     .slice(0, 5)
 
   return {

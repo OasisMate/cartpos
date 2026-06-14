@@ -25,6 +25,7 @@ export interface ProductFilters {
   search?: string
   category?: string
   trackStock?: boolean
+  includeArchived?: boolean // when true, also return archived products
   page?: number
   limit?: number
   sortBy?: ProductSortBy
@@ -276,6 +277,11 @@ export async function listProducts(shopId: string, filters: ProductFilters = {})
     shopId,
   }
 
+  // Hide archived products by default
+  if (!filters.includeArchived) {
+    where.archivedAt = null
+  }
+
   // Search filter (name, sku, barcode)
   if (filters.search) {
     where.OR = [
@@ -391,7 +397,7 @@ export async function deleteProduct(id: string, userId: string) {
   })
 
   if (invoiceLineCount > 0) {
-    throw new Error('Cannot delete product that has been used in sales. Consider disabling it instead.')
+    throw new Error('Cannot delete a product that has been used in sales. Archive it instead to hide it.')
   }
 
   // Delete product
@@ -402,11 +408,35 @@ export async function deleteProduct(id: string, userId: string) {
   return { success: true, shopId: product.shopId, name: product.name }
 }
 
+/** Hide a product from POS, lists and dashboard. Sales history is preserved. */
+export async function archiveProduct(id: string, userId: string) {
+  return setArchived(id, userId, new Date())
+}
+
+/** Restore a previously archived product. */
+export async function unarchiveProduct(id: string, userId: string) {
+  return setArchived(id, userId, null)
+}
+
+async function setArchived(id: string, userId: string, archivedAt: Date | null) {
+  const product = await prisma.product.findUnique({ where: { id } })
+  if (!product) {
+    throw new Error('Product not found')
+  }
+  const hasPermission = await checkProductPermission(userId, product.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to modify this product')
+  }
+  await prisma.product.update({ where: { id }, data: { archivedAt } })
+  return { success: true, shopId: product.shopId, name: product.name, archived: archivedAt !== null }
+}
+
 // Get products for POS (lightweight, no pagination)
 export async function getProductsForPOS(shopId: string) {
   const products = await prisma.product.findMany({
     where: {
       shopId,
+      archivedAt: null, // archived products can't be sold
     },
     select: {
       id: true,

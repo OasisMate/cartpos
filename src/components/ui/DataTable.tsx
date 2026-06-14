@@ -8,8 +8,8 @@ export function THead({ children }: { children: React.ReactNode }) {
   return <thead className="bg-[hsl(var(--muted))]">{children}</thead>
 }
 
-export function TR({ children }: { children: React.ReactNode }) {
-  return <tr className="border-b border-[hsl(var(--border))]">{children}</tr>
+export function TR({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <tr className={`border-b border-[hsl(var(--border))] ${className}`}>{children}</tr>
 }
 
 export function TH({ children, className = '' }: { children: React.ReactNode; className?: string }) {

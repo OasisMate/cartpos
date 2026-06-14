@@ -24,7 +24,8 @@ export interface RangeSummary {
 
 /**
  * Cost of goods sold for COMPLETED sales in the period = Σ(product.costPrice × qty).
- * Products without a cost price contribute 0 (profit for those can't be computed).
+ * Products WITHOUT a cost price contribute their full sale value to COGS, so they
+ * yield 0 gross profit (we can't claim profit on a sale whose cost is unknown).
  */
 // `end` is exclusive (start of the day after the range).
 async function getCostOfGoods(shopId: string, start: Date, end: Date): Promise<number> {
@@ -32,12 +33,12 @@ async function getCostOfGoods(shopId: string, start: Date, end: Date): Promise<n
     where: {
       invoice: { shopId, status: 'COMPLETED', createdAt: { gte: start, lt: end } },
     },
-    select: { quantity: true, product: { select: { costPrice: true } } },
+    select: { quantity: true, lineTotal: true, product: { select: { costPrice: true } } },
   })
   let cogs = 0
   for (const l of lines) {
     const cost = l.product.costPrice ? Number(l.product.costPrice) : 0
-    cogs += cost * Number(l.quantity)
+    cogs += cost > 0 ? cost * Number(l.quantity) : Number(l.lineTotal)
   }
   return Math.round(cogs * 100) / 100
 }
@@ -56,7 +57,7 @@ async function getReturnsAdjustment(shopId: string, start: Date, end: Date) {
     }),
     prisma.saleReturnLine.findMany({
       where: { saleReturn: { shopId, createdAt: { gte: start, lt: end } } },
-      select: { quantity: true, isReplacement: true, restocked: true, product: { select: { costPrice: true } } },
+      select: { quantity: true, lineTotal: true, isReplacement: true, restocked: true, product: { select: { costPrice: true } } },
     }),
   ])
   const returnTotal = Number(agg._sum.returnTotal || 0)
@@ -65,8 +66,10 @@ async function getReturnsAdjustment(shopId: string, start: Date, end: Date) {
   let cogsDelta = 0
   for (const l of lines) {
     const cost = l.product.costPrice ? Number(l.product.costPrice) : 0
-    if (l.isReplacement) cogsDelta += cost * Number(l.quantity) // new goods out
-    else if (l.restocked) cogsDelta -= cost * Number(l.quantity) // returned to stock -> reverse COGS
+    // No-cost lines use sale value as cost (0 profit), matching getCostOfGoods.
+    const lineCogs = cost > 0 ? cost * Number(l.quantity) : Number(l.lineTotal)
+    if (l.isReplacement) cogsDelta += lineCogs // new goods out
+    else if (l.restocked) cogsDelta -= lineCogs // returned to stock -> reverse COGS
   }
   return {
     salesDelta: Math.round((replacementTotal - returnTotal) * 100) / 100,
