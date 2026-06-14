@@ -15,8 +15,52 @@ import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/ToastProvider'
-import { Minus, Plus, X, ShoppingCart, Package, Trash2, Edit3 } from 'lucide-react'
+import { Minus, Plus, X, ShoppingCart, Package, Trash2, Edit3, Keyboard } from 'lucide-react'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
+import Modal from '@/components/ui/Modal'
+
+/** True when the keystroke is inside a text field (so global shortcuts shouldn't fire),
+ *  except the scan box which is allowed to host shortcuts. */
+function isTypingTarget(e: KeyboardEvent, exceptEl?: HTMLElement | null) {
+  const el = e.target as HTMLElement | null
+  if (!el || el === exceptEl) return false
+  const tag = el.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
+}
+
+/** Window-level keydown hook with a stable listener and always-fresh handler. */
+function useHotkeys(handler: (e: KeyboardEvent) => void, enabled: boolean) {
+  const ref = useRef(handler)
+  ref.current = handler
+  useEffect(() => {
+    if (!enabled) return
+    const fn = (e: KeyboardEvent) => ref.current(e)
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [enabled])
+}
+
+/** The keyboard shortcuts shown in the cheatsheet. */
+const POS_SHORTCUTS: Array<{ keys: string; action: string }> = [
+  { keys: 'Enter', action: 'Add typed item / scanned barcode (use "x5" for qty)' },
+  { keys: '↑ / ↓', action: 'Move through search results' },
+  { keys: 'Enter (on a result)', action: 'Add the highlighted result' },
+  { keys: 'Enter (empty box)', action: 'Open checkout' },
+  { keys: 'Esc', action: 'Clear the search box' },
+  { keys: 'Alt + P', action: 'Complete sale (checkout)' },
+  { keys: 'Alt + H', action: 'Hold sale' },
+  { keys: 'Alt + L', action: 'Open held sales' },
+  { keys: 'Alt + K', action: 'Clear cart' },
+  { keys: 'Alt + R', action: 'Toggle Retail / Trade pricing' },
+  { keys: 'Alt + D', action: 'Jump to discount' },
+  { keys: 'Alt + S', action: 'Back to the scan box' },
+  { keys: 'Alt + ↑ / ↓', action: 'Select a cart line' },
+  { keys: 'Alt + + / -', action: 'Change qty of selected line' },
+  { keys: 'Alt + Del', action: 'Remove selected line' },
+  { keys: 'In checkout: C / U', action: 'Set Paid / Udhaar' },
+  { keys: 'In checkout: Enter', action: 'Confirm sale' },
+  { keys: '?', action: 'Show this shortcuts list' },
+]
 
 // Product interface is imported from lib/offline/products
 
@@ -209,6 +253,14 @@ export default function POSPage() {
 
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const submitLockRef = useRef(false)
+
+  // Keyboard-first navigation
+  const [highlightIndex, setHighlightIndex] = useState(-1) // active search result (-1 = none; never auto-pick)
+  const [selectedCartIndex, setSelectedCartIndex] = useState(-1) // active cart line for keyboard qty/remove
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false)
+  const [showShortcutsHint, setShowShortcutsHint] = useState(false)
+  const discountInputRef = useRef<HTMLInputElement>(null)
+  const paymentModalRef = useRef<HTMLDivElement>(null)
 
   // Fast lookup maps for barcode -> product
   const [productIndex, setProductIndex] = useState<{
@@ -1204,6 +1256,7 @@ export default function POSPage() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
 
   useEffect(() => {
+    setHighlightIndex(-1) // reset selection whenever the query/results change
     if (!barcodeInput.trim()) {
       setFilteredProducts(products)
       return
@@ -1278,6 +1331,141 @@ export default function POSPage() {
   // Cap the tappable grid; scanning / the search dropdown still reach every product.
   const gridItems = useMemo(() => products.slice(0, POS_GRID_LIMIT), [products])
 
+  // --- Keyboard-first POS ---
+  const visibleResults = useMemo(() => filteredProducts.slice(0, 15), [filteredProducts])
+
+  // Show the one-time shortcuts hint until the user has seen it.
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem('pos_seen_shortcuts_hint')) setShowShortcutsHint(true)
+    } catch { /* ignore */ }
+  }, [])
+  function dismissShortcutsHint() {
+    setShowShortcutsHint(false)
+    try { localStorage.setItem('pos_seen_shortcuts_hint', '1') } catch { /* ignore */ }
+  }
+  function openShortcuts() {
+    setShowShortcutsModal(true)
+    dismissShortcutsHint()
+  }
+
+  // Keep the selected cart line on the last item as the cart changes.
+  useEffect(() => {
+    setSelectedCartIndex(cart.length ? cart.length - 1 : -1)
+  }, [cart.length])
+
+  // Scroll the highlighted search result / selected cart line into view.
+  useEffect(() => {
+    if (highlightIndex >= 0) document.getElementById(`pos-opt-${highlightIndex}`)?.scrollIntoView({ block: 'nearest' })
+  }, [highlightIndex])
+  useEffect(() => {
+    if (selectedCartIndex >= 0) document.getElementById(`pos-cart-${selectedCartIndex}`)?.scrollIntoView({ block: 'nearest' })
+  }, [selectedCartIndex])
+
+  function moveCartSelection(delta: number) {
+    if (cart.length === 0) return
+    setSelectedCartIndex((i) => {
+      const start = i < 0 ? (delta > 0 ? -1 : cart.length) : i
+      return Math.max(0, Math.min(cart.length - 1, start + delta))
+    })
+  }
+  function bumpSelectedQty(delta: number) {
+    const item = cart[selectedCartIndex]
+    if (item) updateCartQuantity(item.product.id, item.quantity + delta)
+  }
+  function removeSelectedLine() {
+    const item = cart[selectedCartIndex]
+    if (item) removeFromCart(item.product.id)
+  }
+
+  // Keys handled while focus is in the scan box (dropdown nav + Enter behaviour).
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    const hasResults = barcodeInput.trim() !== '' && visibleResults.length > 0
+    if (e.key === 'ArrowDown' && !e.altKey && hasResults) {
+      e.preventDefault()
+      setHighlightIndex((i) => Math.min(i + 1, visibleResults.length - 1))
+      return
+    }
+    if (e.key === 'ArrowUp' && !e.altKey && hasResults) {
+      e.preventDefault()
+      setHighlightIndex((i) => Math.max(i - 1, -1))
+      return
+    }
+    if (e.key === 'Enter' || e.code === 'NumpadEnter') {
+      if (highlightIndex >= 0 && visibleResults[highlightIndex]) {
+        e.preventDefault()
+        handleProductSearch(visibleResults[highlightIndex])
+        setHighlightIndex(-1)
+        return
+      }
+      if (!barcodeInput.trim() && cart.length > 0) {
+        e.preventDefault()
+        handleCompleteSale()
+        return
+      }
+      // else: fall through to the form submit (handleBarcodeSubmit) — scanner path unchanged
+      return
+    }
+    if (e.key === 'Escape') {
+      if (highlightIndex >= 0) { setHighlightIndex(-1); return }
+      if (barcodeInput) setBarcodeInput('')
+    }
+  }
+
+  // Keys handled inside the payment modal (focus is within the modal).
+  function handlePaymentKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setShowPaymentModal(false)
+      setError('')
+      return
+    }
+    if (e.key === 'Enter' || e.code === 'NumpadEnter') {
+      const disabled = submitting || (paymentStatus === 'PAID' && paymentMethod === 'CASH' && change < 0)
+      if (!disabled) { e.preventDefault(); submitSale() }
+      return
+    }
+    const tag = (e.target as HTMLElement).tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return
+    if (e.key.toLowerCase() === 'c') { e.preventDefault(); setPaymentStatus('PAID'); setCustomerId('') }
+    else if (e.key.toLowerCase() === 'u') { e.preventDefault(); setPaymentStatus('UDHAAR') }
+  }
+
+  // Focus the payment modal so its keydown handler catches keys when no field is focused.
+  useEffect(() => {
+    if (showPaymentModal) setTimeout(() => paymentModalRef.current?.focus(), 0)
+  }, [showPaymentModal])
+
+  const anyModalOpen =
+    showPaymentModal || showReceiptModal || !!editingItem || showHeldSalesModal || showHoldNoteModal ||
+    !!quickAddProduct || showShortcutsModal || showNewCustomerModal || showQuickAddProductModal
+
+  // Global command shortcuts (disabled while any modal is open; modals own their keys).
+  useHotkeys((e) => {
+    if (e.key === '?') {
+      const blockedInOtherInput = isTypingTarget(e, barcodeInputRef.current)
+      const inScanBoxWithText = e.target === barcodeInputRef.current && barcodeInput.trim() !== ''
+      if (!blockedInOtherInput && !inScanBoxWithText) { e.preventDefault(); openShortcuts() }
+      return
+    }
+    if (!e.altKey) return
+    if (isTypingTarget(e, barcodeInputRef.current)) return // allow in scan box, block in other fields
+    switch (e.code) {
+      case 'KeyP': e.preventDefault(); handleCompleteSale(); break
+      case 'KeyH': e.preventDefault(); handleHoldSale(); break
+      case 'KeyL': e.preventDefault(); if (heldSales.length) setShowHeldSalesModal(true); break
+      case 'KeyK': e.preventDefault(); handleClearCart(); break
+      case 'KeyR': e.preventDefault(); setPriceMode((m) => (m === 'RETAIL' ? 'TRADE' : 'RETAIL')); break
+      case 'KeyD': e.preventDefault(); discountInputRef.current?.focus(); break
+      case 'KeyS': e.preventDefault(); barcodeInputRef.current?.focus(); break
+      case 'ArrowDown': e.preventDefault(); moveCartSelection(1); break
+      case 'ArrowUp': e.preventDefault(); moveCartSelection(-1); break
+      case 'Equal': case 'NumpadAdd': e.preventDefault(); bumpSelectedQty(1); break
+      case 'Minus': case 'NumpadSubtract': e.preventDefault(); bumpSelectedQty(-1); break
+      case 'Delete': e.preventDefault(); removeSelectedLine(); break
+    }
+  }, !anyModalOpen)
+
   if (!user?.currentShopId) {
     return (
       <div className="p-6">
@@ -1303,6 +1491,18 @@ export default function POSPage() {
       <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] lg:overflow-y-auto">
         <div className={`p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10 ${!isOnline ? 'mt-8' : ''}`}>
           <h1 className="text-2xl font-bold mb-4">{t('pos')}</h1>
+
+          {showShortcutsHint && (
+            <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+              <span className="flex items-center gap-2">
+                <Keyboard className="h-4 w-4 shrink-0" />
+                New: run sales from the keyboard. Press <kbd className="rounded bg-white px-1 font-mono text-xs">?</kbd> to see shortcuts.
+              </span>
+              <button type="button" onClick={dismissShortcutsHint} className="shrink-0 rounded p-1 hover:bg-blue-100" aria-label="Dismiss">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
 
           {/* Barcode Input */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1336,30 +1536,39 @@ export default function POSPage() {
               placeholder={t('scan_barcode') + ' or search by name/SKU (e.g., "candy x5")'}
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               maxLength={64}
               className="w-full text-lg h-11"
               autoFocus
+              role="combobox"
+              aria-expanded={barcodeInput.trim() !== '' && visibleResults.length > 0}
+              aria-controls="pos-suggestions"
+              aria-activedescendant={highlightIndex >= 0 ? `pos-opt-${highlightIndex}` : undefined}
             />
             <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              Tip: Scan barcode or type name/SKU. Use &quot;x&quot; for quantity (e.g., &quot;candy x5&quot;).
+              Enter adds, Up/Down picks a result, &quot;x&quot; sets qty (e.g., &quot;candy x5&quot;). Press ? for keyboard shortcuts.
             </p>
           </form>
 
           {/* Unified Search Suggestions (driven by barcodeInput) */}
           <div className="relative mb-4">
-            {barcodeInput && filteredProducts.length > 0 && (
-              <div className="absolute z-20 w-full bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                {filteredProducts.slice(0, 15).map((product, index) => {
+            {barcodeInput && visibleResults.length > 0 && (
+              <div id="pos-suggestions" role="listbox" className="absolute z-20 w-full bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {visibleResults.map((product, index) => {
                   // Check if there are other products with the same name
                   const sameNameProducts = filteredProducts.filter(p => p.name === product.name)
                   const hasVariants = sameNameProducts.length > 1
-                  
+
                   return (
                     <button
                       key={product.id}
+                      id={`pos-opt-${index}`}
+                      role="option"
+                      aria-selected={index === highlightIndex}
                       type="button"
                       onClick={() => handleProductSearch(product)}
-                      className="w-full px-4 py-2.5 text-left hover:bg-[hsl(var(--muted))] border-b border-[hsl(var(--border))] last:border-b-0"
+                      onMouseEnter={() => setHighlightIndex(index)}
+                      className={`w-full px-4 py-2.5 text-left border-b border-[hsl(var(--border))] last:border-b-0 ${index === highlightIndex ? 'bg-[hsl(var(--muted))]' : 'hover:bg-[hsl(var(--muted))]'}`}
                     >
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex-1 min-w-0">
@@ -1456,14 +1665,25 @@ export default function POSPage() {
         <div className="p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xl font-bold">{t('cart')}</h2>
-            <Button
-              variant="outline"
-              className="h-8 px-3 text-sm"
-              onClick={() => setShowHeldSalesModal(true)}
-              disabled={heldSales.length === 0}
-            >
-              Held Sales ({heldSales.length})
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="h-8 px-2 text-sm"
+                onClick={openShortcuts}
+                title="Keyboard shortcuts (?)"
+              >
+                <Keyboard className="h-4 w-4" />
+                <span className="ml-1 hidden sm:inline">Shortcuts</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-8 px-3 text-sm"
+                onClick={() => setShowHeldSalesModal(true)}
+                disabled={heldSales.length === 0}
+              >
+                Held Sales ({heldSales.length})
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -1475,7 +1695,9 @@ export default function POSPage() {
               {cart.map((item, idx) => (
                 <div
                   key={item.product.id}
-                  className="flex items-center justify-between gap-3 p-3 border border-[hsl(var(--border))] rounded-lg"
+                  id={`pos-cart-${idx}`}
+                  onClick={() => setSelectedCartIndex(idx)}
+                  className={`flex items-center justify-between gap-3 p-3 border rounded-lg ${idx === selectedCartIndex ? 'border-blue-400 ring-1 ring-blue-300' : 'border-[hsl(var(--border))]'}`}
                 >
                   <span className="w-6 shrink-0 text-center text-sm font-semibold text-[hsl(var(--muted-foreground))] tabular-nums">
                     {idx + 1}
@@ -1556,6 +1778,7 @@ export default function POSPage() {
                   </div>
                   {discountMode === 'amount' ? (
                     <Input
+                      ref={discountInputRef}
                       type="number"
                       step="1"
                       min={0}
@@ -1614,7 +1837,7 @@ export default function POSPage() {
                   className="flex-1 h-12 text-lg font-semibold"
                   onClick={handleClearCart}
                 >
-                  Clear Cart
+                  Clear Cart <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-60">Alt+K</kbd>
                 </Button>
                 <Button
                   type="button"
@@ -1622,10 +1845,10 @@ export default function POSPage() {
                   className="flex-1 h-12 text-lg font-semibold bg-yellow-400 hover:bg-yellow-500 text-black border-yellow-500"
                   onClick={handleHoldSale}
                 >
-                  Hold Sale
+                  Hold Sale <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-60">Alt+H</kbd>
                 </Button>
                 <Button onClick={handleCompleteSale} className="flex-1 h-12 text-lg font-semibold">
-                  {t('complete_sale')}
+                  {t('complete_sale')} <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-70">Alt+P</kbd>
                 </Button>
               </div>
           </div>
@@ -1684,7 +1907,12 @@ export default function POSPage() {
       {/* Payment Modal */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-md border border-[hsl(var(--border))]">
+          <div
+            ref={paymentModalRef}
+            tabIndex={-1}
+            onKeyDown={handlePaymentKeyDown}
+            className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-md border border-[hsl(var(--border))] outline-none"
+          >
             <h2 className="text-xl font-bold mb-4">{t('complete_sale')}</h2>
 
             {error && (
@@ -1865,6 +2093,21 @@ export default function POSPage() {
           </div>
         </div>
       )}
+
+      {/* Keyboard Shortcuts cheatsheet */}
+      <Modal open={showShortcutsModal} onClose={() => setShowShortcutsModal(false)} title="Keyboard shortcuts" size="md">
+        <p className="mb-3 text-sm text-[hsl(var(--muted-foreground))]">
+          Run a whole sale without the mouse. The scan box stays focused, so just scan or type.
+        </p>
+        <div className="space-y-1.5">
+          {POS_SHORTCUTS.map((s) => (
+            <div key={s.keys} className="flex items-center justify-between gap-4 text-sm border-b border-[hsl(var(--border))] last:border-b-0 py-1">
+              <span className="text-[hsl(var(--muted-foreground))]">{s.action}</span>
+              <kbd className="shrink-0 rounded border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-2 py-0.5 font-mono text-xs">{s.keys}</kbd>
+            </div>
+          ))}
+        </div>
+      </Modal>
 
       {/* Receipt Modal */}
       {showReceiptModal && receiptInvoice && (
