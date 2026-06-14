@@ -367,6 +367,7 @@ export async function listSales(shopId: string, filters: {
   startDate?: Date
   endDate?: Date
   paymentStatus?: 'PAID' | 'UDHAAR'
+  search?: string
   page?: number
   limit?: number
 } = {}) {
@@ -384,6 +385,17 @@ export async function listSales(shopId: string, filters: {
 
   if (filters.paymentStatus) {
     where.paymentStatus = filters.paymentStatus
+  }
+
+  // Free-text search by invoice number or customer name.
+  if (filters.search) {
+    const term = filters.search.trim()
+    if (term) {
+      where.OR = [
+        { number: { contains: term } },
+        { customer: { name: { contains: term, mode: 'insensitive' } } },
+      ]
+    }
   }
 
   if (filters.startDate || filters.endDate) {

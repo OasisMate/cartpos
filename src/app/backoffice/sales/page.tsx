@@ -23,6 +23,7 @@ interface SaleLine {
 
 interface Sale {
   id: string
+  number: string | null
   createdAt: string
   status: 'COMPLETED' | 'VOID'
   paymentStatus: 'PAID' | 'UDHAAR'
@@ -53,6 +54,8 @@ export default function BackofficeSalesPage() {
     totalPages: 1,
   })
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'UDHAAR'>('ALL')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [voidModalOpen, setVoidModalOpen] = useState(false)
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null)
   const [voiding, setVoiding] = useState(false)
@@ -81,6 +84,9 @@ export default function BackofficeSalesPage() {
           if (statusFilter !== 'ALL') {
             params.set('paymentStatus', statusFilter)
           }
+          if (debouncedSearch) {
+            params.set('search', debouncedSearch)
+          }
           const resp = await fetch(`/api/sales?${params}`)
           const data: SalesResponse = await resp.json()
           if (resp.ok) {
@@ -99,6 +105,7 @@ export default function BackofficeSalesPage() {
       const cached = await getSales(user.currentShopId)
       let rows = cached.map((s) => ({
         id: s.id,
+        number: (s as any).number ?? null,
         createdAt: new Date(s.createdAt).toISOString(),
         status: 'COMPLETED' as const,
         paymentStatus: s.paymentStatus,
@@ -124,7 +131,17 @@ export default function BackofficeSalesPage() {
       if (statusFilter !== 'ALL') {
         rows = rows.filter((s) => s.paymentStatus === statusFilter)
       }
-      
+
+      // Apply search (invoice number or customer name) on cached rows
+      if (debouncedSearch) {
+        const term = debouncedSearch.toLowerCase()
+        rows = rows.filter(
+          (s) =>
+            (s.number && s.number.toLowerCase().includes(term)) ||
+            (s.customer?.name && s.customer.name.toLowerCase().includes(term))
+        )
+      }
+
       setSales(rows)
       setPagination({
         page: 1,
@@ -137,7 +154,16 @@ export default function BackofficeSalesPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.currentShopId, currentPage, statusFilter])
+  }, [user?.currentShopId, currentPage, statusFilter, debouncedSearch])
+
+  // Debounce the search box: wait 300ms after typing, then search from page 1.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim())
+      setCurrentPage(1)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchTerm])
 
   useEffect(() => {
     fetchSales()
@@ -234,9 +260,16 @@ export default function BackofficeSalesPage() {
   return (
     <div className="p-6">
       <ConfirmDialog />
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Sales</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search invoice no. or customer..."
+            className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+          />
           <label className="text-sm text-gray-700">Payment</label>
           <select
             value={statusFilter}
@@ -265,6 +298,7 @@ export default function BackofficeSalesPage() {
             <Table>
               <THead>
                 <TR>
+                  <TH>Invoice #</TH>
                   <TH>Date</TH>
                   <TH>Customer</TH>
                   <TH>Payment</TH>
@@ -275,10 +309,11 @@ export default function BackofficeSalesPage() {
               </THead>
               <tbody>
                 {sales.length === 0 ? (
-                  <EmptyRow colSpan={6} message="No sales found" />
+                  <EmptyRow colSpan={7} message="No sales found" />
                 ) : (
                   sales.map((s) => (
                     <TR key={s.id}>
+                      <TD className="font-medium">{s.number || '-'}</TD>
                       <TD>{new Date(s.createdAt).toLocaleString()}</TD>
                       <TD>{s.customer?.name || '-'}</TD>
                       <TD>

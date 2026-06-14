@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
       customerId: searchParams.get('customerId') || undefined,
       paymentStatus:
         (searchParams.get('paymentStatus') as 'PAID' | 'UDHAAR') || undefined,
+      search: searchParams.get('search') || undefined,
       startDate: searchParams.get('startDate')
         ? new Date(searchParams.get('startDate')!)
         : undefined,
