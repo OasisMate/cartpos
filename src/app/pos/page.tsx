@@ -1240,11 +1240,14 @@ export default function POSPage() {
           setFilteredProducts([])
         }
       } else {
-        // Online: filter products array
+        // Online: filter products array (name, piece barcode, carton barcode, SKU)
+        const term = barcodeInput.toLowerCase()
         const filtered = products.filter(
           (p) =>
-            p.name.toLowerCase().includes(barcodeInput.toLowerCase()) ||
-            (p.barcode && p.barcode.includes(barcodeInput))
+            p.name.toLowerCase().includes(term) ||
+            (p.barcode && p.barcode.includes(barcodeInput)) ||
+            (p.cartonBarcode && p.cartonBarcode.includes(barcodeInput)) ||
+            ((p as any).sku && (p as any).sku.toLowerCase().includes(term))
         )
         // Sort: first by name alphabetically, then by price (ascending) for same names
         filtered.sort((a, b) => {
