@@ -4,9 +4,9 @@ import { useId } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Branded loading spinner: the CartPOS cart mark (same glyph as the sidebar
- * Logo) rotating. Use this instead of a generic ring wherever a spinner is
- * shown, so loaders feel part of the product.
+ * Branded loading indicator: the full CartPOS mark (cart + CP, same as the
+ * sidebar/login Logo) gently pulsing. Matches the logo so loaders feel part of
+ * the product. The mark stays upright (a spinning wordmark reads badly).
  */
 export function BrandSpinner({ size = 32, className }: { size?: number; className?: string }) {
   const gradientId = useId()
@@ -19,8 +19,8 @@ export function BrandSpinner({ size = 32, className }: { size?: number; classNam
       xmlns="http://www.w3.org/2000/svg"
       role="status"
       aria-label="Loading"
-      className={cn('animate-spin', className)}
-      style={{ animationDuration: '1.7s' }}
+      className={cn('animate-pulse', className)}
+      style={{ animationDuration: '1.4s' }}
     >
       <defs>
         <linearGradient id={gradientId} x1="6" y1="6" x2="44" y2="44" gradientUnits="userSpaceOnUse">
@@ -42,6 +42,18 @@ export function BrandSpinner({ size = 32, className }: { size?: number; classNam
         <path d="M31 8l6-2.5 2.5 6L34 14l-3-6z" />
         <path d="M9 24l4-1.6 1.6 4L10.6 28 9 24z" />
       </g>
+      <text
+        x="24"
+        y="24"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="9"
+        fontWeight="700"
+        fontFamily="'Inter','Segoe UI',sans-serif"
+        fill={`url(#${gradientId})`}
+      >
+        CP
+      </text>
     </svg>
   )
 }
