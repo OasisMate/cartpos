@@ -259,7 +259,8 @@ export default function ProductsPage() {
         const term = debouncedSearch.toLowerCase()
         rows = rows.filter((p) =>
           p.name.toLowerCase().includes(term) ||
-          (p.barcode && p.barcode.toLowerCase().includes(term))
+          (p.barcode && p.barcode.toLowerCase().includes(term)) ||
+          (p.cartonBarcode && p.cartonBarcode.toLowerCase().includes(term))
         )
       }
 
@@ -404,6 +405,13 @@ export default function ProductsPage() {
           setSubmitting(false)
           return
         }
+      }
+
+      // A carton barcode needs a pack size so POS can sell the box.
+      if (formData.cartonBarcode.trim() && !(parseInt(formData.cartonSize) > 0)) {
+        setError('Items per carton is required when a carton barcode is set')
+        setSubmitting(false)
+        return
       }
 
       const url = editingProduct
@@ -704,7 +712,7 @@ export default function ProductsPage() {
         <div className="flex gap-2">
           <Input
             type="text"
-            placeholder="Search products (name, SKU, barcode)..."
+            placeholder="Search products (name, SKU, barcode, carton barcode)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-1"
@@ -887,7 +895,10 @@ export default function ProductsPage() {
                 <h3 className="text-sm font-semibold mb-3 text-gray-700">Carton / Packing Details</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Items per Carton</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Items per Carton
+                      {formData.cartonBarcode.trim() && <span className="text-red-500"> *</span>}
+                    </label>
                     <Input
                       type="number"
                       placeholder="e.g. 12"

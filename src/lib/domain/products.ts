@@ -156,6 +156,11 @@ export async function createProduct(
   // Validate barcode + carton barcode uniqueness across both columns per shop.
   await assertBarcodesAvailable(shopId, { barcode: input.barcode, cartonBarcode: input.cartonBarcode })
 
+  // A carton barcode is only sellable with a known pack size (POS converts to pieces).
+  if (input.cartonBarcode?.trim() && !(input.cartonSize && input.cartonSize > 0)) {
+    throw new Error('Items per carton is required when a carton barcode is set')
+  }
+
   // Generate SKU if not provided
   const finalSKU = input.sku?.trim() || await generateUniqueSKU(shopId)
 
@@ -222,10 +227,18 @@ export async function updateProduct(
   }
 
   // Validate barcode + carton barcode against the product's resulting state.
+  const effCartonBarcode = input.cartonBarcode !== undefined ? input.cartonBarcode : product.cartonBarcode
   if (input.barcode !== undefined || input.cartonBarcode !== undefined) {
     const effBarcode = input.barcode !== undefined ? input.barcode : product.barcode
-    const effCartonBarcode = input.cartonBarcode !== undefined ? input.cartonBarcode : product.cartonBarcode
     await assertBarcodesAvailable(product.shopId, { barcode: effBarcode, cartonBarcode: effCartonBarcode }, id)
+  }
+
+  // A carton barcode is only sellable with a known pack size.
+  if (input.cartonBarcode !== undefined || input.cartonSize !== undefined) {
+    const effCartonSize = input.cartonSize !== undefined ? input.cartonSize : product.cartonSize
+    if (effCartonBarcode?.trim() && !(effCartonSize && effCartonSize > 0)) {
+      throw new Error('Items per carton is required when a carton barcode is set')
+    }
   }
 
   // Lazy migration: Generate SKU if product doesn't have one and SKU is not being explicitly set
@@ -298,12 +311,13 @@ export async function listProducts(shopId: string, filters: ProductFilters = {})
     where.archivedAt = null
   }
 
-  // Search filter (name, sku, barcode)
+  // Search filter (name, sku, barcode, carton barcode)
   if (filters.search) {
     where.OR = [
       { name: { contains: filters.search, mode: 'insensitive' } },
       { sku: { contains: filters.search, mode: 'insensitive' } },
       { barcode: { contains: filters.search, mode: 'insensitive' } },
+      { cartonBarcode: { contains: filters.search, mode: 'insensitive' } },
     ]
   }
 
