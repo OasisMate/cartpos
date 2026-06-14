@@ -1434,7 +1434,7 @@ export default function POSPage() {
   }, [showPaymentModal])
 
   const anyModalOpen =
-    showPaymentModal || !!editingItem || showHeldSalesModal || showHoldNoteModal ||
+    showPaymentModal || showReceiptModal || !!editingItem || showHeldSalesModal || showHoldNoteModal ||
     !!quickAddProduct || showShortcutsModal || showNewCustomerModal || showQuickAddProductModal
 
   // Global command shortcuts (disabled while any modal is open; modals own their keys).
