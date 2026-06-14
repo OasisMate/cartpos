@@ -174,7 +174,7 @@ export default function NotificationBell({ sidebarOpen }: { sidebarOpen?: boolea
                   </button>
                   <button type="button" onClick={() => onItemClick(n)} className="min-w-0 flex-1 text-left">
                     <span className="block text-sm font-medium text-gray-900 truncate">{n.title}</span>
-                    {n.body && <span className="block text-xs text-gray-600 line-clamp-2">{n.body}</span>}
+                    {n.body && <span className="block text-xs text-gray-600 whitespace-pre-line line-clamp-6">{n.body}</span>}
                     <span className="block text-[11px] text-gray-400 mt-0.5">{timeAgo(n.createdAt)}</span>
                   </button>
                   <button
