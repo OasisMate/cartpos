@@ -85,7 +85,8 @@ const ProductGrid = memo(function ProductGrid({
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 p-3">
       {items.map((product) => {
-        const hasCarton = !!(product.cartonSize && product.cartonSize > 0 && product.cartonPrice)
+        const hasCarton = !!(product.cartonSize && product.cartonSize > 0)
+        const cartonUnitPrice = product.cartonPrice != null ? product.cartonPrice : product.price * (product.cartonSize || 1)
         const stock = productStock[product.id] ?? null
         const showStock = product.trackStock && stock !== null
         const usingTrade = priceMode === 'TRADE' && product.tradePrice != null
@@ -111,7 +112,7 @@ const ProductGrid = memo(function ProductGrid({
             </div>
             {hasCarton && (
               <div className="text-xs text-[hsl(var(--muted-foreground))] truncate mt-0.5">
-                Carton: {formatCurrency(product.cartonPrice!)}
+                Carton: {formatCurrency(cartonUnitPrice)} ({product.cartonSize} {product.unit})
               </div>
             )}
           </button>
@@ -499,9 +500,10 @@ export default function POSPage() {
   }, [products])
 
   async function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
-    // Determine price: carton overrides; otherwise trade rate when in trade mode (falls back to retail).
-    const unitPrice = isCarton && product.cartonPrice
-      ? product.cartonPrice
+    // Determine price: carton uses cartonPrice when set, else piece price x carton size;
+    // otherwise trade rate when in trade mode (falls back to retail).
+    const unitPrice = isCarton
+      ? (product.cartonPrice != null ? product.cartonPrice : product.price * (product.cartonSize || 1))
       : priceMode === 'TRADE' && product.tradePrice != null
       ? product.tradePrice
       : product.price
@@ -746,14 +748,17 @@ export default function POSPage() {
 
     if (foundProduct) {
       setUnfoundBarcode(null)
-      const isCartonMatch = foundProduct.cartonBarcode === barcodeToSearch
-      const quantity = isCartonMatch ? (foundProduct.cartonSize || 1) : requestedQuantity
-      const isCarton = isCartonMatch && !!foundProduct.cartonPrice
+      const isCartonMatch =
+        !!foundProduct.cartonBarcode && foundProduct.cartonBarcode.trim() === barcodeToSearch
+      // A carton scan needs a carton size; carton price is optional (falls back to piece x size).
+      const isCarton = isCartonMatch && !!(foundProduct.cartonSize && foundProduct.cartonSize > 0)
+      const cartons = requestedQuantity // for a carton scan, the quantity means number of cartons
 
-      addToCart(foundProduct, isCarton ? 1 : quantity, isCarton)
+      addToCart(foundProduct, isCarton ? cartons : requestedQuantity, isCarton)
 
-      if (isCartonMatch) {
-        show({ message: `Added 1 carton (${quantity} ${foundProduct.unit})`, variant: 'success' })
+      if (isCarton) {
+        const pieces = cartons * (foundProduct.cartonSize || 1)
+        show({ message: `Added ${cartons} carton${cartons === 1 ? '' : 's'} (${pieces} ${foundProduct.unit})`, variant: 'success' })
       } else if (requestedQuantity > 1) {
         show({ message: `Added ${requestedQuantity} ${foundProduct.unit}`, variant: 'success' })
       }
@@ -786,16 +791,16 @@ export default function POSPage() {
     if (barcodeInputRef.current) barcodeInputRef.current.focus()
   }
 
-  function handleQuickAdd() {
+  function handleQuickAdd(asCarton: boolean = false) {
     if (!quickAddProduct) return
-    
+
     const quantity = parseInt(quickAddQuantity) || 1
     if (quantity <= 0) {
       show({ message: 'Quantity must be greater than 0', variant: 'destructive' })
       return
     }
 
-    addToCart(quickAddProduct, quantity, false)
+    addToCart(quickAddProduct, quantity, asCarton)
     setQuickAddProduct(null)
     setQuickAddQuantity('1')
     if (barcodeInputRef.current) {
@@ -1259,7 +1264,7 @@ export default function POSPage() {
   const addToCartRef = useRef<(p: Product, q?: number, c?: boolean) => void>(() => {})
   addToCartRef.current = addToCart
   const handleProductSelect = useCallback((product: Product) => {
-    const hasCarton = !!(product.cartonSize && product.cartonSize > 0 && product.cartonPrice)
+    const hasCarton = !!(product.cartonSize && product.cartonSize > 0)
     if (hasCarton) {
       setQuickAddProduct(product)
       setQuickAddQuantity('1')
@@ -1887,7 +1892,7 @@ export default function POSPage() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault()
-                      handleQuickAdd()
+                      handleQuickAdd(false)
                     }
                     if (e.key === 'Escape') {
                       setQuickAddProduct(null)
@@ -1898,27 +1903,52 @@ export default function POSPage() {
                   autoFocus
                 />
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                  Price: {formatCurrency(quickAddProduct.price)} per {quickAddProduct.unit}
+                  Piece: {formatCurrency(quickAddProduct.price)} per {quickAddProduct.unit}
+                  {quickAddProduct.cartonSize && quickAddProduct.cartonSize > 0 && (
+                    <>
+                      {' · '}Carton: {formatCurrency(quickAddProduct.cartonPrice != null ? quickAddProduct.cartonPrice : quickAddProduct.price * quickAddProduct.cartonSize)} ({quickAddProduct.cartonSize} {quickAddProduct.unit})
+                    </>
+                  )}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setQuickAddProduct(null)
-                    setQuickAddQuantity('1')
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1"
-                  onClick={handleQuickAdd}
-                >
-                  Add to Cart
-                </Button>
-              </div>
+              {quickAddProduct.cartonSize && quickAddProduct.cartonSize > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Button className="flex-1" onClick={() => handleQuickAdd(false)}>
+                      Add Pieces
+                    </Button>
+                    <Button variant="primary" className="flex-1" onClick={() => handleQuickAdd(true)}>
+                      Add Cartons
+                    </Button>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setQuickAddProduct(null)
+                      setQuickAddQuantity('1')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setQuickAddProduct(null)
+                      setQuickAddQuantity('1')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button className="flex-1" onClick={() => handleQuickAdd(false)}>
+                    Add to Cart
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>

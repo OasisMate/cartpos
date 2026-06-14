@@ -92,6 +92,44 @@ async function generateUniqueSKU(shopId: string): Promise<string> {
   return `SKU-${Date.now()}`
 }
 
+/**
+ * Ensure a product's piece barcode and carton barcode don't collide with each
+ * other or with any other product's barcode/cartonBarcode in the same shop.
+ * Prevents the "same item in two places" problem and ambiguous POS scans.
+ */
+async function assertBarcodesAvailable(
+  shopId: string,
+  codes: { barcode?: string | null; cartonBarcode?: string | null },
+  excludeProductId?: string
+) {
+  const barcode = codes.barcode?.trim() || null
+  const cartonBarcode = codes.cartonBarcode?.trim() || null
+
+  if (barcode && cartonBarcode && barcode === cartonBarcode) {
+    throw new Error('The piece barcode and carton barcode must be different')
+  }
+
+  const toCheck = [
+    barcode ? { value: barcode, label: 'barcode' } : null,
+    cartonBarcode ? { value: cartonBarcode, label: 'carton barcode' } : null,
+  ].filter(Boolean) as { value: string; label: string }[]
+
+  for (const c of toCheck) {
+    const clash = await prisma.product.findFirst({
+      where: {
+        shopId,
+        ...(excludeProductId ? { id: { not: excludeProductId } } : {}),
+        OR: [{ barcode: c.value }, { cartonBarcode: c.value }],
+      },
+      select: { name: true, barcode: true },
+    })
+    if (clash) {
+      const usedAs = clash.barcode === c.value ? 'barcode' : 'carton barcode'
+      throw new Error(`The ${c.label} "${c.value}" is already used as the ${usedAs} of "${clash.name}"`)
+    }
+  }
+}
+
 export async function createProduct(
   shopId: string,
   input: CreateProductInput,
@@ -115,21 +153,8 @@ export async function createProduct(
     throw new Error('Cost price must be a valid non-negative amount')
   }
 
-  // Validate barcode uniqueness per shop (if provided)
-  if (input.barcode) {
-    const existing = await prisma.product.findUnique({
-      where: {
-        shopId_barcode: {
-          shopId,
-          barcode: input.barcode,
-        },
-      },
-    })
-
-    if (existing) {
-      throw new Error('A product with this barcode already exists in this shop')
-    }
-  }
+  // Validate barcode + carton barcode uniqueness across both columns per shop.
+  await assertBarcodesAvailable(shopId, { barcode: input.barcode, cartonBarcode: input.cartonBarcode })
 
   // Generate SKU if not provided
   const finalSKU = input.sku?.trim() || await generateUniqueSKU(shopId)
@@ -196,20 +221,11 @@ export async function updateProduct(
     throw new Error('You do not have permission to update this product')
   }
 
-  // Validate barcode uniqueness (if being updated)
-  if (input.barcode && input.barcode !== product.barcode) {
-    const existing = await prisma.product.findUnique({
-      where: {
-        shopId_barcode: {
-          shopId: product.shopId,
-          barcode: input.barcode,
-        },
-      },
-    })
-
-    if (existing) {
-      throw new Error('A product with this barcode already exists in this shop')
-    }
+  // Validate barcode + carton barcode against the product's resulting state.
+  if (input.barcode !== undefined || input.cartonBarcode !== undefined) {
+    const effBarcode = input.barcode !== undefined ? input.barcode : product.barcode
+    const effCartonBarcode = input.cartonBarcode !== undefined ? input.cartonBarcode : product.cartonBarcode
+    await assertBarcodesAvailable(product.shopId, { barcode: effBarcode, cartonBarcode: effCartonBarcode }, id)
   }
 
   // Lazy migration: Generate SKU if product doesn't have one and SKU is not being explicitly set
