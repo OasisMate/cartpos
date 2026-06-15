@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 type Audience = 'ALL_USERS' | 'ALL_ORG_ADMINS' | 'ORGS' | 'USERS'
 
@@ -26,6 +27,7 @@ const AUDIENCE_LABELS: Record<Audience, string> = {
 
 export default function BroadcastPage() {
   const { user } = useAuth()
+  const { confirm, ConfirmDialog } = useConfirm()
   const [audience, setAudience] = useState<Audience>('ALL_ORG_ADMINS')
   const [orgs, setOrgs] = useState<OrgLite[]>([])
   const [users, setUsers] = useState<UserLite[]>([])
@@ -92,7 +94,7 @@ export default function BroadcastPage() {
       audience === 'ALL_USERS'
         ? 'Send this message to ALL users in the system?'
         : `Send this ${[inApp && 'in-app', email && 'email'].filter(Boolean).join(' + ')} message?`
-    if (!window.confirm(confirmMsg)) return
+    if (!(await confirm(confirmMsg))) return
 
     setSending(true)
     try {
@@ -133,6 +135,7 @@ export default function BroadcastPage() {
 
   return (
     <div className="max-w-2xl">
+      <ConfirmDialog />
       <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent">
         Broadcast a message
       </h1>
