@@ -255,8 +255,27 @@ model ShopSettings {
   receiptHeaderDisplay            ReceiptHeaderDisplay @default(NAME_ONLY)  // What to show on receipt header
   cardFeePercent                  Decimal?      @db.Decimal(5, 2) // Percentage card fee applied on card payments (0 = no fee)
   allowCardFeeOverride            Boolean       @default(false)   // Allow per-sale override of card fee percent
+  // Business-type feature flags. Seeded from Organization.type at signup (see lib/domain/business-presets.ts),
+  // editable later in store Settings. Defaults preserve pre-feature behaviour for existing shops.
+  enableQuotations                Boolean       @default(true)    // Show quotations module (hardware/electric); existing shops keep it on
+  enableServiceCharge             Boolean       @default(false)   // Restaurant/hotel service charge at checkout
+  serviceChargePercent            Decimal?      @db.Decimal(5, 2) // Default service charge percent (when enabled)
+  allowServiceChargeOverride      Boolean       @default(true)    // Allow per-sale override of service charge
+  enableDeliveryCharge            Boolean       @default(false)   // Restaurant: add a delivery fee on the bill
+  deliveryChargeMode              DeliveryChargeMode @default(FIXED) // Store manager picks fixed amount or % of bill
+  deliveryChargeDefault           Decimal?      @db.Decimal(10, 2) // Default delivery fee when mode=FIXED (editable per order)
+  deliveryChargePercent           Decimal?      @db.Decimal(5, 2)  // Delivery fee percent when mode=PERCENT
+  // When a delivery charge is applied, drop the service charge to 0 by default.
+  // Store managers who want both can turn this off (versatile, not a hard rule).
+  removeServiceChargeOnDelivery   Boolean       @default(true)
+  enableUnitSplitting             Boolean       @default(false)   // Pharmacy: sell whole box or loose unit (reuses cartonSize math)
   timezone                        String        @default("Asia/Karachi") // IANA tz used to compute the shop's "today" for dashboards/reports
   shop                            Shop          @relation(fields: [shopId], references: [id])
+}
+
+enum DeliveryChargeMode {
+  FIXED    // flat rupee amount per delivery order
+  PERCENT  // percent of the bill
 }
 
 enum LanguageMode {
@@ -491,6 +510,10 @@ model Invoice {
   paymentMethod   PaymentMethod?  // null for UDHAAR
   subtotal        Decimal         @db.Decimal(10, 2)
   discount        Decimal         @default(0) @db.Decimal(10, 2)
+  // Extra charges added on top of (subtotal - discount). Card fee remains implicit
+  // in total; receipt derives it as total - (subtotal - discount) - serviceCharge - deliveryCharge.
+  serviceCharge   Decimal         @default(0) @db.Decimal(10, 2)
+  deliveryCharge  Decimal         @default(0) @db.Decimal(10, 2)
   total           Decimal         @db.Decimal(10, 2)
   createdByUserId String?
   createdAt       DateTime        @default(now())

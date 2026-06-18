@@ -34,6 +34,10 @@ export interface CreateSaleInput {
   items: SaleItemInput[]
   subtotal: number
   discount: number
+  /** Restaurant service charge added on top of (subtotal - discount). 0 when not applicable. */
+  serviceCharge?: number
+  /** Restaurant delivery fee added on top of (subtotal - discount). 0 when not applicable. */
+  deliveryCharge?: number
   total: number
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
@@ -169,30 +173,44 @@ export async function createSale(
   // If there are stock warnings and negative stock is allowed, we'll include them in the response
   // but still proceed with the sale
 
-  // Validate totals. The client's `total` INCLUDES the card fee for PAID+CARD sales,
-  // so we must account for it here or card sales get wrongly rejected (was bug C8).
+  // Validate totals. The client's `total` INCLUDES service/delivery charges and the
+  // card fee for PAID+CARD sales, so we must account for them here or sales get
+  // wrongly rejected (card fee was bug C8). Order of charges:
+  //   base = subtotal - discount
+  //   + service charge + delivery charge  -> preCardTotal
+  //   + card fee (on preCardTotal)         -> total
   const calculatedSubtotal = input.items.reduce(
     (sum, item) => sum + item.lineTotal,
     0
   )
   const baseTotal = calculatedSubtotal - input.discount
 
-  let expectedTotal = baseTotal
+  // Extra charges are client-provided (cashier may edit them per sale). They must be
+  // non-negative; their consistency with `total` is enforced by the check below.
+  const serviceCharge = Number(input.serviceCharge ?? 0)
+  const deliveryCharge = Number(input.deliveryCharge ?? 0)
+  if (!Number.isFinite(serviceCharge) || serviceCharge < 0 || !Number.isFinite(deliveryCharge) || deliveryCharge < 0) {
+    throw new Error('Invalid service or delivery charge')
+  }
+
+  const preCardTotal = baseTotal + serviceCharge + deliveryCharge
+
+  let expectedTotal = preCardTotal
   if (input.paymentStatus === 'PAID' && input.paymentMethod === 'CARD') {
     const shopPct = Number(shopSettings?.cardFeePercent ?? 0)
     const allowOverride = shopSettings?.allowCardFeeOverride ?? false
     if (allowOverride) {
       // Per-sale override is enabled: trust the client's fee but bound it to a sane
-      // range (0 .. 100% of the base) so it can't be abused.
-      const impliedFee = input.total - baseTotal
-      if (impliedFee < -0.01 || impliedFee > baseTotal + 0.01) {
+      // range (0 .. 100% of the pre-card total) so it can't be abused.
+      const impliedFee = input.total - preCardTotal
+      if (impliedFee < -0.01 || impliedFee > preCardTotal + 0.01) {
         throw new Error('Total calculation mismatch')
       }
       expectedTotal = input.total
     } else {
       // Recompute the fee from the shop's configured percent (source of truth).
-      const fee = Math.round(baseTotal * shopPct) / 100
-      expectedTotal = baseTotal + fee
+      const fee = Math.round(preCardTotal * shopPct) / 100
+      expectedTotal = preCardTotal + fee
     }
   }
 
@@ -241,6 +259,8 @@ export async function createSale(
           input.paymentStatus === 'PAID' ? input.paymentMethod! : null,
         subtotal: new Decimal(input.subtotal),
         discount: new Decimal(input.discount),
+        serviceCharge: new Decimal(serviceCharge),
+        deliveryCharge: new Decimal(deliveryCharge),
         total: new Decimal(input.total),
         createdByUserId: userId,
       },

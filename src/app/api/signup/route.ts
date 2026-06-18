@@ -8,6 +8,7 @@ import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { withRetry } from '@/lib/db/connection-retry'
 import { isDatabaseConnectionError } from '@/lib/db/db-utils'
 import { issueVerificationEmail } from '@/lib/domain/email-verification'
+import { presetShopSettingsData } from '@/lib/domain/business-presets'
 
 export async function POST(request: Request) {
   try {
@@ -159,6 +160,15 @@ export async function POST(request: Request) {
           userId: user.id,
           shopId: shop.id,
           shopRole: 'STORE_MANAGER' as ShopRole,
+        },
+      })
+
+      // Seed feature flags from the chosen business type (see business-presets.ts).
+      // Owner can override these later in store Settings.
+      await tx.shopSettings.create({
+        data: {
+          shopId: shop.id,
+          ...presetShopSettingsData(organizationType),
         },
       })
 

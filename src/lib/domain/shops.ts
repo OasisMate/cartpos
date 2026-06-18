@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
+import { presetShopSettingsData } from '@/lib/domain/business-presets'
 
 export interface CreateShopInput {
   name: string
@@ -31,6 +32,12 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
 
   // Hash owner password
   const hashedPassword = await hashPassword(input.ownerPassword)
+
+  // Look up the org's business type so the new shop's feature flags match it.
+  const org = await prisma.organization.findUnique({
+    where: { id: input.orgId },
+    select: { type: true },
+  })
 
   // Create shop and owner in a transaction
   const result = await prisma.$transaction(async (tx) => {
@@ -68,7 +75,7 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
       },
     })
 
-    // Create default shop settings
+    // Create default shop settings, with feature flags seeded from the org type.
     await tx.shopSettings.create({
       data: {
         shopId: shop.id,
@@ -77,6 +84,7 @@ export async function createShopWithOwner(input: CreateShopInput, createdByUserI
         allowCustomUnits: true,
         allowNegativeStock: true, // Default: allow negative stock
         languageMode: 'EN_BILINGUAL',
+        ...presetShopSettingsData(org?.type),
       },
     })
 

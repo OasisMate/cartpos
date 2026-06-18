@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { presetShopSettingsData } from '@/lib/domain/business-presets'
 
 function ensureOrgAdmin(user: any) {
   const isOrgAdmin = user?.organizations?.some(
@@ -55,6 +56,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
   }
 
+  // Seed the new shop's feature flags from the org's business type.
+  const org = await prisma.organization.findUnique({
+    where: { id: user.currentOrgId },
+    select: { type: true },
+  })
+
   const shop = await prisma.shop.create({
     data: { name, city, orgId: user.currentOrgId },
   })
@@ -66,6 +73,7 @@ export async function POST(request: Request) {
       requireBarcodeForProducts: false,
       allowCustomUnits: true,
       languageMode: 'EN_BILINGUAL',
+      ...presetShopSettingsData(org?.type),
     },
   })
 

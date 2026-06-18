@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     if (!user.currentShopId) return NextResponse.json({ error: 'No shop selected' }, { status: 400 })
+    if (user.features?.quotations === false) {
+      return NextResponse.json({ error: 'Quotations are not enabled for this shop' }, { status: 403 })
+    }
     if (user.isDemoOrg) return DemoBlockedResponse()
 
     const body = await request.json()

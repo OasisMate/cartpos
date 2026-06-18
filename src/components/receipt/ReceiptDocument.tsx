@@ -31,6 +31,8 @@ export interface ReceiptDocumentInvoice {
   }>
   subtotal: string | number
   discount: string | number
+  serviceCharge?: string | number
+  deliveryCharge?: string | number
   total: string | number
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER' | null
@@ -52,11 +54,13 @@ export default function ReceiptDocument({
   const subtotal = Number(invoice.subtotal)
   const discount = Number(invoice.discount)
   const total = Number(invoice.total)
+  const serviceCharge = Number(invoice.serviceCharge ?? 0)
+  const deliveryCharge = Number(invoice.deliveryCharge ?? 0)
   const paymentMethod = invoice.paymentStatus === 'PAID' ? (invoice.paymentMethod || 'CASH') : 'UDHAAR'
   const amountReceived = invoice.payments && invoice.payments.length > 0 ? Number(invoice.payments[0].amount) : undefined
   const change = amountReceived ? amountReceived - total : undefined
-  // Card fee is implicit in the total (total = subtotal - discount + fee). Derive it for display.
-  const cardFee = paymentMethod === 'CARD' ? Math.max(0, total - (subtotal - discount)) : 0
+  // Card fee is implicit in the total (total = subtotal - discount + service + delivery + fee). Derive it for display.
+  const cardFee = paymentMethod === 'CARD' ? Math.max(0, total - (subtotal - discount) - serviceCharge - deliveryCharge) : 0
   // Udhaar bills: show how much was paid and what's still owed on this bill.
   const paidTotal = (invoice.payments || []).reduce((s, p) => s + Number(p.amount), 0)
   const balanceDue = Math.max(0, total - paidTotal)
@@ -177,6 +181,20 @@ export default function ReceiptDocument({
           <div className="flex justify-between">
             <span className="font-medium">Discount:</span>
             <span className="font-medium">-{formatNumber(discount)}</span>
+          </div>
+        )}
+        {/* Service charge (dine-in) */}
+        {serviceCharge > 0.01 && (
+          <div className="flex justify-between">
+            <span className="font-medium">Service Charge:</span>
+            <span className="font-medium">+{formatNumber(serviceCharge)}</span>
+          </div>
+        )}
+        {/* Delivery charge */}
+        {deliveryCharge > 0.01 && (
+          <div className="flex justify-between">
+            <span className="font-medium">Delivery:</span>
+            <span className="font-medium">+{formatNumber(deliveryCharge)}</span>
           </div>
         )}
         {/* Show card fee if applied (kept transparent for the customer) */}

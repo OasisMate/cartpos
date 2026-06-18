@@ -468,11 +468,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             href: '/store/sales',
             icon: <TrendingUp className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
-          {
-            label: 'Quotations',
-            href: '/store/quotations',
-            icon: <FileText className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
+          // Quotations only show when enabled for this shop (hardware/electric/wholesale preset).
+          ...(user?.features?.quotations !== false
+            ? [{
+                label: 'Quotations',
+                href: '/store/quotations',
+                icon: <FileText className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+              }]
+            : []),
           {
             label: t('customers'),
             href: '/store/customers',

@@ -15,6 +15,8 @@ interface SyncSaleInput {
   }>
   subtotal: number
   discount: number
+  serviceCharge?: number
+  deliveryCharge?: number
   total: number
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
@@ -65,6 +67,8 @@ export async function POST(request: NextRequest) {
           })),
           subtotal: sale.subtotal,
           discount: sale.discount,
+          serviceCharge: sale.serviceCharge ?? 0,
+          deliveryCharge: sale.deliveryCharge ?? 0,
           total: sale.total,
           paymentStatus: sale.paymentStatus,
           paymentMethod: sale.paymentMethod,

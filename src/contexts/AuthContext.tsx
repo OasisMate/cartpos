@@ -33,6 +33,13 @@ interface User {
   }>
   currentShopId?: string | null
   isDemoOrg?: boolean
+  // Per-shop feature flags for the current shop (drives which features/toggles show).
+  features?: {
+    quotations: boolean
+    serviceCharge: boolean
+    deliveryCharge: boolean
+    unitSplitting: boolean
+  }
 }
 
 interface AuthContextType {

@@ -93,6 +93,8 @@ export async function POST(request: NextRequest) {
       })),
       subtotal: parseFloat(body.subtotal),
       discount: parseFloat(body.discount || 0),
+      serviceCharge: body.serviceCharge ? parseFloat(body.serviceCharge) : 0,
+      deliveryCharge: body.deliveryCharge ? parseFloat(body.deliveryCharge) : 0,
       total: parseFloat(body.total),
       paymentStatus: body.paymentStatus,
       paymentMethod: body.paymentMethod,

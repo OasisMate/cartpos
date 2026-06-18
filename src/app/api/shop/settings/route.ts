@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { canManageProducts, hasShopAccess, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
+import { presetShopSettingsData } from '@/lib/domain/business-presets'
 
 // GET: Get shop settings
 export async function GET(request: NextRequest) {
@@ -29,7 +30,11 @@ export async function GET(request: NextRequest) {
     })
 
     if (!settings) {
-      // Create default settings
+      // Create default settings, seeding feature flags from the org's business type.
+      const shop = await prisma.shop.findUnique({
+        where: { id: user.currentShopId },
+        select: { organization: { select: { type: true } } },
+      })
       settings = await prisma.shopSettings.create({
         data: {
           shopId: user.currentShopId,
@@ -44,6 +49,7 @@ export async function GET(request: NextRequest) {
           receiptHeaderDisplay: 'NAME_ONLY',
           cardFeePercent: 0 as any,
           allowCardFeeOverride: false,
+          ...presetShopSettingsData(shop?.organization?.type),
         },
       })
     }
@@ -92,7 +98,24 @@ export async function PUT(request: NextRequest) {
       cardFeePercent,
       allowCardFeeOverride,
       timezone,
+      // Business-type feature flags
+      enableQuotations,
+      enableServiceCharge,
+      serviceChargePercent,
+      allowServiceChargeOverride,
+      enableUnitSplitting,
     } = body
+
+    // Validate service charge percent when provided (0..100).
+    if (serviceChargePercent !== undefined && serviceChargePercent !== null) {
+      const pct = Number(serviceChargePercent)
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        return NextResponse.json(
+          { error: 'Service charge percent must be between 0 and 100' },
+          { status: 400 }
+        )
+      }
+    }
 
     // Update or create settings
     const settings = await prisma.shopSettings.upsert({
@@ -110,6 +133,11 @@ export async function PUT(request: NextRequest) {
         ...(cardFeePercent !== undefined && { cardFeePercent }),
         ...(allowCardFeeOverride !== undefined && { allowCardFeeOverride }),
         ...(timezone !== undefined && timezone && { timezone }),
+        ...(enableQuotations !== undefined && { enableQuotations }),
+        ...(enableServiceCharge !== undefined && { enableServiceCharge }),
+        ...(serviceChargePercent !== undefined && { serviceChargePercent: serviceChargePercent === null ? null : Number(serviceChargePercent) }),
+        ...(allowServiceChargeOverride !== undefined && { allowServiceChargeOverride }),
+        ...(enableUnitSplitting !== undefined && { enableUnitSplitting }),
       },
       create: {
         shopId: user.currentShopId,
@@ -125,6 +153,11 @@ export async function PUT(request: NextRequest) {
         cardFeePercent: (cardFeePercent ?? 0) as any,
         allowCardFeeOverride: allowCardFeeOverride ?? false,
         ...(timezone && { timezone }),
+        ...(enableQuotations !== undefined && { enableQuotations }),
+        ...(enableServiceCharge !== undefined && { enableServiceCharge }),
+        ...(serviceChargePercent !== undefined && serviceChargePercent !== null && { serviceChargePercent: Number(serviceChargePercent) }),
+        ...(allowServiceChargeOverride !== undefined && { allowServiceChargeOverride }),
+        ...(enableUnitSplitting !== undefined && { enableUnitSplitting }),
       },
     })
 

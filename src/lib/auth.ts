@@ -4,6 +4,7 @@ import { prisma } from './db/prisma'
 import { cookies } from 'next/headers'
 import { isDatabaseConnectionError } from './db/db-utils'
 import { withRetry } from './db/connection-retry'
+import { presetForType } from './domain/business-presets'
 
 const secretKey = process.env.JWT_SECRET
 if (!secretKey || secretKey.length < 32) {
@@ -121,7 +122,19 @@ export async function getCurrentUser() {
             },
             shops: {
               include: {
-                shop: { include: { organization: { select: { isDemo: true } } } },
+                shop: {
+                  include: {
+                    organization: { select: { isDemo: true, type: true } },
+                    settings: {
+                      select: {
+                        enableQuotations: true,
+                        enableServiceCharge: true,
+                        enableDeliveryCharge: true,
+                        enableUnitSplitting: true,
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -151,6 +164,19 @@ export async function getCurrentUser() {
       cookieStore.get('currentOrgId')?.value || organizations[0]?.orgId || null
     const currentShopId = cookieStore.get('currentShopId')?.value || shops[0]?.shopId || null
 
+    // Feature flags for the current shop, used to gate UI for ALL roles (cashiers
+    // included, who can't read the settings endpoint). Falls back to the org-type
+    // preset if a settings row doesn't exist yet.
+    const currentShop = shops.find((s) => s.shopId === currentShopId)?.shop
+    const currentSettings = (currentShop as any)?.settings
+    const preset = presetForType((currentShop as any)?.organization?.type)
+    const features = {
+      quotations: currentSettings?.enableQuotations ?? preset.enableQuotations,
+      serviceCharge: currentSettings?.enableServiceCharge ?? preset.enableServiceCharge,
+      deliveryCharge: currentSettings?.enableDeliveryCharge ?? preset.enableDeliveryCharge,
+      unitSplitting: currentSettings?.enableUnitSplitting ?? preset.enableUnitSplitting,
+    }
+
     return {
       id: user.id,
       name: user.name,
@@ -164,6 +190,7 @@ export async function getCurrentUser() {
       currentOrgId,
       shops,
       currentShopId,
+      features,
       // True when the current org is a demo/test fixture → destructive actions blocked (see lib/demo.ts).
       // Store managers / cashiers have no OrganizationUser row, so derive demo status from the
       // current SHOP's org (their actual context); fall back to org membership for org admins.
