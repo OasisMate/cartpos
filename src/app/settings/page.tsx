@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer, Globe } from 'lucide-react'
+import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer, Globe, SlidersHorizontal } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
+import { presetForType } from '@/lib/domain/business-presets'
 import { COMMON_TIMEZONES } from '@/lib/utils/timezone'
 import { validatePassword } from '@/lib/validation/password'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
@@ -45,7 +46,20 @@ export default function SettingsPage() {
     cardFeePercent: 0,
     allowCardFeeOverride: false,
     timezone: 'Asia/Karachi',
+    // Business-type feature flags
+    enableQuotations: true,
+    enableServiceCharge: false,
+    serviceChargePercent: 0,
+    allowServiceChargeOverride: true,
+    enableDeliveryCharge: false,
+    deliveryChargeMode: 'FIXED' as 'FIXED' | 'PERCENT',
+    deliveryChargeDefault: 0,
+    deliveryChargePercent: 0,
+    removeServiceChargeOnDelivery: true,
+    enableUnitSplitting: false,
   })
+  // Shop's business type (drives which feature sections show). Null until loaded.
+  const [businessType, setBusinessType] = useState<string | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -118,7 +132,18 @@ export default function SettingsPage() {
             cardFeePercent: Number(data.settings?.cardFeePercent || 0),
             allowCardFeeOverride: Boolean(data.settings?.allowCardFeeOverride || false),
             timezone: data.settings?.timezone || 'Asia/Karachi',
+            enableQuotations: data.settings?.enableQuotations !== false,
+            enableServiceCharge: Boolean(data.settings?.enableServiceCharge),
+            serviceChargePercent: Number(data.settings?.serviceChargePercent || 0),
+            allowServiceChargeOverride: data.settings?.allowServiceChargeOverride !== false,
+            enableDeliveryCharge: Boolean(data.settings?.enableDeliveryCharge),
+            deliveryChargeMode: (data.settings?.deliveryChargeMode === 'PERCENT' ? 'PERCENT' : 'FIXED'),
+            deliveryChargeDefault: Number(data.settings?.deliveryChargeDefault || 0),
+            deliveryChargePercent: Number(data.settings?.deliveryChargePercent || 0),
+            removeServiceChargeOnDelivery: data.settings?.removeServiceChargeOnDelivery !== false,
+            enableUnitSplitting: Boolean(data.settings?.enableUnitSplitting),
           })
+          setBusinessType(data.businessType ?? null)
           if (data.settings?.logoUrl) {
             setLogoPreview(data.settings.logoUrl)
           }
@@ -326,6 +351,16 @@ export default function SettingsPage() {
           cardFeePercent: shopSettings.cardFeePercent,
           allowCardFeeOverride: shopSettings.allowCardFeeOverride,
           timezone: shopSettings.timezone,
+          enableQuotations: shopSettings.enableQuotations,
+          enableServiceCharge: shopSettings.enableServiceCharge,
+          serviceChargePercent: shopSettings.serviceChargePercent,
+          allowServiceChargeOverride: shopSettings.allowServiceChargeOverride,
+          enableDeliveryCharge: shopSettings.enableDeliveryCharge,
+          deliveryChargeMode: shopSettings.deliveryChargeMode,
+          deliveryChargeDefault: shopSettings.deliveryChargeDefault,
+          deliveryChargePercent: shopSettings.deliveryChargePercent,
+          removeServiceChargeOnDelivery: shopSettings.removeServiceChargeOnDelivery,
+          enableUnitSplitting: shopSettings.enableUnitSplitting,
         }),
       })
 
@@ -336,6 +371,8 @@ export default function SettingsPage() {
       }
 
       setSettingsSuccess('Settings updated successfully')
+      // Refresh session so feature flags (nav visibility, POS toggles) reflect the change.
+      await refreshUser()
       setTimeout(() => setSettingsSuccess(''), 3000)
     } catch (err: any) {
       setSettingsError(err.message || 'Failed to update shop settings')
@@ -343,6 +380,17 @@ export default function SettingsPage() {
       setSavingSettings(false)
     }
   }
+
+  // Which feature sections to show is driven by the shop's business type (its preset
+  // capabilities), OR-ed with whatever is currently enabled so a feature stays visible
+  // after a manager toggles it on. This is the general per-business-type model.
+  const caps = presetForType(businessType as any)
+  const showQuotations = caps.enableQuotations || shopSettings.enableQuotations
+  const showRestaurantCharges =
+    caps.enableServiceCharge || caps.enableDeliveryCharge ||
+    shopSettings.enableServiceCharge || shopSettings.enableDeliveryCharge
+  const showUnitSplitting = caps.enableUnitSplitting || shopSettings.enableUnitSplitting
+  const hasAnyFeature = showQuotations || showRestaurantCharges || showUnitSplitting
 
   if (!user) {
     return (
@@ -818,6 +866,203 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+
+          {/* Business Features (shown only when the shop's business type has them) */}
+          {isStoreManager && hasAnyFeature && (
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <SlidersHorizontal className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Business Features</h2>
+              </div>
+              {loadingSettings ? (
+                <div className="text-gray-600">Loading features...</div>
+              ) : (
+                <div className="space-y-5">
+                  {/* Quotations */}
+                  {showQuotations && (
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="enableQuotations"
+                        checked={shopSettings.enableQuotations}
+                        onChange={(e) => setShopSettings({ ...shopSettings, enableQuotations: e.target.checked })}
+                        disabled={savingSettings}
+                        className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="enableQuotations" className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">Quotations</span>
+                        <span className="block text-xs text-gray-500">Create price estimates that convert to sales (hardware, electric, wholesale).</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Unit splitting (pharmacy) */}
+                  {showUnitSplitting && (
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="enableUnitSplitting"
+                        checked={shopSettings.enableUnitSplitting}
+                        onChange={(e) => setShopSettings({ ...shopSettings, enableUnitSplitting: e.target.checked })}
+                        disabled={savingSettings}
+                        className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="enableUnitSplitting" className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">Sell loose units</span>
+                        <span className="block text-xs text-gray-500">Sell a whole box or a single loose unit (pharmacy).</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Restaurant: service + delivery charges */}
+                  {showRestaurantCharges && (
+                    <div className="space-y-4 rounded-lg border border-gray-200 p-4">
+                      <p className="text-sm font-semibold text-gray-900">Restaurant charges</p>
+
+                      {/* Service charge */}
+                      <div className="flex items-start">
+                        <input
+                          type="checkbox"
+                          id="enableServiceCharge"
+                          checked={shopSettings.enableServiceCharge}
+                          onChange={(e) => setShopSettings({ ...shopSettings, enableServiceCharge: e.target.checked })}
+                          disabled={savingSettings}
+                          className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="enableServiceCharge" className="ml-2 text-sm text-gray-700">
+                          <span className="font-medium">Service charge</span>
+                          <span className="block text-xs text-gray-500">Added to dine-in bills.</span>
+                        </label>
+                      </div>
+                      {shopSettings.enableServiceCharge && (
+                        <div className="ml-6 space-y-3">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.01}
+                              value={shopSettings.serviceChargePercent}
+                              onChange={(e) => setShopSettings({ ...shopSettings, serviceChargePercent: Number(e.target.value) || 0 })}
+                              disabled={savingSettings}
+                              className="w-28 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-right"
+                            />
+                            <span className="text-sm text-gray-600">% of bill</span>
+                          </div>
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="allowServiceChargeOverride"
+                              checked={shopSettings.allowServiceChargeOverride}
+                              onChange={(e) => setShopSettings({ ...shopSettings, allowServiceChargeOverride: e.target.checked })}
+                              disabled={savingSettings}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <label htmlFor="allowServiceChargeOverride" className="ml-2 text-sm text-gray-700">
+                              Allow cashier to change service charge per bill
+                            </label>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Delivery charge */}
+                      <div className="flex items-start">
+                        <input
+                          type="checkbox"
+                          id="enableDeliveryCharge"
+                          checked={shopSettings.enableDeliveryCharge}
+                          onChange={(e) => setShopSettings({ ...shopSettings, enableDeliveryCharge: e.target.checked })}
+                          disabled={savingSettings}
+                          className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="enableDeliveryCharge" className="ml-2 text-sm text-gray-700">
+                          <span className="font-medium">Delivery charge</span>
+                          <span className="block text-xs text-gray-500">Added to delivery orders.</span>
+                        </label>
+                      </div>
+                      {shopSettings.enableDeliveryCharge && (
+                        <div className="ml-6 space-y-3">
+                          <div className="flex items-center gap-2">
+                            {(['FIXED', 'PERCENT'] as const).map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setShopSettings({ ...shopSettings, deliveryChargeMode: mode })}
+                                disabled={savingSettings}
+                                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                                  shopSettings.deliveryChargeMode === mode
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                {mode === 'FIXED' ? 'Fixed amount' : 'Percentage'}
+                              </button>
+                            ))}
+                          </div>
+                          {shopSettings.deliveryChargeMode === 'FIXED' ? (
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={shopSettings.deliveryChargeDefault}
+                                onChange={(e) => setShopSettings({ ...shopSettings, deliveryChargeDefault: Number(e.target.value) || 0 })}
+                                disabled={savingSettings}
+                                className="w-32 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-right"
+                              />
+                              <span className="text-sm text-gray-600">Rs default (editable per order)</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.01}
+                                value={shopSettings.deliveryChargePercent}
+                                onChange={(e) => setShopSettings({ ...shopSettings, deliveryChargePercent: Number(e.target.value) || 0 })}
+                                disabled={savingSettings}
+                                className="w-28 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-right"
+                              />
+                              <span className="text-sm text-gray-600">% of bill</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* SC vs delivery rule */}
+                      {shopSettings.enableServiceCharge && shopSettings.enableDeliveryCharge && (
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="removeServiceChargeOnDelivery"
+                            checked={shopSettings.removeServiceChargeOnDelivery}
+                            onChange={(e) => setShopSettings({ ...shopSettings, removeServiceChargeOnDelivery: e.target.checked })}
+                            disabled={savingSettings}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <label htmlFor="removeServiceChargeOnDelivery" className="ml-2 text-sm text-gray-700">
+                            Drop the service charge on delivery orders
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={handleShopSettingsSubmit}
+                      disabled={savingSettings}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingSettings ? 'Saving...' : 'Save Features'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Printer Settings */}
           <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
