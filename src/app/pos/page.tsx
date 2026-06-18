@@ -100,6 +100,8 @@ interface ReceiptData {
   items: ReceiptItem[]
   subtotal: number
   discount: number
+  serviceCharge?: number
+  deliveryCharge?: number
   total: number
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
@@ -166,6 +168,27 @@ const ProductGrid = memo(function ProductGrid({
   )
 })
 
+// Normalize the settings payload (from /api/pos/init or /api/shop/settings) into the
+// shape the POS keeps in state. Centralized so both load paths stay in sync.
+function mapPosSettings(s: any) {
+  return {
+    logoUrl: s?.logoUrl || null,
+    receiptHeaderDisplay: s?.receiptHeaderDisplay || 'NAME_ONLY',
+    cardFeePercent: typeof s?.cardFeePercent === 'number' ? s.cardFeePercent : s?.cardFeePercent ? Number(s.cardFeePercent) : 0,
+    allowCardFeeOverride: Boolean(s?.allowCardFeeOverride || false),
+    autoPrint: Boolean(s?.autoPrint),
+    enableServiceCharge: Boolean(s?.enableServiceCharge),
+    serviceChargePercent: Number(s?.serviceChargePercent || 0),
+    allowServiceChargeOverride: s?.allowServiceChargeOverride !== false,
+    enableDeliveryCharge: Boolean(s?.enableDeliveryCharge),
+    deliveryChargeMode: s?.deliveryChargeMode === 'PERCENT' ? 'PERCENT' as const : 'FIXED' as const,
+    deliveryChargeDefault: Number(s?.deliveryChargeDefault || 0),
+    deliveryChargePercent: Number(s?.deliveryChargePercent || 0),
+    removeServiceChargeOnDelivery: s?.removeServiceChargeOnDelivery !== false,
+    enableUnitSplitting: Boolean(s?.enableUnitSplitting),
+  }
+}
+
 export default function POSPage() {
   const { user } = useAuth()
   const { show } = useToast()
@@ -213,12 +236,48 @@ export default function POSPage() {
     cardFeePercent?: number | null
     allowCardFeeOverride?: boolean
     autoPrint?: boolean
+    enableServiceCharge?: boolean
+    serviceChargePercent?: number
+    allowServiceChargeOverride?: boolean
+    enableDeliveryCharge?: boolean
+    deliveryChargeMode?: 'FIXED' | 'PERCENT'
+    deliveryChargeDefault?: number
+    deliveryChargePercent?: number
+    removeServiceChargeOnDelivery?: boolean
+    enableUnitSplitting?: boolean
   } | null>(null)
 
   // Edit Item State
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
   const [editForm, setEditForm] = useState({ quantity: 0, price: 0 })
   const [cardFeePercentOverride, setCardFeePercentOverride] = useState<number | null>(null)
+
+  // Order type (restaurant): dine-in applies service charge, delivery applies delivery fee.
+  const [orderType, setOrderType] = useState<'DINE_IN' | 'DELIVERY'>('DINE_IN')
+  // Per-sale editable charges. Null means "use the shop default" (computed at render).
+  const [serviceChargeOverride, setServiceChargeOverride] = useState<number | null>(null)
+  const [deliveryChargeAmount, setDeliveryChargeAmount] = useState<number | null>(null)
+
+  // Restaurant features. Order-type toggle only appears when one of these is enabled.
+  const restaurantChargesEnabled = Boolean(shopSettings?.enableServiceCharge || shopSettings?.enableDeliveryCharge)
+
+  // Service charge for a given base total, honouring order type, the remove-on-delivery
+  // rule, and a per-sale override. Function declarations (hoisted) so settle can call them.
+  function computeServiceCharge(base: number): number {
+    if (!shopSettings?.enableServiceCharge) return 0
+    if (orderType === 'DELIVERY' && shopSettings?.removeServiceChargeOnDelivery) return 0
+    if (serviceChargeOverride != null) return Math.max(0, serviceChargeOverride)
+    return roundToTwo((base * (shopSettings?.serviceChargePercent ?? 0)) / 100)
+  }
+  function computeDeliveryCharge(base: number): number {
+    if (!shopSettings?.enableDeliveryCharge) return 0
+    if (orderType !== 'DELIVERY') return 0
+    if (deliveryChargeAmount != null) return Math.max(0, deliveryChargeAmount)
+    if (shopSettings?.deliveryChargeMode === 'PERCENT') {
+      return roundToTwo((base * (shopSettings?.deliveryChargePercent ?? 0)) / 100)
+    }
+    return Math.max(0, shopSettings?.deliveryChargeDefault ?? 0)
+  }
 
   // Held sales (parked carts)
   interface HeldSale {
@@ -346,17 +405,7 @@ export default function POSPage() {
             if (data.settings?.allowNegativeStock !== undefined) {
               setAllowNegativeStock(data.settings.allowNegativeStock)
             }
-              setShopSettings({
-                logoUrl: data.settings?.logoUrl || null,
-                receiptHeaderDisplay: data.settings?.receiptHeaderDisplay || 'NAME_ONLY',
-                cardFeePercent: typeof data.settings?.cardFeePercent === 'number'
-                  ? data.settings.cardFeePercent
-                  : data.settings?.cardFeePercent
-                  ? Number(data.settings.cardFeePercent)
-                  : 0,
-                allowCardFeeOverride: Boolean(data.settings?.allowCardFeeOverride || false),
-                autoPrint: Boolean(data.settings?.autoPrint),
-              })
+              setShopSettings(mapPosSettings(data.settings))
           } else {
             throw new Error('Init endpoint failed')
           }
@@ -400,17 +449,7 @@ export default function POSPage() {
             if (settingsData.settings?.allowNegativeStock !== undefined) {
               setAllowNegativeStock(settingsData.settings.allowNegativeStock)
             }
-            setShopSettings({
-              logoUrl: settingsData.settings?.logoUrl || null,
-              receiptHeaderDisplay: settingsData.settings?.receiptHeaderDisplay || 'NAME_ONLY',
-              cardFeePercent: typeof settingsData.settings?.cardFeePercent === 'number'
-                ? settingsData.settings.cardFeePercent
-                : settingsData.settings?.cardFeePercent
-                ? Number(settingsData.settings.cardFeePercent)
-                : 0,
-              allowCardFeeOverride: Boolean(settingsData.settings?.allowCardFeeOverride || false),
-              autoPrint: Boolean(settingsData.settings?.autoPrint),
-            })
+            setShopSettings(mapPosSettings(settingsData.settings))
           }
         }
       } catch (err) {
@@ -1054,7 +1093,12 @@ export default function POSPage() {
       const subtotal = sumCartLines(cart)
       const { total: baseTotal } = calculateTotals(subtotal, discount)
 
-      // Determine card fee for this sale (applied on total after discount)
+      // Restaurant charges added on top of the base, before the card fee.
+      const serviceCharge = computeServiceCharge(baseTotal)
+      const deliveryCharge = computeDeliveryCharge(baseTotal)
+      const preCardTotal = roundToTwo(baseTotal + serviceCharge + deliveryCharge)
+
+      // Determine card fee for this sale (applied on the pre-card total)
       const effectiveCardFeePercent =
         paymentStatus === 'PAID' && paymentMethod === 'CARD'
           ? (shopSettings?.allowCardFeeOverride
@@ -1064,10 +1108,10 @@ export default function POSPage() {
 
       const cardFee =
         effectiveCardFeePercent > 0
-          ? roundToTwo((baseTotal * effectiveCardFeePercent) / 100)
+          ? roundToTwo((preCardTotal * effectiveCardFeePercent) / 100)
           : 0
 
-      const total = roundToTwo(baseTotal + cardFee)
+      const total = roundToTwo(preCardTotal + cardFee)
 
       if (paymentStatus === 'PAID' && paymentMethod === 'CASH') {
         if (!amountReceived) {
@@ -1106,6 +1150,8 @@ export default function POSPage() {
         })),
         subtotal,
         discount,
+        serviceCharge,
+        deliveryCharge,
         total,
         paymentStatus,
         paymentMethod: paymentStatus === 'PAID' ? paymentMethod : undefined,
@@ -1159,6 +1205,8 @@ export default function POSPage() {
         })),
         subtotal,
         discount,
+        serviceCharge,
+        deliveryCharge,
         total,
         paymentStatus,
         paymentMethod: paymentStatus === 'PAID' ? paymentMethod : undefined,
@@ -1182,6 +1230,10 @@ export default function POSPage() {
       setPaymentMethod('CASH')
       setCustomerId('')
       setAmountReceived('')
+      // Reset restaurant order state for the next bill.
+      setOrderType('DINE_IN')
+      setServiceChargeOverride(null)
+      setDeliveryChargeAmount(null)
       setTimeout(() => {
         setSuccess(false)
       }, 2000)
@@ -1200,6 +1252,10 @@ export default function POSPage() {
 
   const subtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0)
   const baseTotal = subtotal - discount
+  // Restaurant charges for display (same rules as settle).
+  const serviceChargeForDisplay = computeServiceCharge(baseTotal)
+  const deliveryChargeForDisplay = computeDeliveryCharge(baseTotal)
+  const preCardTotalForDisplay = roundToTwo(baseTotal + serviceChargeForDisplay + deliveryChargeForDisplay)
   const effectiveCardFeePercentForDisplay =
     paymentStatus === 'PAID' && paymentMethod === 'CARD'
       ? (shopSettings?.allowCardFeeOverride
@@ -1208,9 +1264,9 @@ export default function POSPage() {
       : 0
   const cardFeeForDisplay =
     effectiveCardFeePercentForDisplay > 0
-      ? roundToTwo((baseTotal * effectiveCardFeePercentForDisplay) / 100)
+      ? roundToTwo((preCardTotalForDisplay * effectiveCardFeePercentForDisplay) / 100)
       : 0
-  const total = roundToTwo(baseTotal + cardFeeForDisplay)
+  const total = roundToTwo(preCardTotalForDisplay + cardFeeForDisplay)
   const change =
     paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
       ? parseFloat(amountReceived) - total
@@ -1245,6 +1301,8 @@ export default function POSPage() {
     })),
     subtotal: receiptData.subtotal,
     discount: receiptData.discount,
+    serviceCharge: receiptData.serviceCharge,
+    deliveryCharge: receiptData.deliveryCharge,
     total: receiptData.total,
     paymentStatus: receiptData.paymentStatus,
     paymentMethod: receiptData.paymentMethod,
@@ -1530,6 +1588,34 @@ export default function POSPage() {
             )}
           </div>
 
+          {/* Order type (restaurant only): dine-in vs delivery. Mirrors the Pricing toggle. */}
+          {restaurantChargesEnabled && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Order</span>
+              <div className="inline-flex overflow-hidden rounded-md border border-[hsl(var(--border))]">
+                {(['DINE_IN', 'DELIVERY'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setOrderType(type)
+                      // Reset per-sale overrides so the new order type's defaults apply.
+                      setServiceChargeOverride(null)
+                      setDeliveryChargeAmount(null)
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      orderType === type
+                        ? 'bg-gray-800 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {type === 'DINE_IN' ? 'Dine-in' : 'Delivery'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleBarcodeSubmit} className="mb-4">
             <Input
               ref={barcodeInputRef}
@@ -1814,10 +1900,52 @@ export default function POSPage() {
                   )}
                 </div>
               </div>
+              {/* Service charge (editable when the shop allows per-bill override) */}
+              {shopSettings?.enableServiceCharge &&
+                shopSettings?.allowServiceChargeOverride &&
+                !(orderType === 'DELIVERY' && shopSettings?.removeServiceChargeOnDelivery) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Service Charge (Rs)</span>
+                  <Input
+                    type="number"
+                    step="1"
+                    min={0}
+                    value={Math.round(serviceChargeOverride ?? serviceChargeForDisplay).toString()}
+                    onChange={(e) => setServiceChargeOverride(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-24 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+              )}
+              {/* Delivery charge (editable per order) */}
+              {shopSettings?.enableDeliveryCharge && orderType === 'DELIVERY' && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Delivery (Rs)</span>
+                  <Input
+                    type="number"
+                    step="1"
+                    min={0}
+                    value={Math.round(deliveryChargeAmount ?? deliveryChargeForDisplay).toString()}
+                    onChange={(e) => setDeliveryChargeAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-24 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>{t('total')}:</span>
                 <span>{formatCurrency(baseTotal)}</span>
               </div>
+              {serviceChargeForDisplay > 0 && (
+                <div className="flex justify-between text-sm text-[hsl(var(--muted-foreground))]">
+                  <span>Service Charge:</span>
+                  <span>{formatCurrency(serviceChargeForDisplay)}</span>
+                </div>
+              )}
+              {deliveryChargeForDisplay > 0 && (
+                <div className="flex justify-between text-sm text-[hsl(var(--muted-foreground))]">
+                  <span>Delivery:</span>
+                  <span>{formatCurrency(deliveryChargeForDisplay)}</span>
+                </div>
+              )}
               {effectiveCardFeePercentForDisplay > 0 && (
                 <div className="flex justify-between text-sm text-[hsl(var(--muted-foreground))]">
                   <span>Card Charges ({formatNumber(effectiveCardFeePercentForDisplay)}%):</span>

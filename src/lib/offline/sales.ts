@@ -15,6 +15,8 @@ export interface SaleInput {
   }>
   subtotal: number
   discount: number
+  serviceCharge?: number
+  deliveryCharge?: number
   total: number
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
@@ -41,6 +43,8 @@ export async function syncSaleToServer(sale: CachedSale): Promise<boolean> {
         items: sale.items,
         subtotal: sale.subtotal,
         discount: sale.discount,
+        serviceCharge: sale.serviceCharge,
+        deliveryCharge: sale.deliveryCharge,
         total: sale.total,
         paymentStatus: sale.paymentStatus,
         paymentMethod: sale.paymentMethod,
@@ -92,6 +96,8 @@ export async function syncPendingSalesBatch(shopId: string): Promise<{ synced: n
       items: (sale as CachedSale).items,
       subtotal: (sale as CachedSale).subtotal,
       discount: (sale as CachedSale).discount,
+      serviceCharge: (sale as CachedSale).serviceCharge,
+      deliveryCharge: (sale as CachedSale).deliveryCharge,
       total: (sale as CachedSale).total,
       paymentStatus: (sale as CachedSale).paymentStatus,
       paymentMethod: (sale as CachedSale).paymentMethod,

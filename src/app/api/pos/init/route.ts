@@ -82,6 +82,16 @@ export async function GET(request: NextRequest) {
         cardFeePercent: settings.cardFeePercent,
         allowCardFeeOverride: settings.allowCardFeeOverride,
         autoPrint: Boolean(settings.autoPrint),
+        // Business-type flags that affect checkout (service/delivery charges, unit splitting).
+        enableServiceCharge: Boolean(settings.enableServiceCharge),
+        serviceChargePercent: Number(settings.serviceChargePercent || 0),
+        allowServiceChargeOverride: settings.allowServiceChargeOverride !== false,
+        enableDeliveryCharge: Boolean(settings.enableDeliveryCharge),
+        deliveryChargeMode: settings.deliveryChargeMode === 'PERCENT' ? 'PERCENT' : 'FIXED',
+        deliveryChargeDefault: Number(settings.deliveryChargeDefault || 0),
+        deliveryChargePercent: Number(settings.deliveryChargePercent || 0),
+        removeServiceChargeOnDelivery: settings.removeServiceChargeOnDelivery !== false,
+        enableUnitSplitting: Boolean(settings.enableUnitSplitting),
       },
       customers,
     })

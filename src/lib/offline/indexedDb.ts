@@ -85,6 +85,8 @@ export interface CachedSale {
   }>
   subtotal: number
   discount: number
+  serviceCharge?: number
+  deliveryCharge?: number
   total: number
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
