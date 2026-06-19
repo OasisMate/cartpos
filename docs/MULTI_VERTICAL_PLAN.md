@@ -58,7 +58,7 @@ generic-table usage → QA in QA org → log → review. Candidate order by real
 4. **Electronics** — StockLot reused for serial/IMEI + warranty lookup.
 5. **Supermarket / FBR e-invoicing** — heavy/regulatory; only if demand + verified specifics.
 
-## Phase 3a — Pharmacy vertical (IN PROGRESS)
+## Phase 3a — Pharmacy vertical (COMPLETE — P1-P5 built + QA'd 2026-06-19)
 Decisions: **3-level packaging** (carton/box/tablet) via `PackagingLevel`; **batch+expiry** as an
 **optional toggle**, captured at stock-in, FEFO at sale, with expiry alerts.
 Builds on generic `PackagingLevel` + `StockLot` (Phase 2). Backward-compatible: shops not using
