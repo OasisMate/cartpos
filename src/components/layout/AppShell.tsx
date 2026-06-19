@@ -28,6 +28,7 @@ import {
   ChevronDown,
   History,
   Megaphone,
+  CalendarClock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
@@ -492,6 +493,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             href: '/store/stock-adjustments',
             icon: <Repeat className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
+          // Expiry alerts only for shops that track batch/expiry (pharmacy).
+          ...(user?.features?.batchExpiry === true
+            ? [{
+                label: 'Expiry alerts',
+                href: '/store/expiry',
+                icon: <CalendarClock className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+              }]
+            : []),
           // Purchasing / supplier cluster
           {
             label: t('purchases'),
