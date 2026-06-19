@@ -22,7 +22,12 @@ import type { OrganizationType } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { presetShopSettingsData } from '../src/lib/domain/business-presets'
 
-const prisma = new PrismaClient()
+// Use the DIRECT (non-pooled, port 5432) connection for this long batch job.
+// The pgbouncer pooler (6543) recycles connections mid-run and drops them over a
+// multi-minute seed; the direct session connection is stable for thousands of inserts.
+const prisma = new PrismaClient(
+  process.env.DIRECT_URL ? { datasources: { db: { url: process.env.DIRECT_URL } } } : undefined
+)
 
 export const DEMO_ORG_NAME = 'CartPOS Demo'
 export const DEMO_PASSWORD = 'Demo@12345' // meets policy: 10+ chars, upper/lower/number/symbol

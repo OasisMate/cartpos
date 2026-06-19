@@ -11,7 +11,10 @@
 import { PrismaClient } from '@prisma/client'
 import { seedDemoOrg, DEMO_USERS } from './seed-demo-org'
 
-const prisma = new PrismaClient()
+// Direct (non-pooled, 5432) connection — stable for the heavy teardown + reseed.
+const prisma = new PrismaClient(
+  process.env.DIRECT_URL ? { datasources: { db: { url: process.env.DIRECT_URL } } } : undefined
+)
 
 async function safeDeleteMany(fn: () => Promise<unknown>) {
   try {
