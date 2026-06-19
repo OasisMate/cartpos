@@ -121,7 +121,10 @@ export async function createPurchase(
     },
   })
 
-  if (products.length !== productIds.length) {
+  // Compare against UNIQUE ids: batch/expiry stock-in legitimately has several lines for
+  // the same product (one per batch), so distinct-product count is what must match.
+  const uniqueProductIds = [...new Set(productIds)]
+  if (products.length !== uniqueProductIds.length) {
     throw new Error('One or more products not found or do not belong to this shop')
   }
 
