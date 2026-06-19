@@ -58,6 +58,7 @@ export default function SettingsPage() {
     removeServiceChargeOnDelivery: true,
     enableUnitSplitting: false,
     enableTradePricing: true,
+    batchExpiry: false,
   })
   // Shop's business type (drives which feature sections show). Null until loaded.
   const [businessType, setBusinessType] = useState<string | null>(null)
@@ -144,6 +145,7 @@ export default function SettingsPage() {
             removeServiceChargeOnDelivery: data.settings?.removeServiceChargeOnDelivery !== false,
             enableUnitSplitting: Boolean(data.settings?.enableUnitSplitting),
             enableTradePricing: data.settings?.enableTradePricing !== false,
+            batchExpiry: Boolean(data.settings?.featureConfig?.batchExpiry),
           })
           setBusinessType(data.businessType ?? null)
           if (data.settings?.logoUrl) {
@@ -364,6 +366,7 @@ export default function SettingsPage() {
           removeServiceChargeOnDelivery: shopSettings.removeServiceChargeOnDelivery,
           enableUnitSplitting: shopSettings.enableUnitSplitting,
           enableTradePricing: shopSettings.enableTradePricing,
+          featureConfig: { batchExpiry: shopSettings.batchExpiry },
         }),
       })
 
@@ -394,7 +397,8 @@ export default function SettingsPage() {
     shopSettings.enableServiceCharge || shopSettings.enableDeliveryCharge
   const showUnitSplitting = caps.enableUnitSplitting || shopSettings.enableUnitSplitting
   const showTradePricing = caps.enableTradePricing || shopSettings.enableTradePricing
-  const hasAnyFeature = showQuotations || showRestaurantCharges || showUnitSplitting || showTradePricing
+  const showBatchExpiry = caps.batchExpiry || shopSettings.batchExpiry
+  const hasAnyFeature = showQuotations || showRestaurantCharges || showUnitSplitting || showTradePricing || showBatchExpiry
 
   if (!user) {
     return (
@@ -930,8 +934,26 @@ export default function SettingsPage() {
                         className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
                       <label htmlFor="enableUnitSplitting" className="ml-2 text-sm text-gray-700">
-                        <span className="font-medium">Sell loose units</span>
-                        <span className="block text-xs text-gray-500">Sell a whole box or a single loose unit (pharmacy).</span>
+                        <span className="font-medium">Multi-level packaging</span>
+                        <span className="block text-xs text-gray-500">Sell at different pack levels (carton / box / loose unit) e.g. pharmacy.</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Batch & expiry tracking (pharmacy / perishables) */}
+                  {showBatchExpiry && (
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="batchExpiry"
+                        checked={shopSettings.batchExpiry}
+                        onChange={(e) => setShopSettings({ ...shopSettings, batchExpiry: e.target.checked })}
+                        disabled={savingSettings}
+                        className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="batchExpiry" className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">Batch &amp; expiry tracking</span>
+                        <span className="block text-xs text-gray-500">Record batch number + expiry at stock-in, sell earliest-expiry first, alert before expiry.</span>
                       </label>
                     </div>
                   )}

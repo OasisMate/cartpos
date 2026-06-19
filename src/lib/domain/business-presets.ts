@@ -23,6 +23,19 @@ export interface BusinessFeatureFlags {
   removeServiceChargeOnDelivery: boolean
   enableUnitSplitting: boolean
   enableTradePricing: boolean
+  // Vertical-specific extras live in featureConfig JSON (hybrid), not as columns.
+  batchExpiry: boolean
+}
+
+/** Typed shape of the ShopSettings.featureConfig JSON bag. Add vertical extras here. */
+export interface FeatureConfig {
+  batchExpiry?: boolean
+}
+
+/** Safe reader for the featureConfig JSON column (handles null/legacy rows). */
+export function readFeatureConfig(json: unknown): FeatureConfig {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return {}
+  return json as FeatureConfig
 }
 
 // Conservative baseline. Anything not explicitly turned on by a type stays off,
@@ -39,6 +52,7 @@ const DEFAULT_FLAGS: BusinessFeatureFlags = {
   removeServiceChargeOnDelivery: true,
   enableUnitSplitting: false,
   enableTradePricing: false,
+  batchExpiry: false,
 }
 
 // Typical restaurant service charge in PK; owner can change it in Settings.
@@ -54,8 +68,8 @@ const PRESETS: Partial<Record<OrganizationType, Partial<BusinessFeatureFlags>>> 
   FURNITURE_STORE: { enableQuotations: true, enableTradePricing: true },
   WHOLESALE: { enableQuotations: true, enableTradePricing: true },
 
-  // Pharmacy: sell a whole box or a loose unit (tablet) out of it.
-  PHARMACY: { enableUnitSplitting: true },
+  // Pharmacy: multi-level packaging (carton/box/tablet) + batch/expiry tracking.
+  PHARMACY: { enableUnitSplitting: true, batchExpiry: true },
 
   // Hospitality: service charge on dine-in, optional delivery fee.
   RESTAURANT: {
@@ -103,8 +117,10 @@ export function presetShopSettingsData(
   | 'removeServiceChargeOnDelivery'
   | 'enableUnitSplitting'
   | 'enableTradePricing'
+  | 'featureConfig'
 > {
   const flags = presetForType(type)
+  const featureConfig = { batchExpiry: flags.batchExpiry } as Prisma.InputJsonObject
   return {
     enableQuotations: flags.enableQuotations,
     enableServiceCharge: flags.enableServiceCharge,
@@ -117,5 +133,6 @@ export function presetShopSettingsData(
     removeServiceChargeOnDelivery: flags.removeServiceChargeOnDelivery,
     enableUnitSplitting: flags.enableUnitSplitting,
     enableTradePricing: flags.enableTradePricing,
+    featureConfig,
   }
 }

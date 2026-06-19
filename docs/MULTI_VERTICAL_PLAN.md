@@ -58,6 +58,25 @@ generic-table usage → QA in QA org → log → review. Candidate order by real
 4. **Electronics** — StockLot reused for serial/IMEI + warranty lookup.
 5. **Supermarket / FBR e-invoicing** — heavy/regulatory; only if demand + verified specifics.
 
+## Phase 3a — Pharmacy vertical (IN PROGRESS)
+Decisions: **3-level packaging** (carton/box/tablet) via `PackagingLevel`; **batch+expiry** as an
+**optional toggle**, captured at stock-in, FEFO at sale, with expiry alerts.
+Builds on generic `PackagingLevel` + `StockLot` (Phase 2). Backward-compatible: shops not using
+packaging levels keep the existing `cartonSize`/piece behaviour untouched.
+
+Slices (each: build → typecheck → commit → QA later):
+- **P1 — toggles + preset.** `enableUnitSplitting` already exists = "sell at multiple packaging
+  levels". Add `batchExpiry` flag in `featureConfig` (hybrid). Pharmacy preset: unitSplitting ON +
+  featureConfig.batchExpiry ON. Surface both in the Business Features settings card.
+- **P2 — product packaging levels.** Products API create/update accepts `packagingLevels[]`
+  (name, factorToBase, price?, barcode?, level). Editor in `backoffice/products/page.tsx` form.
+  Loose price derived = box price ÷ factor when level price omitted.
+- **P3 — POS multi-level selling.** When a product has packaging levels, the add-to-cart unit
+  picker offers each level (else fall back to existing carton/piece). Price per chosen level.
+- **P4 — batch/expiry at stock-in + FEFO.** Purchases capture batch no. + expiry → `StockLot`;
+  sale deducts earliest-expiry first; lot recorded. Only when `featureConfig.batchExpiry` on.
+- **P5 — expiry alerts.** Near-expiry + expired lot list (dashboard/report); warn/block selling expired.
+
 ## Phase 4 — Per-vertical go-to-market readiness
 - For each shipped vertical: a clean preset, a short "is this for you" feature list, demo data.
 
