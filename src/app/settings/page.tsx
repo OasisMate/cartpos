@@ -662,43 +662,58 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Two-Step Verification - available to every user */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
-        <div className="flex items-center justify-between">
+      {/* Two-Step Verification - available to every user EXCEPT demo accounts (shared login,
+          codes go to a dead inbox, so enabling it would lock everyone out of the demo). */}
+      {user?.isDemoOrg ? (
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
           <div className="flex items-start gap-2 pr-4">
-            <Lock className="h-5 w-5 text-blue-600 mt-0.5" />
+            <Lock className="h-5 w-5 text-gray-400 mt-0.5" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Two-Step Verification</h2>
               <p className="text-sm text-gray-500 mt-1">
-                When on, signing in requires a 6-digit code emailed to you - extra protection if your
-                password is ever leaked.
+                Turned off for demo accounts. Demo logins are shared, so a sign-in code cannot be delivered.
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => toggleTwoFA(!twoFAEnabled)}
-            disabled={twoFASaving}
-            role="switch"
-            aria-checked={twoFAEnabled}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-              twoFAEnabled ? 'bg-blue-600' : 'bg-gray-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                twoFAEnabled ? 'translate-x-5' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
         </div>
-        <p className="mt-3 text-sm font-medium">
-          Status:{' '}
-          <span className={twoFAEnabled ? 'text-green-600' : 'text-gray-500'}>
-            {twoFAEnabled ? 'Enabled' : 'Disabled'}
-          </span>
-        </p>
-      </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-start gap-2 pr-4">
+              <Lock className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Two-Step Verification</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  When on, signing in requires a 6-digit code emailed to you - extra protection if your
+                  password is ever leaked.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleTwoFA(!twoFAEnabled)}
+              disabled={twoFASaving}
+              role="switch"
+              aria-checked={twoFAEnabled}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                twoFAEnabled ? 'bg-blue-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                  twoFAEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          <p className="mt-3 text-sm font-medium">
+            Status:{' '}
+            <span className={twoFAEnabled ? 'text-green-600' : 'text-gray-500'}>
+              {twoFAEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </p>
+        </div>
+      )}
 
       {/* Language - available to every user */}
       <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">

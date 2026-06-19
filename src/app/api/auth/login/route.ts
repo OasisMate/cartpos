@@ -129,7 +129,24 @@ export async function POST(request: NextRequest) {
 
     // Opt-in 2FA: don't create a session yet; email a code and return a
     // short-lived pre-auth token the client exchanges for a session.
+    // EXCEPTION: demo-org accounts are shared and their code goes to a dead inbox, so 2FA
+    // would lock everyone out. Never gate a demo login on 2FA (defensive — the toggle is
+    // also blocked for demo users, but a flag set earlier/by DB must not brick the demo).
+    let inDemoOrg = false
     if (user.twoFactorEnabled) {
+      const demoOrg = await prisma.organization.findFirst({
+        where: {
+          isDemo: true,
+          OR: [
+            { users: { some: { userId: user.id } } },
+            { shops: { some: { owners: { some: { userId: user.id } } } } },
+          ],
+        },
+        select: { id: true },
+      })
+      inDemoOrg = Boolean(demoOrg)
+    }
+    if (user.twoFactorEnabled && !inDemoOrg) {
       const code = String(randomInt(100000, 1000000))
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
       await prisma.loginCode.updateMany({ where: { userId: user.id, used: false }, data: { used: true } })
