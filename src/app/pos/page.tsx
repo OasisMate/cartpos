@@ -1816,21 +1816,25 @@ export default function POSPage() {
                   key={`${item.product.id}-${item.packName || (item.isCarton ? 'carton' : 'base')}`}
                   id={`pos-cart-${idx}`}
                   onClick={() => setSelectedCartIndex(idx)}
-                  className={`flex items-center justify-between gap-3 p-3 border rounded-lg ${idx === selectedCartIndex ? 'border-blue-400 ring-1 ring-blue-300' : 'border-[hsl(var(--border))]'}`}
+                  className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 p-3 border rounded-lg ${idx === selectedCartIndex ? 'border-blue-400 ring-1 ring-blue-300' : 'border-[hsl(var(--border))]'}`}
                 >
-                  <span className="w-6 shrink-0 text-center text-sm font-semibold text-[hsl(var(--muted-foreground))] tabular-nums">
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1 cursor-pointer" onClick={() => setEditingItem(item)}>
-                    <div className="font-medium">{item.product.name}</div>
-                    <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                      {formatCurrency(item.unitPrice)} × {formatNumber(item.quantity)} {item.packName || (item.isCarton ? 'carton' : item.product.unit)}
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="w-6 shrink-0 text-center text-sm font-semibold text-[hsl(var(--muted-foreground))] tabular-nums">
+                      {idx + 1}
+                    </span>
+                    <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setEditingItem(item)}>
+                      <div className="font-medium truncate">{item.product.name}</div>
+                      <div className="text-sm text-[hsl(var(--muted-foreground))] truncate">
+                        {formatCurrency(item.unitPrice)} × {formatNumber(item.quantity)} {item.packName || (item.isCarton ? 'carton' : item.product.unit)}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  {/* On mobile the controls drop to their own full-width row (right-aligned) so the
+                      product name keeps the first line; on sm+ they sit inline on one row. */}
+                  <div className="flex items-center gap-2 shrink-0 basis-full sm:basis-auto justify-end">
                     <button
                       onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
-                      className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 text-gray-700 font-semibold text-lg"
+                      className="w-8 h-8 shrink-0 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 text-gray-700 font-semibold text-lg"
                       title="Decrease quantity"
                     >
                       −
@@ -1839,23 +1843,23 @@ export default function POSPage() {
                       type="number"
                       value={item.quantity}
                       onChange={(e) => updateCartQuantity(item.product.id, parseFloat(e.target.value) || 0)}
-                      className="w-16 text-center p-1 h-8 border-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      className="w-14 shrink-0 text-center p-1 h-8 border-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       step="0.001"
                     />
                     <button
                       onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
-                      className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 text-gray-700 font-semibold text-lg"
+                      className="w-8 h-8 shrink-0 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 hover:border-gray-400 text-gray-700 font-semibold text-lg"
                       title="Increase quantity"
                     >
                       +
                     </button>
-                    <div className="w-24 text-right font-semibold">
+                    <div className="w-20 shrink-0 text-right font-semibold tabular-nums">
                       {formatCurrency(item.lineTotal)}
                     </div>
                     <Button
                       onClick={() => removeFromCart(item.product.id)}
                       variant="outline"
-                      className="ml-2 p-2"
+                      className="shrink-0 p-2"
                       title="Remove from cart"
                     >
                       <X className="w-4 h-4" />
@@ -1991,24 +1995,28 @@ export default function POSPage() {
               </div>
             </div>
 
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 h-12 text-lg font-semibold"
-                  onClick={handleClearCart}
-                >
-                  Clear Cart <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-60">Alt+K</kbd>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 h-12 text-lg font-semibold bg-yellow-400 hover:bg-yellow-500 text-black border-yellow-500"
-                  onClick={handleHoldSale}
-                >
-                  Hold Sale <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-60">Alt+H</kbd>
-                </Button>
-                <Button onClick={handleCompleteSale} className="flex-1 h-12 text-lg font-semibold">
+              {/* Secondary actions share a row; the primary "Complete Sale" is full-width below so
+                  its label never gets squeezed/wrapped on small or tablet screens. */}
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 h-12 text-base sm:text-lg font-semibold whitespace-nowrap"
+                    onClick={handleClearCart}
+                  >
+                    Clear Cart <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-60">Alt+K</kbd>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 h-12 text-base sm:text-lg font-semibold whitespace-nowrap bg-yellow-400 hover:bg-yellow-500 text-black border-yellow-500"
+                    onClick={handleHoldSale}
+                  >
+                    Hold Sale <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-60">Alt+H</kbd>
+                  </Button>
+                </div>
+                <Button onClick={handleCompleteSale} className="w-full h-12 text-lg font-semibold whitespace-nowrap">
                   {t('complete_sale')} <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-70">Alt+P</kbd>
                 </Button>
               </div>
