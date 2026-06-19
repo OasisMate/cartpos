@@ -57,6 +57,7 @@ export default function SettingsPage() {
     deliveryChargePercent: 0,
     removeServiceChargeOnDelivery: true,
     enableUnitSplitting: false,
+    enableTradePricing: true,
   })
   // Shop's business type (drives which feature sections show). Null until loaded.
   const [businessType, setBusinessType] = useState<string | null>(null)
@@ -142,6 +143,7 @@ export default function SettingsPage() {
             deliveryChargePercent: Number(data.settings?.deliveryChargePercent || 0),
             removeServiceChargeOnDelivery: data.settings?.removeServiceChargeOnDelivery !== false,
             enableUnitSplitting: Boolean(data.settings?.enableUnitSplitting),
+            enableTradePricing: data.settings?.enableTradePricing !== false,
           })
           setBusinessType(data.businessType ?? null)
           if (data.settings?.logoUrl) {
@@ -361,6 +363,7 @@ export default function SettingsPage() {
           deliveryChargePercent: shopSettings.deliveryChargePercent,
           removeServiceChargeOnDelivery: shopSettings.removeServiceChargeOnDelivery,
           enableUnitSplitting: shopSettings.enableUnitSplitting,
+          enableTradePricing: shopSettings.enableTradePricing,
         }),
       })
 
@@ -390,7 +393,8 @@ export default function SettingsPage() {
     caps.enableServiceCharge || caps.enableDeliveryCharge ||
     shopSettings.enableServiceCharge || shopSettings.enableDeliveryCharge
   const showUnitSplitting = caps.enableUnitSplitting || shopSettings.enableUnitSplitting
-  const hasAnyFeature = showQuotations || showRestaurantCharges || showUnitSplitting
+  const showTradePricing = caps.enableTradePricing || shopSettings.enableTradePricing
+  const hasAnyFeature = showQuotations || showRestaurantCharges || showUnitSplitting || showTradePricing
 
   if (!user) {
     return (
@@ -892,6 +896,24 @@ export default function SettingsPage() {
                       <label htmlFor="enableQuotations" className="ml-2 text-sm text-gray-700">
                         <span className="font-medium">Quotations</span>
                         <span className="block text-xs text-gray-500">Create price estimates that convert to sales (hardware, electric, wholesale).</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Trade pricing (Retail/Trade toggle at POS) */}
+                  {showTradePricing && (
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="enableTradePricing"
+                        checked={shopSettings.enableTradePricing}
+                        onChange={(e) => setShopSettings({ ...shopSettings, enableTradePricing: e.target.checked })}
+                        disabled={savingSettings}
+                        className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="enableTradePricing" className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">Trade pricing</span>
+                        <span className="block text-xs text-gray-500">Show the Retail / Trade price toggle at checkout (wholesale, hardware, electric).</span>
                       </label>
                     </div>
                   )}

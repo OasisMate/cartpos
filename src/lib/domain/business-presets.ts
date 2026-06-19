@@ -22,6 +22,7 @@ export interface BusinessFeatureFlags {
   deliveryChargePercent: number | null
   removeServiceChargeOnDelivery: boolean
   enableUnitSplitting: boolean
+  enableTradePricing: boolean
 }
 
 // Conservative baseline. Anything not explicitly turned on by a type stays off,
@@ -37,6 +38,7 @@ const DEFAULT_FLAGS: BusinessFeatureFlags = {
   deliveryChargePercent: null,
   removeServiceChargeOnDelivery: true,
   enableUnitSplitting: false,
+  enableTradePricing: false,
 }
 
 // Typical restaurant service charge in PK; owner can change it in Settings.
@@ -44,13 +46,13 @@ const DEFAULT_SERVICE_CHARGE_PERCENT = 5
 
 // Only list the flags that differ from DEFAULT_FLAGS for a given type.
 const PRESETS: Partial<Record<OrganizationType, Partial<BusinessFeatureFlags>>> = {
-  // Quote-driven trades.
-  HARDWARE_STORE: { enableQuotations: true },
-  SANITARY_STORE: { enableQuotations: true },
-  ELECTRONICS_STORE: { enableQuotations: true },
-  AUTO_PARTS: { enableQuotations: true },
-  FURNITURE_STORE: { enableQuotations: true },
-  WHOLESALE: { enableQuotations: true },
+  // Quote-driven trades that also use wholesale/trade pricing.
+  HARDWARE_STORE: { enableQuotations: true, enableTradePricing: true },
+  SANITARY_STORE: { enableQuotations: true, enableTradePricing: true },
+  ELECTRONICS_STORE: { enableQuotations: true, enableTradePricing: true },
+  AUTO_PARTS: { enableQuotations: true, enableTradePricing: true },
+  FURNITURE_STORE: { enableQuotations: true, enableTradePricing: true },
+  WHOLESALE: { enableQuotations: true, enableTradePricing: true },
 
   // Pharmacy: sell a whole box or a loose unit (tablet) out of it.
   PHARMACY: { enableUnitSplitting: true },
@@ -100,6 +102,7 @@ export function presetShopSettingsData(
   | 'deliveryChargePercent'
   | 'removeServiceChargeOnDelivery'
   | 'enableUnitSplitting'
+  | 'enableTradePricing'
 > {
   const flags = presetForType(type)
   return {
@@ -113,5 +116,6 @@ export function presetShopSettingsData(
     deliveryChargePercent: flags.deliveryChargePercent,
     removeServiceChargeOnDelivery: flags.removeServiceChargeOnDelivery,
     enableUnitSplitting: flags.enableUnitSplitting,
+    enableTradePricing: flags.enableTradePricing,
   }
 }

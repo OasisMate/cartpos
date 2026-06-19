@@ -113,6 +113,7 @@ export async function PUT(request: NextRequest) {
       deliveryChargePercent,
       removeServiceChargeOnDelivery,
       enableUnitSplitting,
+      enableTradePricing,
     } = body
 
     // Validate percent fields when provided (0..100).
@@ -164,6 +165,7 @@ export async function PUT(request: NextRequest) {
         ...(deliveryChargePercent !== undefined && { deliveryChargePercent: deliveryChargePercent === null ? null : Number(deliveryChargePercent) }),
         ...(removeServiceChargeOnDelivery !== undefined && { removeServiceChargeOnDelivery }),
         ...(enableUnitSplitting !== undefined && { enableUnitSplitting }),
+        ...(enableTradePricing !== undefined && { enableTradePricing }),
       },
       create: {
         shopId: user.currentShopId,
@@ -189,6 +191,7 @@ export async function PUT(request: NextRequest) {
         ...(deliveryChargePercent !== undefined && deliveryChargePercent !== null && { deliveryChargePercent: Number(deliveryChargePercent) }),
         ...(removeServiceChargeOnDelivery !== undefined && { removeServiceChargeOnDelivery }),
         ...(enableUnitSplitting !== undefined && { enableUnitSplitting }),
+        ...(enableTradePricing !== undefined && { enableTradePricing }),
       },
     })
 

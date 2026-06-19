@@ -92,6 +92,7 @@ export async function GET(request: NextRequest) {
         deliveryChargePercent: Number(settings.deliveryChargePercent || 0),
         removeServiceChargeOnDelivery: settings.removeServiceChargeOnDelivery !== false,
         enableUnitSplitting: Boolean(settings.enableUnitSplitting),
+        enableTradePricing: settings.enableTradePricing !== false,
       },
       customers,
     })

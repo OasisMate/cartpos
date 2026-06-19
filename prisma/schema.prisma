@@ -269,6 +269,9 @@ model ShopSettings {
   // Store managers who want both can turn this off (versatile, not a hard rule).
   removeServiceChargeOnDelivery   Boolean       @default(true)
   enableUnitSplitting             Boolean       @default(false)   // Pharmacy: sell whole box or loose unit (reuses cartonSize math)
+  // Show the Retail/Trade pricing toggle at POS. Default true preserves existing shops;
+  // seeded by preset for new shops (on for hardware/electric/wholesale-type trades).
+  enableTradePricing              Boolean       @default(true)
   timezone                        String        @default("Asia/Karachi") // IANA tz used to compute the shop's "today" for dashboards/reports
   shop                            Shop          @relation(fields: [shopId], references: [id])
 }

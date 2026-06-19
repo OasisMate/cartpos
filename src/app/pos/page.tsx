@@ -186,6 +186,7 @@ function mapPosSettings(s: any) {
     deliveryChargePercent: Number(s?.deliveryChargePercent || 0),
     removeServiceChargeOnDelivery: s?.removeServiceChargeOnDelivery !== false,
     enableUnitSplitting: Boolean(s?.enableUnitSplitting),
+    enableTradePricing: s?.enableTradePricing !== false,
   }
 }
 
@@ -245,6 +246,7 @@ export default function POSPage() {
     deliveryChargePercent?: number
     removeServiceChargeOnDelivery?: boolean
     enableUnitSplitting?: boolean
+    enableTradePricing?: boolean
   } | null>(null)
 
   // Edit Item State
@@ -1513,7 +1515,7 @@ export default function POSPage() {
       case 'KeyH': e.preventDefault(); handleHoldSale(); break
       case 'KeyL': e.preventDefault(); if (heldSales.length) setShowHeldSalesModal(true); break
       case 'KeyK': e.preventDefault(); handleClearCart(); break
-      case 'KeyR': e.preventDefault(); setPriceMode((m) => (m === 'RETAIL' ? 'TRADE' : 'RETAIL')); break
+      case 'KeyR': e.preventDefault(); if (shopSettings?.enableTradePricing !== false) setPriceMode((m) => (m === 'RETAIL' ? 'TRADE' : 'RETAIL')); break
       case 'KeyD': e.preventDefault(); discountInputRef.current?.focus(); break
       case 'KeyS': e.preventDefault(); barcodeInputRef.current?.focus(); break
       case 'ArrowDown': e.preventDefault(); moveCartSelection(1); break
@@ -1562,7 +1564,8 @@ export default function POSPage() {
             </div>
           )}
 
-          {/* Barcode Input */}
+          {/* Pricing toggle (Retail/Trade) — only for shops that use trade pricing. */}
+          {shopSettings?.enableTradePricing !== false && (
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Pricing</span>
             <div className="inline-flex overflow-hidden rounded-md border border-[hsl(var(--border))]">
@@ -1587,6 +1590,7 @@ export default function POSPage() {
               <span className="text-xs text-blue-600">Trade rates applied (retail used where no trade price is set).</span>
             )}
           </div>
+          )}
 
           {/* Order type (restaurant only): dine-in vs delivery. Mirrors the Pricing toggle. */}
           {restaurantChargesEnabled && (
