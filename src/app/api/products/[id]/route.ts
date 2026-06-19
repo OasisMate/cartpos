@@ -125,6 +125,7 @@ export async function PUT(
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,
       cartonSize: body.cartonSize ? parseInt(body.cartonSize) : undefined,
       cartonBarcode: body.cartonBarcode || undefined,
+      packagingLevels: Array.isArray(body.packagingLevels) ? body.packagingLevels : undefined,
     }
 
     const product = await updateProduct(params.id, input, user.id)

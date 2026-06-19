@@ -1,6 +1,19 @@
 import { prisma } from '@/lib/db/prisma'
 import { Decimal } from '@prisma/client/runtime/library'
 
+/**
+ * An extra packaging level above the product's base unit (which is `unit`/`price`, factor 1).
+ * e.g. pharmacy: base = TABLET; levels = [{name:'Box', factorToBase:10, price:...},
+ * {name:'Carton', factorToBase:200, price:...}]. Generic — also bundles, case-packs.
+ */
+export interface PackagingLevelInput {
+  name: string
+  factorToBase: number // how many base units this level equals (> 0)
+  price?: number       // price for one of this level (optional; else derived from base price)
+  barcode?: string
+  level?: number       // display order; defaults to array index + 1
+}
+
 export interface CreateProductInput {
   name: string
   sku?: string
@@ -15,9 +28,42 @@ export interface CreateProductInput {
   cartonSize?: number
   cartonBarcode?: string
   initialStock?: number
+  packagingLevels?: PackagingLevelInput[]
 }
 
 export interface UpdateProductInput extends Partial<CreateProductInput> {}
+
+/**
+ * Validate + normalize packaging levels. Names must be non-empty and unique;
+ * factorToBase must be a finite number > 0. Returns Prisma-ready rows (sans productId).
+ */
+export function normalizePackagingLevels(levels: PackagingLevelInput[] | undefined) {
+  if (!levels || levels.length === 0) return [] as Array<{
+    name: string; factorToBase: Decimal; price: Decimal | null; barcode: string | null; level: number
+  }>
+  const seen = new Set<string>()
+  return levels.map((lvl, idx) => {
+    const name = (lvl.name || '').trim()
+    if (!name) throw new Error('Packaging level name is required')
+    const key = name.toUpperCase()
+    if (seen.has(key)) throw new Error(`Duplicate packaging level name: ${name}`)
+    seen.add(key)
+    const factor = Number(lvl.factorToBase)
+    if (!Number.isFinite(factor) || factor <= 0) {
+      throw new Error(`Packaging level "${name}" needs a units-per-pack greater than 0`)
+    }
+    if (lvl.price != null && (!Number.isFinite(Number(lvl.price)) || Number(lvl.price) < 0)) {
+      throw new Error(`Packaging level "${name}" has an invalid price`)
+    }
+    return {
+      name,
+      factorToBase: new Decimal(factor),
+      price: lvl.price != null ? new Decimal(Number(lvl.price)) : null,
+      barcode: lvl.barcode?.trim() || null,
+      level: Number.isFinite(Number(lvl.level)) ? Number(lvl.level) : idx + 1,
+    }
+  })
+}
 
 export type ProductSortBy = 'name' | 'price' | 'costPrice' | 'sku' | 'createdAt' | 'updatedAt'
 
@@ -186,6 +232,14 @@ export async function createProduct(
       },
     })
 
+    // Extra packaging levels (carton/box/...) above the base unit.
+    const levels = normalizePackagingLevels(input.packagingLevels)
+    if (levels.length > 0) {
+      await tx.packagingLevel.createMany({
+        data: levels.map((l) => ({ ...l, productId: newProduct.id })),
+      })
+    }
+
     // If initial stock is provided and product tracks stock, create stock ledger entry
     if (input.initialStock && input.initialStock > 0 && newProduct.trackStock) {
       await tx.stockLedger.create({
@@ -267,31 +321,45 @@ export async function updateProduct(
       ? { name: (String(input.name).trim() || product.name).toUpperCase() }
       : {}
 
-  // Update product
-  const updated = await prisma.product.update({
-    where: { id },
-    data: {
-      ...nameUpdate,
-      ...(finalSKU && { sku: finalSKU }),
-      ...(input.barcode !== undefined && { barcode: input.barcode || null }),
-      ...(input.unit && { unit: input.unit }),
-      ...(input.price !== undefined && { price: new Decimal(input.price) }),
-      ...(input.tradePrice !== undefined && {
-        tradePrice: input.tradePrice ? new Decimal(input.tradePrice) : null,
-      }),
-      ...(input.cartonPrice !== undefined && {
-        cartonPrice: input.cartonPrice ? new Decimal(input.cartonPrice) : null,
-      }),
-      ...(input.costPrice !== undefined && {
-        costPrice: input.costPrice ? new Decimal(input.costPrice) : null,
-      }),
-      ...(input.trackStock !== undefined && { trackStock: input.trackStock }),
-      ...(input.reorderLevel !== undefined && {
-        reorderLevel: input.reorderLevel || null,
-      }),
-      ...(input.cartonSize !== undefined && { cartonSize: input.cartonSize || null }),
-      ...(input.cartonBarcode !== undefined && { cartonBarcode: input.cartonBarcode || null }),
-    },
+  // Normalize packaging levels up-front (throws on bad input before any write).
+  const levels = input.packagingLevels !== undefined
+    ? normalizePackagingLevels(input.packagingLevels)
+    : undefined
+
+  // Update product, replacing packaging levels when provided (transactional).
+  const updated = await prisma.$transaction(async (tx) => {
+    const p = await tx.product.update({
+      where: { id },
+      data: {
+        ...nameUpdate,
+        ...(finalSKU && { sku: finalSKU }),
+        ...(input.barcode !== undefined && { barcode: input.barcode || null }),
+        ...(input.unit && { unit: input.unit }),
+        ...(input.price !== undefined && { price: new Decimal(input.price) }),
+        ...(input.tradePrice !== undefined && {
+          tradePrice: input.tradePrice ? new Decimal(input.tradePrice) : null,
+        }),
+        ...(input.cartonPrice !== undefined && {
+          cartonPrice: input.cartonPrice ? new Decimal(input.cartonPrice) : null,
+        }),
+        ...(input.costPrice !== undefined && {
+          costPrice: input.costPrice ? new Decimal(input.costPrice) : null,
+        }),
+        ...(input.trackStock !== undefined && { trackStock: input.trackStock }),
+        ...(input.reorderLevel !== undefined && {
+          reorderLevel: input.reorderLevel || null,
+        }),
+        ...(input.cartonSize !== undefined && { cartonSize: input.cartonSize || null }),
+        ...(input.cartonBarcode !== undefined && { cartonBarcode: input.cartonBarcode || null }),
+      },
+    })
+    if (levels !== undefined) {
+      await tx.packagingLevel.deleteMany({ where: { productId: id } })
+      if (levels.length > 0) {
+        await tx.packagingLevel.createMany({ data: levels.map((l) => ({ ...l, productId: id })) })
+      }
+    }
+    return p
   })
 
   return updated
@@ -342,6 +410,7 @@ export async function listProducts(shopId: string, filters: ProductFilters = {})
       orderBy: { [sortBy]: sortDir },
       skip,
       take: limit,
+      include: { packagingLevels: { orderBy: { level: 'asc' } } },
     }),
     prisma.product.count({ where }),
   ])
@@ -390,6 +459,7 @@ export async function listProducts(shopId: string, filters: ProductFilters = {})
 export async function getProduct(id: string, userId: string) {
   const product = await prisma.product.findUnique({
     where: { id },
+    include: { packagingLevels: { orderBy: { level: 'asc' } } },
   })
 
   if (!product) {
@@ -479,6 +549,10 @@ export async function getProductsForPOS(shopId: string) {
       trackStock: true,
       cartonSize: true,
       cartonBarcode: true,
+      packagingLevels: {
+        select: { name: true, factorToBase: true, price: true, barcode: true, level: true },
+        orderBy: { level: 'asc' },
+      },
     },
     orderBy: { name: 'asc' },
   })
@@ -494,5 +568,12 @@ export async function getProductsForPOS(shopId: string) {
     trackStock: p.trackStock,
     cartonSize: p.cartonSize,
     cartonBarcode: p.cartonBarcode,
+    packagingLevels: p.packagingLevels.map((l) => ({
+      name: l.name,
+      factorToBase: parseFloat(l.factorToBase.toString()),
+      price: l.price != null ? parseFloat(l.price.toString()) : null,
+      barcode: l.barcode,
+      level: l.level,
+    })),
   }))
 }

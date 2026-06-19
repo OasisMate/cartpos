@@ -177,6 +177,7 @@ export async function POST(request: NextRequest) {
       cartonSize: body.cartonSize ? parseInt(body.cartonSize) : undefined,
       cartonBarcode: body.cartonBarcode || undefined,
       initialStock: body.initialStock ? parseFloat(body.initialStock) : undefined,
+      packagingLevels: Array.isArray(body.packagingLevels) ? body.packagingLevels : undefined,
     }
 
     const product = await createProduct(user.currentShopId, input, user.id)
