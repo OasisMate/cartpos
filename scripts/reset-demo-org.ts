@@ -44,11 +44,20 @@ async function resetDemoOrg() {
   await safeDeleteMany(() => prisma.customerLedger.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.supplierLedger.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.stockLedger.deleteMany({ where: inShop }))
+  // Returns reference invoices; delete before invoices.
+  await safeDeleteMany(() => prisma.saleReturnLine.deleteMany({ where: { saleReturn: { shopId: { in: shopIds } } } }))
+  await safeDeleteMany(() => prisma.saleReturn.deleteMany({ where: inShop }))
+  // Quotations + their lines (lines cascade, but delete explicitly to be safe).
+  await safeDeleteMany(() => prisma.quotationLine.deleteMany({ where: { quotation: { shopId: { in: shopIds } } } }))
+  await safeDeleteMany(() => prisma.quotation.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.invoiceLine.deleteMany({ where: { invoice: { shopId: { in: shopIds } } } }))
   await safeDeleteMany(() => prisma.invoice.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.purchaseLine.deleteMany({ where: { purchase: { shopId: { in: shopIds } } } }))
   await safeDeleteMany(() => prisma.purchase.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.expense.deleteMany({ where: inShop }))
+  // Product children (lots, packaging) before products.
+  await safeDeleteMany(() => prisma.stockLot.deleteMany({ where: inShop }))
+  await safeDeleteMany(() => prisma.packagingLevel.deleteMany({ where: { product: { shopId: { in: shopIds } } } }))
   await safeDeleteMany(() => prisma.product.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.customer.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.supplier.deleteMany({ where: inShop }))
