@@ -75,6 +75,8 @@ export async function POST(request: NextRequest) {
         productId: line.productId,
         quantity: parseFloat(line.quantity),
         unitCost: line.unitCost ? parseFloat(line.unitCost) : undefined,
+        lotNo: line.lotNo || undefined,
+        expiry: line.expiry || undefined,
       })),
     }
 

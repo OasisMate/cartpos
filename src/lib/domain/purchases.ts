@@ -1,10 +1,15 @@
 import { prisma } from '@/lib/db/prisma'
 import { Decimal } from '@prisma/client/runtime/library'
+import { readFeatureConfig } from './business-presets'
 
 export interface PurchaseLineInput {
   productId: string
   quantity: number
   unitCost?: number
+  /** Batch/lot number (pharmacy). Creates a StockLot when batch/expiry tracking is on. */
+  lotNo?: string
+  /** Expiry date (ISO string or Date). Drives FEFO + expiry alerts. */
+  expiry?: string | Date | null
 }
 
 export interface CreatePurchaseInput {
@@ -120,6 +125,11 @@ export async function createPurchase(
     throw new Error('One or more products not found or do not belong to this shop')
   }
 
+  // Batch/expiry tracking is a per-shop opt-in (pharmacy). When on, purchase lines that
+  // carry a lot/expiry also create a StockLot for FEFO + expiry alerts.
+  const shopSettingsRow = await prisma.shopSettings.findUnique({ where: { shopId }, select: { featureConfig: true } })
+  const batchExpiryOn = readFeatureConfig(shopSettingsRow?.featureConfig).batchExpiry === true
+
   // Validate quantities
   for (const line of input.lines) {
     if (!line.quantity || line.quantity <= 0) {
@@ -177,6 +187,21 @@ export async function createPurchase(
           refId: purchaseLine.id,
         },
       })
+
+      // Batch/expiry: record a StockLot so this batch can be sold FEFO + flagged near expiry.
+      if (batchExpiryOn && (lineInput.lotNo?.trim() || lineInput.expiry)) {
+        const expiryDate = lineInput.expiry ? new Date(lineInput.expiry) : null
+        await tx.stockLot.create({
+          data: {
+            shopId,
+            productId: lineInput.productId,
+            lotNo: lineInput.lotNo?.trim() || null,
+            expiry: expiryDate && !isNaN(expiryDate.getTime()) ? expiryDate : null,
+            quantity, // base units received in this lot
+            costPrice: unitCost,
+          },
+        })
+      }
 
       // Update product costPrice if unitCost provided
       if (unitCost) {

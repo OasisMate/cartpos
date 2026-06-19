@@ -39,6 +39,7 @@ interface User {
     serviceCharge: boolean
     deliveryCharge: boolean
     unitSplitting: boolean
+    batchExpiry: boolean
   }
 }
 

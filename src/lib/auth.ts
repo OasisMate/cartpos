@@ -4,7 +4,7 @@ import { prisma } from './db/prisma'
 import { cookies } from 'next/headers'
 import { isDatabaseConnectionError } from './db/db-utils'
 import { withRetry } from './db/connection-retry'
-import { presetForType } from './domain/business-presets'
+import { presetForType, readFeatureConfig } from './domain/business-presets'
 
 const secretKey = process.env.JWT_SECRET
 if (!secretKey || secretKey.length < 32) {
@@ -131,6 +131,7 @@ export async function getCurrentUser() {
                         enableServiceCharge: true,
                         enableDeliveryCharge: true,
                         enableUnitSplitting: true,
+                        featureConfig: true,
                       },
                     },
                   },
@@ -170,11 +171,13 @@ export async function getCurrentUser() {
     const currentShop = shops.find((s) => s.shopId === currentShopId)?.shop
     const currentSettings = (currentShop as any)?.settings
     const preset = presetForType((currentShop as any)?.organization?.type)
+    const batchExpiry = readFeatureConfig(currentSettings?.featureConfig).batchExpiry ?? preset.batchExpiry
     const features = {
       quotations: currentSettings?.enableQuotations ?? preset.enableQuotations,
       serviceCharge: currentSettings?.enableServiceCharge ?? preset.enableServiceCharge,
       deliveryCharge: currentSettings?.enableDeliveryCharge ?? preset.enableDeliveryCharge,
       unitSplitting: currentSettings?.enableUnitSplitting ?? preset.enableUnitSplitting,
+      batchExpiry,
     }
 
     return {

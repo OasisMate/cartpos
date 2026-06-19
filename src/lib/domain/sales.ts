@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 import { Decimal } from '@prisma/client/runtime/library'
 import { getProductStock, getProductStockBatch } from './purchases'
 import { formatNumber } from '@/lib/utils/money'
+import { readFeatureConfig } from './business-presets'
 
 const invoiceDetailInclude = {
   lines: {
@@ -130,6 +131,8 @@ export async function createSale(
   })
 
   const allowNegativeStock = shopSettings?.allowNegativeStock ?? true // Default: allow
+  // Batch/expiry shops deduct sold units from lots earliest-expiry-first (FEFO).
+  const batchExpiryOn = readFeatureConfig(shopSettings?.featureConfig).batchExpiry === true
 
   // Validate quantities and line amounts (reject NaN/Infinity/negative; verify line math)
   for (const item of input.items) {
@@ -315,6 +318,35 @@ export async function createSale(
         }
       }),
     })
+
+    // FEFO: for batch/expiry shops, draw the sold base units down from lots, earliest
+    // expiry first (no-expiry lots last). The stock ledger above remains the source of
+    // truth for total stock; this keeps per-lot quantities accurate for expiry tracking.
+    if (batchExpiryOn) {
+      for (const itemInput of input.items) {
+        const product = products.find((p) => p.id === itemInput.productId)!
+        if (!product.trackStock) continue
+        const unitsPerItem = Number.isFinite(itemInput.unitsPerItem) && (itemInput.unitsPerItem as number) > 0 ? (itemInput.unitsPerItem as number) : 1
+        let remaining = itemInput.quantity * unitsPerItem
+        if (remaining <= 0) continue
+        const lots = await tx.stockLot.findMany({
+          where: { shopId, productId: itemInput.productId, quantity: { gt: 0 } },
+          orderBy: [{ expiry: { sort: 'asc', nulls: 'last' } }, { receivedAt: 'asc' }],
+        })
+        for (const lot of lots) {
+          if (remaining <= 0.0001) break
+          const have = Number(lot.quantity)
+          const take = Math.min(have, remaining)
+          await tx.stockLot.update({
+            where: { id: lot.id },
+            data: { quantity: new Decimal(have - take) },
+          })
+          remaining -= take
+        }
+        // If remaining > 0, sold more than was lotted (e.g. legacy stock). Allowed — the
+        // ledger still reflects the true total; lots simply can't go below zero.
+      }
+    }
 
     // Handle payment or udhaar
     if (input.paymentStatus === 'PAID') {
