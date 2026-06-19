@@ -79,6 +79,12 @@ Slices (each: build → typecheck → commit → QA later):
 
 ## Phase 4 — Per-vertical go-to-market readiness
 - For each shipped vertical: a clean preset, a short "is this for you" feature list, demo data.
+- **DONE (2026-06-19) — demo data:** rich 22-shop demo org (one per business type, ~90-day
+  activity) via `VERTICALS[]` in `scripts/seed-demo-org.ts`. See TESTING_LOG "PERMANENT DEMO / TEST ORG".
+- **DONE (2026-06-19) — per-shop units:** each shop has an editable unit list seeded by business
+  type (`UNIT_PRESETS` in `lib/domain/business-presets.ts`), managed in Settings → "Product units",
+  stored in `featureConfig.units`. Product Unit dropdown now uses it. Spec:
+  `docs/superpowers/specs/2026-06-19-shop-units-design.md`.
 
 ## Open decisions (ask before the relevant phase)
 - Phase 3 vertical ORDER (confirm against QA + verified research, real demand).
