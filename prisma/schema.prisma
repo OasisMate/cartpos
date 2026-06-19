@@ -116,6 +116,7 @@ model Shop {
   activityLogs ActivityLog[]
   saleReturns SaleReturn[]
   quotations  Quotation[]
+  stockLots   StockLot[]
 
   @@index([orgId, name])
 }
@@ -272,6 +273,10 @@ model ShopSettings {
   // Show the Retail/Trade pricing toggle at POS. Default true preserves existing shops;
   // seeded by preset for new shops (on for hardware/electric/wholesale-type trades).
   enableTradePricing              Boolean       @default(true)
+  // Hybrid config bucket: rare / vertical-specific toggles & params that don't warrant a column.
+  // Common, frequently-queried flags stay as typed columns above; everything else lives here so
+  // adding a vertical never means a migration. Shape is owned by lib/domain/business-presets.ts.
+  featureConfig                   Json?
   timezone                        String        @default("Asia/Karachi") // IANA tz used to compute the shop's "today" for dashboards/reports
   shop                            Shop          @relation(fields: [shopId], references: [id])
 }
@@ -322,10 +327,61 @@ model Product {
   stockLedger  StockLedger[]
   saleReturnLines SaleReturnLine[]
   quotationLines QuotationLine[]
+  stockLots    StockLot[]
+  packagingLevels PackagingLevel[]
 
   @@index([shopId, name])
   @@unique([shopId, barcode], map: "unique_barcode_per_shop")
   @@index([shopId, barcode])
+}
+
+// -----------------------------------------------------
+// Generic reusable models (Phase 2 foundation — used by later verticals).
+// One change, many angles: these intentionally serve multiple business types
+// instead of adding per-feature columns to Product.
+// -----------------------------------------------------
+
+// A tracked lot/unit of a product. Pharmacy: batch no. + expiry + quantity.
+// Electronics/mobile: serial/IMEI (quantity 1 each). Perishables: expiry/FEFO.
+// Same table, different fields populated per vertical.
+model StockLot {
+  id          String    @id @default(cuid())
+  shopId      String
+  productId   String
+  lotNo       String?   // batch / lot number (pharmacy, food)
+  serial      String?   // serial number / IMEI (electronics) — one unit per row when used
+  expiry      DateTime? // expiry date (FEFO ordering)
+  quantity    Decimal   @default(0) @db.Decimal(12, 3) // remaining qty in base units
+  costPrice   Decimal?  @db.Decimal(12, 2)             // optional per-lot cost
+  note        String?
+  receivedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  shop        Shop      @relation(fields: [shopId], references: [id])
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@index([shopId, productId])
+  @@index([productId, expiry])
+  @@index([shopId, serial])
+}
+
+// A packaging/unit level for a product, with a conversion factor to the base unit.
+// Replaces ad-hoc cartonSize/cartonPrice growth. Serves carton -> box -> strip -> tablet
+// (pharmacy), bundles (hardware), and case-packs (grocery). Base unit has factorToBase = 1.
+model PackagingLevel {
+  id           String   @id @default(cuid())
+  productId    String
+  name         String   // e.g. "Carton", "Box", "Strip", "Tablet", "Bundle"
+  factorToBase Decimal  @db.Decimal(12, 4) // base units this level equals (base = 1)
+  price        Decimal? @db.Decimal(12, 2) // optional price at this level (else derived from base)
+  barcode      String?  // optional scan barcode for this level
+  level        Int      // 0 = base unit; higher = larger pack
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  product      Product  @relation(fields: [productId], references: [id])
+
+  @@unique([productId, name])
+  @@index([productId, level])
 }
 
 model StockLedger {

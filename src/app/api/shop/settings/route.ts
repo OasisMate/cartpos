@@ -114,7 +114,13 @@ export async function PUT(request: NextRequest) {
       removeServiceChargeOnDelivery,
       enableUnitSplitting,
       enableTradePricing,
+      featureConfig,
     } = body
+
+    // featureConfig is the hybrid bucket for vertical-specific config; accept any plain object.
+    if (featureConfig !== undefined && featureConfig !== null && (typeof featureConfig !== 'object' || Array.isArray(featureConfig))) {
+      return NextResponse.json({ error: 'featureConfig must be an object' }, { status: 400 })
+    }
 
     // Validate percent fields when provided (0..100).
     for (const [label, val] of [
@@ -166,6 +172,7 @@ export async function PUT(request: NextRequest) {
         ...(removeServiceChargeOnDelivery !== undefined && { removeServiceChargeOnDelivery }),
         ...(enableUnitSplitting !== undefined && { enableUnitSplitting }),
         ...(enableTradePricing !== undefined && { enableTradePricing }),
+        ...(featureConfig !== undefined && { featureConfig }),
       },
       create: {
         shopId: user.currentShopId,
@@ -192,6 +199,7 @@ export async function PUT(request: NextRequest) {
         ...(removeServiceChargeOnDelivery !== undefined && { removeServiceChargeOnDelivery }),
         ...(enableUnitSplitting !== undefined && { enableUnitSplitting }),
         ...(enableTradePricing !== undefined && { enableTradePricing }),
+        ...(featureConfig !== undefined && featureConfig !== null && { featureConfig }),
       },
     })
 
