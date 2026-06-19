@@ -35,6 +35,8 @@ interface PurchaseLine {
   quantity: string
   unitCost: string
   unit: 'piece' | 'carton'
+  lotNo?: string
+  expiry?: string
 }
 
 interface Purchase {
@@ -74,6 +76,7 @@ interface PurchasesResponse {
 
 export default function PurchasesPage() {
   const { user } = useAuth()
+  const showBatch = user?.features?.batchExpiry === true
   const router = useRouter()
   const { show } = useToast()
   const [purchases, setPurchases] = useState<Purchase[]>([])
@@ -481,6 +484,8 @@ export default function PurchasesPage() {
                 ? parseFloat(line.quantity) * (products.find(p => p.id === line.productId)?.cartonSize || 1)
                 : parseFloat(line.quantity),
               unitCost: line.unitCost ? parseFloat(line.unitCost) : undefined,
+              lotNo: line.lotNo || undefined,
+              expiry: line.expiry || undefined,
             })),
           }),
         })
@@ -508,6 +513,8 @@ export default function PurchasesPage() {
             ? parseFloat(line.quantity) * (products.find(p => p.id === line.productId)?.cartonSize || 1)
             : parseFloat(line.quantity),
           unitCost: line.unitCost ? parseFloat(line.unitCost) : undefined,
+          lotNo: line.lotNo || undefined,
+          expiry: line.expiry || undefined,
         })),
       }
 
@@ -676,6 +683,8 @@ export default function PurchasesPage() {
                         <th className="border p-2 text-left">Product</th>
                         <th className="border p-2 text-right">Quantity</th>
                         <th className="border p-2 text-right">Unit Cost</th>
+                        {showBatch && <th className="border p-2 text-left">Batch #</th>}
+                        {showBatch && <th className="border p-2 text-left">Expiry</th>}
                         <th className="border p-2 text-center">Actions</th>
                       </tr>
                     </thead>
@@ -858,6 +867,27 @@ export default function PurchasesPage() {
                               })()}
                             />
                           </td>
+                          {showBatch && (
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={line.lotNo || ''}
+                                onChange={(e) => updateLine(index, 'lotNo', e.target.value)}
+                                className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Batch (optional)"
+                              />
+                            </td>
+                          )}
+                          {showBatch && (
+                            <td className="border p-2">
+                              <input
+                                type="date"
+                                value={line.expiry || ''}
+                                onChange={(e) => updateLine(index, 'expiry', e.target.value)}
+                                className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </td>
+                          )}
                           <td className="border p-2 text-center">
                             {formData.lines.length > 1 && (
                               <button

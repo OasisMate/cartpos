@@ -20,6 +20,8 @@ export interface PurchaseInput {
     productId: string
     quantity: number
     unitCost?: number
+    lotNo?: string
+    expiry?: string
   }>
 }
 

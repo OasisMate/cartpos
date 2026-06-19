@@ -363,6 +363,8 @@ export interface CachedPurchase {
     productId: string
     quantity: number
     unitCost?: number
+    lotNo?: string
+    expiry?: string
   }>
   createdAt: number
   syncStatus: 'PENDING' | 'SYNCED'

@@ -13,6 +13,8 @@ interface SyncPurchaseInput {
     productId: string
     quantity: number
     unitCost?: number
+    lotNo?: string
+    expiry?: string
   }>
 }
 
@@ -47,6 +49,8 @@ export async function POST(request: NextRequest) {
             productId: l.productId,
             quantity: l.quantity,
             unitCost: l.unitCost,
+            lotNo: l.lotNo,
+            expiry: l.expiry,
           })),
         }
 
