@@ -358,6 +358,7 @@ export default function POSPage() {
               trackStock: p.trackStock,
               cartonSize: p.cartonSize,
               cartonBarcode: p.cartonBarcode,
+              packagingLevels: p.packagingLevels,
             }))
             .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
           setProducts(sortedProducts)
@@ -594,17 +595,27 @@ export default function POSPage() {
     setProductIndex({ byBarcode, byCartonBarcode })
   }, [products])
 
-  async function addToCart(product: Product, quantity: number = 1, isCarton: boolean = false) {
-    // Determine price: carton uses cartonPrice when set, else piece price x carton size;
-    // otherwise trade rate when in trade mode (falls back to retail).
-    const unitPrice = isCarton
+  async function addToCart(
+    product: Product,
+    quantity: number = 1,
+    isCarton: boolean = false,
+    packLevel?: { name: string; factor: number; unitPrice: number },
+  ) {
+    // Determine price: a chosen packaging level uses its own price; carton uses cartonPrice
+    // (else piece price x carton size); otherwise trade rate in trade mode (falls back to retail).
+    const unitPrice = packLevel
+      ? packLevel.unitPrice
+      : isCarton
       ? (product.cartonPrice != null ? product.cartonPrice : product.price * (product.cartonSize || 1))
       : priceMode === 'TRADE' && product.tradePrice != null
       ? product.tradePrice
       : product.price
-    
-    // If adding carton, quantity should be in cartons, not pieces
-    const finalQuantity = isCarton ? quantity : quantity
+
+    // Base units per sold item: level factor, carton size, or 1 (base unit).
+    const unitsPerItem = packLevel ? packLevel.factor : isCarton ? (product.cartonSize || 1) : 1
+    // Identity for cart dedup: same product + same sold level merge into one line.
+    const variantKey = packLevel ? `lvl:${packLevel.name}` : isCarton ? 'carton' : 'base'
+    const finalQuantity = quantity
 
     // Check stock if product tracks stock (purely client-side, no per-product network calls)
     if (product.trackStock) {
@@ -614,27 +625,17 @@ export default function POSPage() {
         currentStock = Number.POSITIVE_INFINITY
       }
 
-      // Calculate total quantity in cart (including what we're about to add)
-      // Need to sum all items for this product (both pieces and cartons) and convert to pieces
-      const cartonSize = product.cartonSize || 1
-      const existingItem = cart.find((item) => 
-        item.product.id === product.id && item.isCarton === isCarton
-      )
-      
-      // Calculate total pieces already in cart for this product
+      // Calculate total base units in cart for this product (across all sold levels).
       let totalPiecesInCart = 0
       cart.forEach((item) => {
         if (item.product.id === product.id) {
-          if (item.isCarton) {
-            totalPiecesInCart += item.quantity * cartonSize
-          } else {
-            totalPiecesInCart += item.quantity
-          }
+          const itemUnits = item.unitsPerItem ?? (item.isCarton ? (product.cartonSize || 1) : 1)
+          totalPiecesInCart += item.quantity * itemUnits
         }
       })
       
-      // Add the quantity we're about to add
-      const piecesToAdd = isCarton ? finalQuantity * cartonSize : finalQuantity
+      // Add the quantity we're about to add (in base units)
+      const piecesToAdd = finalQuantity * unitsPerItem
       const totalPiecesAfterAdd = totalPiecesInCart + piecesToAdd
 
       // Check if we exceed available stock (only if stock is finite)
@@ -669,14 +670,14 @@ export default function POSPage() {
       }
     }
 
-    const existingItem = cart.find((item) => 
-      item.product.id === product.id && item.isCarton === isCarton
-    )
+    // A cart line's identity: same product sold at the same level merges.
+    const keyOf = (item: CartItem) => item.packName ? `lvl:${item.packName}` : item.isCarton ? 'carton' : 'base'
+    const existingItem = cart.find((item) => item.product.id === product.id && keyOf(item) === variantKey)
 
     if (existingItem) {
       setCart(
         cart.map((item) =>
-          item.product.id === product.id && item.isCarton === isCarton
+          item.product.id === product.id && keyOf(item) === variantKey
             ? {
                 ...item,
                 quantity: item.quantity + finalQuantity,
@@ -694,8 +695,8 @@ export default function POSPage() {
           unitPrice,
           lineTotal: unitPrice * finalQuantity,
           isCarton,
-          // Base units per sold item: carton uses pack size, piece/base = 1. Drives stock deduction.
-          unitsPerItem: isCarton ? (product.cartonSize || 1) : 1,
+          packName: packLevel?.name,
+          unitsPerItem,
         },
       ])
     }
@@ -903,6 +904,26 @@ export default function POSPage() {
     if (barcodeInputRef.current) {
       barcodeInputRef.current.focus()
     }
+  }
+
+  // Add the quick-add product at a specific packaging level (or the base unit when level is null).
+  function handleQuickAddLevel(level: { name: string; factorToBase: number; price: number | null } | null) {
+    if (!quickAddProduct) return
+    const quantity = parseInt(quickAddQuantity) || 1
+    if (quantity <= 0) {
+      show({ message: 'Quantity must be greater than 0', variant: 'destructive' })
+      return
+    }
+    if (level) {
+      // Level price, else derive from the base unit price x factor.
+      const unitPrice = level.price != null ? level.price : quickAddProduct.price * level.factorToBase
+      addToCart(quickAddProduct, quantity, false, { name: level.name, factor: level.factorToBase, unitPrice })
+    } else {
+      addToCart(quickAddProduct, quantity, false)
+    }
+    setQuickAddProduct(null)
+    setQuickAddQuantity('1')
+    if (barcodeInputRef.current) barcodeInputRef.current.focus()
   }
 
   async function handleQuickAddProductSubmit(e: React.FormEvent) {
@@ -1206,7 +1227,8 @@ export default function POSPage() {
         items: cart.map((item) => ({
           name: item.product.name,
           quantity: item.quantity,
-          unit: item.product.unit,
+          // Show the sold level on the receipt (e.g. "Box"); carton uses "carton"; else base unit.
+          unit: item.packName || (item.isCarton ? 'carton' : item.product.unit),
           unitPrice: item.unitPrice,
           lineTotal: item.lineTotal,
         })),
@@ -1386,7 +1408,9 @@ export default function POSPage() {
   addToCartRef.current = addToCart
   const handleProductSelect = useCallback((product: Product) => {
     const hasCarton = !!(product.cartonSize && product.cartonSize > 0)
-    if (hasCarton) {
+    const hasLevels = !!(product.packagingLevels && product.packagingLevels.length > 0)
+    if (hasCarton || hasLevels) {
+      // Let the cashier pick which unit / packaging level to sell.
       setQuickAddProduct(product)
       setQuickAddQuantity('1')
     } else {
@@ -1789,7 +1813,7 @@ export default function POSPage() {
             <div className="space-y-2">
               {cart.map((item, idx) => (
                 <div
-                  key={item.product.id}
+                  key={`${item.product.id}-${item.packName || (item.isCarton ? 'carton' : 'base')}`}
                   id={`pos-cart-${idx}`}
                   onClick={() => setSelectedCartIndex(idx)}
                   className={`flex items-center justify-between gap-3 p-3 border rounded-lg ${idx === selectedCartIndex ? 'border-blue-400 ring-1 ring-blue-300' : 'border-[hsl(var(--border))]'}`}
@@ -1800,7 +1824,7 @@ export default function POSPage() {
                   <div className="flex-1 cursor-pointer" onClick={() => setEditingItem(item)}>
                     <div className="font-medium">{item.product.name}</div>
                     <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                      {formatCurrency(item.unitPrice)} × {formatNumber(item.quantity)} {item.product.unit}
+                      {formatCurrency(item.unitPrice)} × {formatNumber(item.quantity)} {item.packName || (item.isCarton ? 'carton' : item.product.unit)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2286,15 +2310,48 @@ export default function POSPage() {
                   autoFocus
                 />
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                  Piece: {formatCurrency(quickAddProduct.price)} per {quickAddProduct.unit}
-                  {quickAddProduct.cartonSize && quickAddProduct.cartonSize > 0 && (
+                  {quickAddProduct.unit}: {formatCurrency(quickAddProduct.price)}
+                  {quickAddProduct.cartonSize && quickAddProduct.cartonSize > 0 && !(quickAddProduct.packagingLevels && quickAddProduct.packagingLevels.length > 0) && (
                     <>
                       {' · '}Carton: {formatCurrency(quickAddProduct.cartonPrice != null ? quickAddProduct.cartonPrice : quickAddProduct.price * quickAddProduct.cartonSize)} ({quickAddProduct.cartonSize} {quickAddProduct.unit})
                     </>
                   )}
                 </p>
               </div>
-              {quickAddProduct.cartonSize && quickAddProduct.cartonSize > 0 ? (
+              {quickAddProduct.packagingLevels && quickAddProduct.packagingLevels.length > 0 ? (
+                // Pick a packaging level (or the base unit). Levels are ordered largest-pack last.
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickAddLevel(null)}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))] transition-colors"
+                  >
+                    <span className="font-medium">{quickAddProduct.unit} (loose)</span>
+                    <span className="text-sm text-[hsl(var(--muted-foreground))]">{formatCurrency(quickAddProduct.price)}</span>
+                  </button>
+                  {quickAddProduct.packagingLevels.map((lvl) => {
+                    const price = lvl.price != null ? lvl.price : quickAddProduct.price * lvl.factorToBase
+                    return (
+                      <button
+                        key={lvl.name}
+                        type="button"
+                        onClick={() => handleQuickAddLevel(lvl)}
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))] transition-colors"
+                      >
+                        <span className="font-medium">{lvl.name} <span className="text-xs text-[hsl(var(--muted-foreground))]">({formatNumber(lvl.factorToBase)} {quickAddProduct.unit})</span></span>
+                        <span className="text-sm text-[hsl(var(--muted-foreground))]">{formatCurrency(price)}</span>
+                      </button>
+                    )
+                  })}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => { setQuickAddProduct(null); setQuickAddQuantity('1') }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : quickAddProduct.cartonSize && quickAddProduct.cartonSize > 0 ? (
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <Button className="flex-1" onClick={() => handleQuickAdd(false)}>
