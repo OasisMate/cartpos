@@ -13,6 +13,7 @@ export interface Product {
   trackStock: boolean
   cartonSize?: number | null
   cartonBarcode?: string | null
+  packagingLevels?: Array<{ name: string; factorToBase: number; price: number | null; barcode: string | null; level: number }>
 }
 
 /**
@@ -69,6 +70,7 @@ export async function getProductsWithCache(shopId: string, isOnline: boolean): P
         trackStock: p.trackStock,
         cartonSize: p.cartonSize,
         cartonBarcode: p.cartonBarcode,
+        packagingLevels: (p as any).packagingLevels,
       }))
     }
   } else {

@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
         quantity: parseFloat(item.quantity),
         unitPrice: parseFloat(item.unitPrice),
         lineTotal: parseFloat(item.lineTotal),
+        unitsPerItem: item.unitsPerItem != null ? parseFloat(item.unitsPerItem) : undefined,
       })),
       subtotal: parseFloat(body.subtotal),
       discount: parseFloat(body.discount || 0),

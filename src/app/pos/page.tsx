@@ -75,7 +75,9 @@ interface CartItem {
   quantity: number
   unitPrice: number
   lineTotal: number
-  isCarton?: boolean  // true if selling by carton, false if by piece
+  isCarton?: boolean  // true if selling by carton, false if by piece (legacy 2-level)
+  packName?: string   // packaging level name when selling a defined level (e.g. "Box")
+  unitsPerItem?: number // base units per sold item (cartonSize / level factor / 1). Drives stock.
 }
 
 interface ReceiptItem {
@@ -692,6 +694,8 @@ export default function POSPage() {
           unitPrice,
           lineTotal: unitPrice * finalQuantity,
           isCarton,
+          // Base units per sold item: carton uses pack size, piece/base = 1. Drives stock deduction.
+          unitsPerItem: isCarton ? (product.cartonSize || 1) : 1,
         },
       ])
     }
@@ -1149,6 +1153,7 @@ export default function POSPage() {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           lineTotal: item.lineTotal,
+          unitsPerItem: item.unitsPerItem ?? (item.isCarton ? (item.product.cartonSize || 1) : 1),
         })),
         subtotal,
         discount,

@@ -25,6 +25,13 @@ export interface SaleItemInput {
   quantity: number
   unitPrice: number
   lineTotal: number
+  /**
+   * Base units per sold item (the packaging factor). 1 for a base-unit sale, `cartonSize`
+   * for a carton, or a PackagingLevel factor for box/carton selling. Stock deducts
+   * quantity * unitsPerItem so packs draw down the right number of base units, while the
+   * invoice line keeps the pack quantity + per-pack price for display.
+   */
+  unitsPerItem?: number
 }
 
 export interface CreateSaleInput {
@@ -153,18 +160,21 @@ export async function createSale(
     const product = products.find((p) => p.id === item.productId)!
     if (product.trackStock) {
       const currentStock = stockMap.get(item.productId) || 0
-      if (currentStock < item.quantity) {
+      // Stock is tracked in base units; a pack draws down quantity * unitsPerItem.
+      const unitsPerItem = Number.isFinite(item.unitsPerItem) && (item.unitsPerItem as number) > 0 ? (item.unitsPerItem as number) : 1
+      const baseRequested = item.quantity * unitsPerItem
+      if (currentStock < baseRequested) {
         // If negative stock not allowed, block the sale
         if (!allowNegativeStock) {
           throw new Error(
-            `Insufficient stock for ${product.name}. Available: ${formatNumber(currentStock)} ${product.unit}, Requested: ${formatNumber(item.quantity)} ${product.unit}. Negative stock is not allowed for this shop.`
+            `Insufficient stock for ${product.name}. Available: ${formatNumber(currentStock)} ${product.unit}, Requested: ${formatNumber(baseRequested)} ${product.unit}. Negative stock is not allowed for this shop.`
           )
         }
         // If allowed, collect warning but proceed
         stockWarnings.push({
           productName: product.name,
           available: currentStock,
-          requested: item.quantity,
+          requested: baseRequested,
         })
       }
     }
@@ -293,10 +303,12 @@ export async function createSale(
         if (!invoiceLine) {
           throw new Error(`Invoice line not found for product ${itemInput.productId}`)
         }
+        // Deduct in base units: pack quantity * units-per-pack (1 for base-unit sales).
+        const unitsPerItem = Number.isFinite(itemInput.unitsPerItem) && (itemInput.unitsPerItem as number) > 0 ? (itemInput.unitsPerItem as number) : 1
         return {
           shopId,
           productId: itemInput.productId,
-          changeQty: new Decimal(itemInput.quantity).mul(-1), // Negative for sales
+          changeQty: new Decimal(itemInput.quantity).mul(unitsPerItem).mul(-1), // Negative for sales, in base units
           type: 'SALE' as const,
           refType: 'invoice_line',
           refId: invoiceLine.id,

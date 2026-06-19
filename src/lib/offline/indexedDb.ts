@@ -19,6 +19,7 @@ export interface CachedProduct {
   trackStock: boolean
   cartonSize?: number | null
   cartonBarcode?: string | null
+  packagingLevels?: Array<{ name: string; factorToBase: number; price: number | null; barcode: string | null; level: number }>
   updatedAt: number // timestamp
 }
 
@@ -82,6 +83,7 @@ export interface CachedSale {
     quantity: number
     unitPrice: number
     lineTotal: number
+    unitsPerItem?: number
   }>
   subtotal: number
   discount: number

@@ -12,6 +12,7 @@ interface SyncSaleInput {
     quantity: number
     unitPrice: number
     lineTotal: number
+    unitsPerItem?: number
   }>
   subtotal: number
   discount: number
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             lineTotal: item.lineTotal,
+            unitsPerItem: item.unitsPerItem,
           })),
           subtotal: sale.subtotal,
           discount: sale.discount,

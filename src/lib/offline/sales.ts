@@ -12,6 +12,7 @@ export interface SaleInput {
     quantity: number
     unitPrice: number
     lineTotal: number
+    unitsPerItem?: number
   }>
   subtotal: number
   discount: number
