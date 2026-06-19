@@ -90,6 +90,10 @@ export default function ProductsPage() {
     packagingLevels: [] as PackLevelRow[],
   })
   const showPackaging = user?.features?.unitSplitting === true
+  // Units offered in the form come from the shop's settings-managed list (seeded by
+  // business type); fall back to the historical defaults for legacy/unknown shops.
+  const featureUnits = (user?.features as any)?.units as string[] | undefined
+  const shopUnits = featureUnits?.length ? featureUnits : COMMON_UNITS
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
@@ -849,7 +853,9 @@ export default function ProductsPage() {
                     onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                     className="w-full"
                   >
-                    {COMMON_UNITS.map((unit) => (
+                    {/* Shop units + the product's own current unit, so editing a product
+                        whose unit was later removed from Settings never loses it. */}
+                    {Array.from(new Set([...shopUnits, formData.unit].filter(Boolean))).map((unit) => (
                       <option key={unit} value={unit}>
                         {unit}
                       </option>

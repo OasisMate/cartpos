@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer, Globe, SlidersHorizontal } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
-import { presetForType } from '@/lib/domain/business-presets'
+import { presetForType, getShopUnits, normalizeUnits } from '@/lib/domain/business-presets'
 import { COMMON_TIMEZONES } from '@/lib/utils/timezone'
 import { validatePassword } from '@/lib/validation/password'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
@@ -59,9 +59,12 @@ export default function SettingsPage() {
     enableUnitSplitting: false,
     enableTradePricing: true,
     batchExpiry: false,
+    units: [] as string[],
   })
   // Shop's business type (drives which feature sections show). Null until loaded.
   const [businessType, setBusinessType] = useState<string | null>(null)
+  // Draft text for adding a new product unit.
+  const [newUnit, setNewUnit] = useState('')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -146,6 +149,7 @@ export default function SettingsPage() {
             enableUnitSplitting: Boolean(data.settings?.enableUnitSplitting),
             enableTradePricing: data.settings?.enableTradePricing !== false,
             batchExpiry: Boolean(data.settings?.featureConfig?.batchExpiry),
+            units: getShopUnits(data.settings?.featureConfig, data.businessType as any),
           })
           setBusinessType(data.businessType ?? null)
           if (data.settings?.logoUrl) {
@@ -366,7 +370,7 @@ export default function SettingsPage() {
           removeServiceChargeOnDelivery: shopSettings.removeServiceChargeOnDelivery,
           enableUnitSplitting: shopSettings.enableUnitSplitting,
           enableTradePricing: shopSettings.enableTradePricing,
-          featureConfig: { batchExpiry: shopSettings.batchExpiry },
+          featureConfig: { batchExpiry: shopSettings.batchExpiry, units: normalizeUnits(shopSettings.units) },
         }),
       })
 
@@ -385,6 +389,21 @@ export default function SettingsPage() {
     } finally {
       setSavingSettings(false)
     }
+  }
+
+  // Product-unit list management (saved into featureConfig.units on submit).
+  const addUnit = () => {
+    const u = newUnit.trim()
+    if (!u) return
+    if (shopSettings.units.some((x) => x.toLowerCase() === u.toLowerCase())) {
+      setNewUnit('')
+      return
+    }
+    setShopSettings({ ...shopSettings, units: [...shopSettings.units, u] })
+    setNewUnit('')
+  }
+  const removeUnit = (u: string) => {
+    setShopSettings({ ...shopSettings, units: shopSettings.units.filter((x) => x !== u) })
   }
 
   // Which feature sections to show is driven by the shop's business type (its preset
@@ -874,6 +893,82 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+
+          {/* Product units (always available; manages the unit dropdown used by products) */}
+          {isStoreManager && (
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <SlidersHorizontal className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Product units</h2>
+              </div>
+              {loadingSettings ? (
+                <div className="text-gray-600">Loading units...</div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-500">
+                    These units appear in the Add and Edit Product dropdown. Add the ones your shop uses and remove any you do not need.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {shopSettings.units.length === 0 && (
+                      <span className="text-sm text-gray-400">No units yet. Add one below.</span>
+                    )}
+                    {shopSettings.units.map((u) => (
+                      <span
+                        key={u}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 text-sm px-3 py-1 border border-blue-200"
+                      >
+                        {u}
+                        <button
+                          type="button"
+                          onClick={() => removeUnit(u)}
+                          disabled={savingSettings}
+                          aria-label={`Remove ${u}`}
+                          className="text-blue-400 hover:text-red-600 disabled:cursor-not-allowed text-base leading-none"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newUnit}
+                      onChange={(e) => setNewUnit(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addUnit()
+                        }
+                      }}
+                      placeholder="e.g. tablet, plate, gram"
+                      maxLength={24}
+                      disabled={savingSettings}
+                      className="w-52 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={addUnit}
+                      disabled={savingSettings || !newUnit.trim()}
+                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add unit
+                    </button>
+                  </div>
+                  <div className="pt-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={handleShopSettingsSubmit}
+                      disabled={savingSettings}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingSettings ? 'Saving...' : 'Save units'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Business Features (shown only when the shop's business type has them) */}
           {isStoreManager && hasAnyFeature && (

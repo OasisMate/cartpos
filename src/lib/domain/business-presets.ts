@@ -30,12 +30,76 @@ export interface BusinessFeatureFlags {
 /** Typed shape of the ShopSettings.featureConfig JSON bag. Add vertical extras here. */
 export interface FeatureConfig {
   batchExpiry?: boolean
+  /** Editable per-shop unit list used by the product form. Seeded by business type. */
+  units?: string[]
 }
 
 /** Safe reader for the featureConfig JSON column (handles null/legacy rows). */
 export function readFeatureConfig(json: unknown): FeatureConfig {
   if (!json || typeof json !== 'object' || Array.isArray(json)) return {}
   return json as FeatureConfig
+}
+
+// -----------------------------------------------------
+// Per-shop units (stored in featureConfig.units, managed in Settings).
+// -----------------------------------------------------
+
+/** Fallback unit list (the historical hardcoded set) for lean retail and unknown types. */
+export const DEFAULT_UNITS = ['pcs', 'kg', 'g', 'L', 'mL', 'pack', 'box', 'dozen']
+
+/** Starter unit list per business type. Only list types that differ from DEFAULT_UNITS. */
+const UNIT_PRESETS: Partial<Record<OrganizationType, string[]>> = {
+  PHARMACY: ['tablet', 'capsule', 'strip', 'bottle', 'sachet', 'ml', 'vial', 'tube', 'pen', 'box', 'pcs'],
+  RESTAURANT: ['plate', 'item', 'piece', 'cup', 'glass', 'bowl', 'pcs'],
+  HARDWARE_STORE: ['pcs', 'ft', 'meter', 'kg', 'bag', 'box', 'roll', 'set', 'pair'],
+  SANITARY_STORE: ['pcs', 'ft', 'meter', 'set', 'box', 'roll', 'pair'],
+  AUTO_PARTS: ['pcs', 'set', 'pair', 'box', 'L'],
+  ELECTRONICS_STORE: ['pcs', 'box', 'set', 'pair', 'unit'],
+  MOBILE_ACCESSORIES: ['pcs', 'box', 'set', 'pair', 'unit'],
+  FURNITURE_STORE: ['pcs', 'set', 'pair'],
+  WHOLESALE: ['pcs', 'kg', 'g', 'carton', 'bag', 'dozen', 'pack', 'box'],
+  JEWELRY_STORE: ['pcs', 'gram', 'tola', 'set', 'pair'],
+  OPTICAL_STORE: ['pcs', 'pair', 'box', 'set'],
+  CLOTHING_STORE: ['pcs', 'pair', 'set', 'dozen', 'meter'],
+  FOOTWEAR_STORE: ['pair', 'pcs', 'set', 'box'],
+  COSMETICS_STORE: ['pcs', 'bottle', 'tube', 'box', 'pack'],
+  STATIONERY_STORE: ['pcs', 'pack', 'box', 'dozen', 'ream', 'set'],
+  BAKERY: ['pcs', 'item', 'piece', 'box', 'pack', 'dozen', 'kg'],
+}
+
+/** The starter unit list for a business type (falls back to DEFAULT_UNITS). */
+export function unitsForType(type: OrganizationType | null | undefined): string[] {
+  return (type && UNIT_PRESETS[type]) || DEFAULT_UNITS
+}
+
+/** Clean a unit list: trim, drop empties, de-dupe (case-insensitive), cap length + count. */
+export function normalizeUnits(list: unknown): string[] {
+  if (!Array.isArray(list)) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of list) {
+    if (typeof raw !== 'string') continue
+    const u = raw.trim().slice(0, 24)
+    if (!u) continue
+    const key = u.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(u)
+    if (out.length >= 40) break
+  }
+  return out
+}
+
+/**
+ * The units a shop should offer: its saved list if any, else the type preset.
+ * Legacy shops with no featureConfig.units transparently get the preset.
+ */
+export function getShopUnits(
+  featureConfig: unknown,
+  type: OrganizationType | null | undefined
+): string[] {
+  const fromCfg = normalizeUnits(readFeatureConfig(featureConfig).units)
+  return fromCfg.length ? fromCfg : unitsForType(type)
 }
 
 // Conservative baseline. Anything not explicitly turned on by a type stays off,
@@ -120,7 +184,7 @@ export function presetShopSettingsData(
   | 'featureConfig'
 > {
   const flags = presetForType(type)
-  const featureConfig = { batchExpiry: flags.batchExpiry } as Prisma.InputJsonObject
+  const featureConfig = { batchExpiry: flags.batchExpiry, units: unitsForType(type) } as Prisma.InputJsonObject
   return {
     enableQuotations: flags.enableQuotations,
     enableServiceCharge: flags.enableServiceCharge,

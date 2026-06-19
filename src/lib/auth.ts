@@ -4,7 +4,7 @@ import { prisma } from './db/prisma'
 import { cookies } from 'next/headers'
 import { isDatabaseConnectionError } from './db/db-utils'
 import { withRetry } from './db/connection-retry'
-import { presetForType, readFeatureConfig } from './domain/business-presets'
+import { presetForType, readFeatureConfig, getShopUnits } from './domain/business-presets'
 
 const secretKey = process.env.JWT_SECRET
 if (!secretKey || secretKey.length < 32) {
@@ -170,7 +170,8 @@ export async function getCurrentUser() {
     // preset if a settings row doesn't exist yet.
     const currentShop = shops.find((s) => s.shopId === currentShopId)?.shop
     const currentSettings = (currentShop as any)?.settings
-    const preset = presetForType((currentShop as any)?.organization?.type)
+    const currentType = (currentShop as any)?.organization?.type
+    const preset = presetForType(currentType)
     const batchExpiry = readFeatureConfig(currentSettings?.featureConfig).batchExpiry ?? preset.batchExpiry
     const features = {
       quotations: currentSettings?.enableQuotations ?? preset.enableQuotations,
@@ -178,6 +179,7 @@ export async function getCurrentUser() {
       deliveryCharge: currentSettings?.enableDeliveryCharge ?? preset.enableDeliveryCharge,
       unitSplitting: currentSettings?.enableUnitSplitting ?? preset.enableUnitSplitting,
       batchExpiry,
+      units: getShopUnits(currentSettings?.featureConfig, currentType),
     }
 
     return {
