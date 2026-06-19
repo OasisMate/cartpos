@@ -32,7 +32,11 @@ interface Product {
   archivedAt: string | null
   createdAt: string
   updatedAt: string
+  packagingLevels?: Array<{ name: string; factorToBase: number; price: number | null; barcode: string | null; level: number }>
 }
+
+// One editable packaging-level row in the product form (strings for inputs).
+interface PackLevelRow { name: string; factorToBase: string; price: string; barcode: string }
 
 interface ProductsResponse {
   products: Product[]
@@ -83,7 +87,9 @@ export default function ProductsPage() {
     cartonSize: '',
     cartonBarcode: '',
     initialStock: '',
+    packagingLevels: [] as PackLevelRow[],
   })
+  const showPackaging = user?.features?.unitSplitting === true
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
@@ -311,6 +317,7 @@ export default function ProductsPage() {
       cartonSize: '',
       cartonBarcode: '',
       initialStock: '',
+      packagingLevels: [],
     })
     setError('')
     setShowForm(true)
@@ -338,6 +345,12 @@ export default function ProductsPage() {
       cartonSize: product.cartonSize?.toString() || '',
       cartonBarcode: product.cartonBarcode || '',
       initialStock: '', // Not editable for existing products
+      packagingLevels: (product.packagingLevels || []).map((l) => ({
+        name: l.name,
+        factorToBase: String(l.factorToBase),
+        price: l.price != null ? String(l.price) : '',
+        barcode: l.barcode || '',
+      })),
     })
     setError('')
     setShowForm(true)
@@ -443,6 +456,21 @@ export default function ProductsPage() {
         }
       }
 
+      // Packaging levels (carton/box/...) — send only when the feature is on. Always send the
+      // array (even empty) when editing so removed levels are cleared server-side.
+      if (showPackaging) {
+        const levels = formData.packagingLevels
+          .filter((l) => l.name.trim() && parseFloat(l.factorToBase) > 0)
+          .map((l, idx) => ({
+            name: l.name.trim(),
+            factorToBase: parseFloat(l.factorToBase),
+            price: l.price.trim() !== '' ? parseFloat(l.price) : undefined,
+            barcode: l.barcode.trim() || undefined,
+            level: idx + 1,
+          }))
+        payload.packagingLevels = levels
+      }
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -507,6 +535,7 @@ export default function ProductsPage() {
           name: '', sku: '', barcode: '', unit: formData.unit, price: '',
           tradePrice: '', cartonPrice: '', costPrice: '', trackStock: formData.trackStock,
           reorderLevel: '', cartonSize: '', cartonBarcode: '', initialStock: '',
+          packagingLevels: [],
         })
         setError('')
         setTimeout(() => nameInputRef.current?.focus(), 0)
@@ -937,6 +966,71 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Packaging levels (multi-level selling: carton / box / loose unit). */}
+              {showPackaging && (
+                <div className="mt-6 border-t pt-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-sm font-semibold text-gray-700">Packaging levels</h3>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, packagingLevels: [...formData.packagingLevels, { name: '', factorToBase: '', price: '', barcode: '' }] })}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      + Add level
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Sell this product as bigger packs as well as the base unit ({formData.unit || 'unit'}).
+                    e.g. Box = 10, Carton = 200. Leave a level&apos;s price blank to derive it from the base price.
+                  </p>
+                  {formData.packagingLevels.length === 0 ? (
+                    <p className="text-xs text-gray-400">No extra levels. The product sells by its base unit only.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {formData.packagingLevels.map((lvl, idx) => (
+                        <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                          <Input
+                            className="col-span-4"
+                            placeholder="Name (e.g. Box)"
+                            value={lvl.name}
+                            onChange={(e) => { const next = [...formData.packagingLevels]; next[idx] = { ...lvl, name: e.target.value }; setFormData({ ...formData, packagingLevels: next }) }}
+                          />
+                          <Input
+                            className="col-span-3"
+                            type="number"
+                            placeholder={`${formData.unit || 'units'} / pack`}
+                            value={lvl.factorToBase}
+                            onChange={(e) => { const next = [...formData.packagingLevels]; next[idx] = { ...lvl, factorToBase: e.target.value }; setFormData({ ...formData, packagingLevels: next }) }}
+                          />
+                          <Input
+                            className="col-span-2"
+                            type="number"
+                            step="0.01"
+                            placeholder="Price"
+                            value={lvl.price}
+                            onChange={(e) => { const next = [...formData.packagingLevels]; next[idx] = { ...lvl, price: e.target.value }; setFormData({ ...formData, packagingLevels: next }) }}
+                          />
+                          <Input
+                            className="col-span-2"
+                            placeholder="Barcode"
+                            value={lvl.barcode}
+                            onChange={(e) => { const next = [...formData.packagingLevels]; next[idx] = { ...lvl, barcode: e.target.value }; setFormData({ ...formData, packagingLevels: next }) }}
+                          />
+                          <button
+                            type="button"
+                            aria-label="Remove level"
+                            onClick={() => setFormData({ ...formData, packagingLevels: formData.packagingLevels.filter((_, i) => i !== idx) })}
+                            className="col-span-1 text-gray-400 hover:text-red-600 text-lg leading-none"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="mt-4">
                 <label className="flex items-center gap-2">
