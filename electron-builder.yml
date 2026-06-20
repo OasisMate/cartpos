@@ -3,7 +3,6 @@ productName: CartPOS
 directories:
   output: dist
 files:
-  - 'out/**/*'
   - 'electron/**/*'
   - 'package.json'
   - 'node_modules/**/*'

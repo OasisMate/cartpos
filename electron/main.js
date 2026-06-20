@@ -1,19 +1,14 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 
-// Check if running in development (no need for electron-is-dev)
+// Development = local Next dev server; Production = the live deployed site.
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
-// Only require electron-serve in production
-let loadURL
-if (!isDev) {
-  try {
-    const serve = require('electron-serve')
-    loadURL = serve({ directory: 'out' })
-  } catch (err) {
-    console.error('Failed to load electron-serve:', err)
-  }
-}
+// The packaged desktop app is a thin shell over the live CartPOS site. This keeps
+// a real server behind it (API routes + DB) - a static export can't run those - and
+// the silent-print IPC handler below makes receipts print with no dialog.
+// Override the domain at build/run time with CARTPOS_DESKTOP_URL.
+const PROD_URL = process.env.CARTPOS_DESKTOP_URL || 'https://YOUR-CARTPOS-DOMAIN'
 
 let mainWindow
 
@@ -29,20 +24,12 @@ function createWindow() {
   })
 
   if (isDev) {
-    // Development: load from Next.js dev server
+    // Development: load from the local Next.js dev server
     mainWindow.loadURL('http://localhost:3000')
     mainWindow.webContents.openDevTools()
   } else {
-    // Production: load from built files
-    if (loadURL) {
-      loadURL(mainWindow)
-    } else {
-      // Fallback: load from Next.js standalone output
-      // Note: This requires Next.js to be built with output: 'standalone'
-      // For now, we'll need to run Next.js server or use static export
-      console.error('electron-serve not available. Next.js must run as server or use static export.')
-      mainWindow.loadURL('http://localhost:3000')
-    }
+    // Production: load the live deployed CartPOS site
+    mainWindow.loadURL(PROD_URL)
   }
 
   mainWindow.on('closed', () => {

@@ -55,6 +55,19 @@ Edge works the same way: use `msedge.exe` with `--kiosk-printing`.
 
 ---
 
+## Building the Windows desktop app (for whoever distributes it)
+The desktop app is a thin shell over the live CartPOS site, so receipts print silently to the
+Windows default printer with no per-user setup (no kiosk flag needed).
+1. Set the live URL once in `electron/main.js` (`PROD_URL`), or pass `CARTPOS_DESKTOP_URL` when building.
+2. Run `npm run electron:build` -> produces a portable `CartPOS <version>.exe` in `dist/`.
+3. Share that `.exe` (host it / send it). It is unsigned, so on first run Windows SmartScreen shows
+   "More info" > "Run anyway".
+4. The user double-clicks it (portable, no install), logs in, and enables Auto-print in Settings.
+   Receipts then print silently to the Windows default printer.
+
+Note: installing CartPOS from the Chrome address-bar prompt is the **PWA** (still a browser, shows the
+print dialog), NOT this desktop app. Silent desktop printing requires this `.exe`.
+
 ## How it works (for maintainers)
 - All silent printing routes through `printReceipt()` in `src/lib/utils/print.ts`.
 - Desktop: the Electron main process (`electron/main.js`, `print-receipt` IPC) renders the
