@@ -70,6 +70,11 @@ export default function ExpiryPage() {
           <CalendarClock className="h-7 w-7 text-blue-600" /> Expiry alerts
         </h1>
         <p className="text-gray-600">Batches expired or expiring within 60 days. Sell or remove these first.</p>
+        <p className="mt-1 text-sm text-gray-500">
+          Batches come from stock-in: add a <span className="font-medium">Batch #</span> and{' '}
+          <span className="font-medium">Expiry</span> on each line when you record a{' '}
+          <a href="/store/purchases" className="text-blue-600 hover:underline">Purchase</a>.
+        </p>
       </div>
 
       {loading ? (

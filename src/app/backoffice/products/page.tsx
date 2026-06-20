@@ -925,7 +925,9 @@ export default function ProductsPage() {
                 )}
               </div>
 
-              {/* Carton / Packing Section */}
+              {/* Carton / Packing Section — legacy 2-level packaging. Hidden when the shop
+                  uses the flexible multi-level "Packaging levels" below, to avoid duplication. */}
+              {!showPackaging && (
               <div className="mt-6 border-t pt-4">
                 <h3 className="text-sm font-semibold mb-3 text-gray-700">Carton / Packing Details</h3>
                 <div className="grid grid-cols-3 gap-4">
@@ -972,6 +974,7 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Packaging levels (multi-level selling: carton / box / loose unit). */}
               {showPackaging && (

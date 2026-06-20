@@ -216,12 +216,16 @@ export default function POSPage() {
   // `discount` always holds the resolved rupee amount used everywhere downstream.
   const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount')
   const [discountPercent, setDiscountPercent] = useState(0)
+  // Raw text of the discount inputs so decimals (e.g. "12.5") can be typed freely;
+  // the numeric `discount` / `discountPercent` above stay the source of truth for totals.
+  const [discountAmtStr, setDiscountAmtStr] = useState('')
+  const [discountPctStr, setDiscountPctStr] = useState('')
 
   // When in percent mode, keep the rupee discount in sync with subtotal × percent.
   useEffect(() => {
     if (discountMode !== 'percent') return
     const sub = cart.reduce((s, it) => s + it.lineTotal, 0)
-    const amt = Math.max(0, Math.min(sub, Math.round((sub * discountPercent) / 100)))
+    const amt = Math.max(0, Math.min(sub, roundToTwo((sub * discountPercent) / 100)))
     setDiscount(amt)
   }, [cart, discountPercent, discountMode])
   const [quickAddProduct, setQuickAddProduct] = useState<Product | null>(null)
@@ -1031,6 +1035,8 @@ export default function POSPage() {
     }
     setCart([])
     setDiscount(0)
+    setDiscountAmtStr('')
+    setDiscountPctStr('')
     setPaymentStatus('PAID')
     setPaymentMethod('CASH')
     setCustomerId('')
@@ -1082,6 +1088,8 @@ export default function POSPage() {
     // Reset current sale so cashier can continue with next customer
     setCart([])
     setDiscount(0)
+    setDiscountAmtStr('')
+    setDiscountPctStr('')
     setPaymentStatus('PAID')
     setPaymentMethod('CASH')
     setCustomerId('')
@@ -1096,6 +1104,11 @@ export default function POSPage() {
   function resumeHeldSale(held: HeldSale) {
     setCart(held.cart)
     setDiscount(held.discount)
+    // Held sales store the resolved rupee discount, so resume in amount mode (else the
+    // percent sync effect would recompute discount from a 0% and wipe it).
+    setDiscountMode('amount')
+    setDiscountAmtStr(held.discount ? String(held.discount) : '')
+    setDiscountPctStr('')
     setPaymentStatus(held.paymentStatus)
     setPaymentMethod(held.paymentMethod)
     setCustomerId(held.customerId)
@@ -1268,6 +1281,8 @@ export default function POSPage() {
       setDiscount(0)
       setDiscountMode('amount')
       setDiscountPercent(0)
+      setDiscountAmtStr('')
+      setDiscountPctStr('')
       setPaymentStatus('PAID')
       setPaymentMethod('CASH')
       setCustomerId('')
@@ -1928,15 +1943,17 @@ export default function POSPage() {
                     <Input
                       ref={discountInputRef}
                       type="number"
-                      step="1"
+                      step="any"
                       min={0}
-                      max={Math.floor(subtotal)}
-                      value={Math.round(discount).toString()}
+                      max={subtotal}
+                      value={discountAmtStr}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0
-                        const rounded = Math.round(val)
-                        setDiscount(Math.max(0, Math.min(Math.floor(subtotal), rounded)))
+                        const s = e.target.value
+                        setDiscountAmtStr(s)
+                        const val = parseFloat(s)
+                        setDiscount(Number.isFinite(val) ? Math.max(0, Math.min(subtotal, roundToTwo(val))) : 0)
                       }}
+                      onBlur={() => setDiscountAmtStr(discount ? String(discount) : '')}
                       className="w-20 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="0"
                     />
@@ -1944,14 +1961,17 @@ export default function POSPage() {
                     <div className="flex items-center gap-1">
                       <Input
                         type="number"
-                        step="1"
+                        step="any"
                         min={0}
                         max={100}
-                        value={Math.round(discountPercent).toString()}
+                        value={discountPctStr}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0
-                          setDiscountPercent(Math.max(0, Math.min(100, Math.round(val))))
+                          const s = e.target.value
+                          setDiscountPctStr(s)
+                          const val = parseFloat(s)
+                          setDiscountPercent(Number.isFinite(val) ? Math.max(0, Math.min(100, val)) : 0)
                         }}
+                        onBlur={() => setDiscountPctStr(discountPercent ? String(discountPercent) : '')}
                         className="w-16 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         placeholder="0"
                       />

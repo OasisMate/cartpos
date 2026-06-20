@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 type Size = 'sm' | 'md' | 'lg' | 'xl'
@@ -29,9 +30,12 @@ export default function Modal({
   size?: Size
   children: React.ReactNode
 }) {
-  if (!open) return null
+  // Render only on the client (portal needs document) and only when open.
+  if (!open || typeof document === 'undefined') return null
 
-  return (
+  // Portal to <body> so the overlay escapes any parent stacking context
+  // (e.g. POS sticky headers with z-index) and reliably covers the whole page.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onMouseDown={(e) => {
@@ -56,6 +60,7 @@ export default function Modal({
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
