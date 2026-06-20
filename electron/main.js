@@ -8,7 +8,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 // a real server behind it (API routes + DB) - a static export can't run those - and
 // the silent-print IPC handler below makes receipts print with no dialog.
 // Override the domain at build/run time with CARTPOS_DESKTOP_URL.
-const PROD_URL = process.env.CARTPOS_DESKTOP_URL || 'https://YOUR-CARTPOS-DOMAIN'
+const PROD_URL = process.env.CARTPOS_DESKTOP_URL || 'https://cartpos.vercel.app'
 
 let mainWindow
 
