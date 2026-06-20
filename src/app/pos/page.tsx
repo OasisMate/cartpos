@@ -230,6 +230,8 @@ export default function POSPage() {
   }, [cart, discountPercent, discountMode])
   const [quickAddProduct, setQuickAddProduct] = useState<Product | null>(null)
   const [quickAddQuantity, setQuickAddQuantity] = useState('1')
+  // Keyboard selection in the packaging-level modal: 0 = base/loose unit, 1..n = packaging levels.
+  const [quickAddLevelIdx, setQuickAddLevelIdx] = useState(0)
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'UDHAAR'>('PAID')
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'OTHER'>('CASH')
   const [customerId, setCustomerId] = useState('')
@@ -488,6 +490,11 @@ export default function POSPage() {
       setEditForm({ quantity: editingItem.quantity, price: editingItem.unitPrice })
     }
   }, [editingItem])
+
+  // Reset the keyboard highlight to the base unit each time the quick-add modal opens.
+  useEffect(() => {
+    if (quickAddProduct) setQuickAddLevelIdx(0)
+  }, [quickAddProduct])
 
   useEffect(() => {
     // Focus barcode input on mount
@@ -2350,13 +2357,29 @@ export default function POSPage() {
                   value={quickAddQuantity}
                   onChange={(e) => setQuickAddQuantity(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      handleQuickAdd(false)
-                    }
                     if (e.key === 'Escape') {
+                      e.preventDefault()
                       setQuickAddProduct(null)
                       setQuickAddQuantity('1')
+                      return
+                    }
+                    const levels = quickAddProduct.packagingLevels
+                    if (levels && levels.length > 0) {
+                      // Arrow keys move the highlight (0 = loose, 1..n = levels); Enter picks it.
+                      const count = levels.length + 1
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        setQuickAddLevelIdx((i) => Math.min(count - 1, i + 1))
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        setQuickAddLevelIdx((i) => Math.max(0, i - 1))
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleQuickAddLevel(quickAddLevelIdx === 0 ? null : levels[quickAddLevelIdx - 1])
+                      }
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleQuickAdd(false)
                     }
                   }}
                   className="w-full text-lg"
@@ -2374,22 +2397,26 @@ export default function POSPage() {
               {quickAddProduct.packagingLevels && quickAddProduct.packagingLevels.length > 0 ? (
                 // Pick a packaging level (or the base unit). Levels are ordered largest-pack last.
                 <div className="space-y-2">
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Use ↑ / ↓ to choose a pack, Enter to add.</p>
                   <button
                     type="button"
                     onClick={() => handleQuickAddLevel(null)}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))] transition-colors"
+                    onMouseEnter={() => setQuickAddLevelIdx(0)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-colors ${quickAddLevelIdx === 0 ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))]'}`}
                   >
                     <span className="font-medium">{quickAddProduct.unit} (loose)</span>
                     <span className="text-sm text-[hsl(var(--muted-foreground))]">{formatCurrency(quickAddProduct.price)}</span>
                   </button>
-                  {quickAddProduct.packagingLevels.map((lvl) => {
+                  {quickAddProduct.packagingLevels.map((lvl, idx) => {
                     const price = lvl.price != null ? lvl.price : quickAddProduct.price * lvl.factorToBase
+                    const active = quickAddLevelIdx === idx + 1
                     return (
                       <button
                         key={lvl.name}
                         type="button"
                         onClick={() => handleQuickAddLevel(lvl)}
-                        className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))] transition-colors"
+                        onMouseEnter={() => setQuickAddLevelIdx(idx + 1)}
+                        className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-colors ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))]'}`}
                       >
                         <span className="font-medium">{lvl.name} <span className="text-xs text-[hsl(var(--muted-foreground))]">({formatNumber(lvl.factorToBase)} {quickAddProduct.unit})</span></span>
                         <span className="text-sm text-[hsl(var(--muted-foreground))]">{formatCurrency(price)}</span>
