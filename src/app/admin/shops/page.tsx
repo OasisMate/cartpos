@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import Button from '@/components/ui/Button'
 import IconButton from '@/components/ui/IconButton'
 import EmptyState from '@/components/ui/EmptyState'
 
@@ -36,16 +35,7 @@ export default function AdminShopsPage() {
   const router = useRouter()
   const [shops, setShops] = useState<Shop[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState({
-    name: '',
-    city: '',
-    ownerName: '',
-    ownerEmail: '',
-    ownerPassword: '',
-  })
   const [error, setError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   const [openingId, setOpeningId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -93,43 +83,6 @@ export default function AdminShopsPage() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setSubmitting(true)
-
-    try {
-      const response = await fetch('/api/admin/shops', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to create shop')
-        setSubmitting(false)
-        return
-      }
-
-      // Reset form and refresh list
-      setFormData({
-        name: '',
-        city: '',
-        ownerName: '',
-        ownerEmail: '',
-        ownerPassword: '',
-      })
-      setShowForm(false)
-      await fetchShops()
-    } catch (err) {
-      setError('An error occurred. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   if (user?.role !== 'PLATFORM_ADMIN') {
     return (
       <div>
@@ -150,88 +103,15 @@ export default function AdminShopsPage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:justify-between sm:items-center">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold">Shops</h1>
-        <Button variant={showForm ? 'outline' : 'primary'} onClick={() => setShowForm(!showForm)} className="w-full sm:w-auto">
-          {showForm ? 'Cancel' : 'Create Shop'}
-        </Button>
+        <p className="mt-1 text-sm text-gray-500">
+          All stores across every organization. To add a store, open its organization and create it from the Stores tab.
+        </p>
       </div>
 
-      {showForm && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <h2 className="text-lg font-semibold mb-4">Create New Shop</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 bg-red-50 text-red-800 rounded-md text-sm">
-                {error}
-              </div>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Shop Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  City
-                </label>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Owner Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.ownerName}
-                onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Owner Email *
-              </label>
-              <input
-                type="email"
-                required
-                value={formData.ownerEmail}
-                onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Owner Password *
-              </label>
-              <input
-                type="password"
-                required
-                value={formData.ownerPassword}
-                onChange={(e) => setFormData({ ...formData, ownerPassword: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500"
-              />
-            </div>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Creating...' : 'Create Shop'}
-            </Button>
-          </form>
-        </div>
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 text-red-800 rounded-md text-sm">{error}</div>
       )}
 
       {/* Desktop table */}
