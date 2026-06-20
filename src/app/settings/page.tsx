@@ -1229,24 +1229,6 @@ export default function SettingsPage() {
               <div className="text-gray-600">Loading printer settings...</div>
             ) : (
               <form onSubmit={handleShopSettingsSubmit} className="space-y-4">
-                <div>
-                  <label htmlFor="printerName" className="block text-sm font-medium text-gray-700 mb-2">
-                    Printer Name
-                  </label>
-                  <input
-                    type="text"
-                    id="printerName"
-                    value={shopSettings.printerName}
-                    onChange={(e) => setShopSettings({ ...shopSettings, printerName: e.target.value })}
-                    placeholder="Enter printer name (e.g., Thermal Printer, HP LaserJet)"
-                    disabled={savingSettings}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    A label for your own reference only. Receipts always print to your Windows default printer (see below).
-                  </p>
-                </div>
-
                 <div className="flex items-center">
                   <input
                     type="checkbox"
