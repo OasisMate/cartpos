@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
+import dynamic from 'next/dynamic'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
@@ -16,7 +17,9 @@ import Select from '@/components/ui/Select'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/ToastProvider'
 import { Minus, Plus, X, ShoppingCart, Package, Trash2, Edit3, Keyboard } from 'lucide-react'
-import ReceiptModal from '@/components/receipt/ReceiptModal'
+// Receipt modal carries the print markup/CSS and only renders after a sale completes,
+// so load it lazily to keep it out of the initial POS bundle (faster first paint on mobile).
+const ReceiptModal = dynamic(() => import('@/components/receipt/ReceiptModal'), { ssr: false })
 import Modal from '@/components/ui/Modal'
 
 /** True when the keystroke is inside a text field (so global shortcuts shouldn't fire),

@@ -11,6 +11,13 @@ export async function GET() {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
+  // getCurrentUser omits the base64 avatar from its hot path; fetch it here only,
+  // since this is the one endpoint that feeds the sidebar/profile UI.
+  const avatar = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { profileImageUrl: true },
+  })
+
   return NextResponse.json({
     user: {
       id: user.id,
@@ -19,7 +26,7 @@ export async function GET() {
       phone: user.phone,
       cnic: user.cnic,
       isWhatsApp: user.isWhatsApp,
-      profileImageUrl: user.profileImageUrl,
+      profileImageUrl: avatar?.profileImageUrl ?? null,
       role: user.role,
       twoFactorEnabled: user.twoFactorEnabled,
       organizations: user.organizations,

@@ -114,7 +114,18 @@ export async function getCurrentUser() {
       () =>
         prisma.user.findUnique({
           where: { id: session.userId },
-          include: {
+          // Explicit select (not include) so the hot auth path never loads heavy/secret
+          // columns: the base64 profileImageUrl (~10-30KB) is fetched separately only by
+          // /api/me for the sidebar; passwordHash / 2FA secrets / tokens stay out entirely.
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            cnic: true,
+            isWhatsApp: true,
+            role: true,
+            twoFactorEnabled: true,
             organizations: {
               include: {
                 organization: true,
@@ -189,7 +200,8 @@ export async function getCurrentUser() {
       phone: user.phone,
       cnic: user.cnic,
       isWhatsApp: user.isWhatsApp,
-      profileImageUrl: user.profileImageUrl,
+      // Not loaded on the hot path; /api/me fetches it for the sidebar avatar.
+      profileImageUrl: null as string | null,
       role: user.role,
       twoFactorEnabled: user.twoFactorEnabled,
       organizations,
