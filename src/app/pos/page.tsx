@@ -1340,6 +1340,7 @@ export default function POSPage() {
     paymentMethod: receiptData.paymentMethod,
     payments: receiptData.amountReceived ? [{ amount: receiptData.amountReceived }] : undefined,
     customerName: receiptData.customerName,
+    servedBy: user?.name ?? null,
   } : null
 
   // Use cached search when offline, or filter products array when online

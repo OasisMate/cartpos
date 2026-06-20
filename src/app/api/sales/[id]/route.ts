@@ -29,6 +29,7 @@ export async function GET(
           },
         },
         payments: true,
+        createdBy: { select: { name: true } },
         shop: {
           include: {
             settings: {
@@ -46,7 +47,8 @@ export async function GET(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ invoice })
+    // servedBy drives the "Served by" line on the reprinted receipt (first name only).
+    return NextResponse.json({ invoice: { ...invoice, servedBy: invoice.createdBy?.name ?? null } })
   } catch (error: any) {
     console.error('Get sale error:', error)
     return NextResponse.json({ error: error.message || 'Failed to get sale' }, { status: 500 })

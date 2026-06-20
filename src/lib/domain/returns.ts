@@ -237,6 +237,7 @@ export async function createReturn(shopId: string, userId: string, input: Create
             customerId: invoice.customerId,
             amount: D(-netRefund),
             method: 'CASH',
+            receivedById: userId,
             note: kind === 'EXCHANGE' ? 'Exchange settlement' : 'Return refund',
           },
         })

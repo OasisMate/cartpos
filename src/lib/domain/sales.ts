@@ -357,6 +357,7 @@ export async function createSale(
           invoiceId: invoice.id,
           amount: new Decimal(input.total),
           method: input.paymentMethod!,
+          receivedById: userId,
           note: input.amountReceived
             ? `Received: ${input.amountReceived}, Change: ${input.amountReceived - input.total}`
             : null,

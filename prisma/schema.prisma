@@ -148,6 +148,7 @@ model User {
   activityLogs     ActivityLog[]
   createdReturns   SaleReturn[]  @relation("SaleReturnCreatedBy")
   createdQuotations Quotation[]  @relation("QuotationCreatedBy")
+  receivedPayments Payment[]     @relation("PaymentReceivedBy")
 
   @@index([phone])
   @@index([cnic])
@@ -729,13 +730,17 @@ model Payment {
   note        String?
   /// Offline client id — dedupes udhaar payments created offline so re-sync can't duplicate them.
   clientId    String?
+  /// Staff member who received/recorded this payment (accountability). Null = recorded before tracking.
+  receivedById String?
   createdAt   DateTime        @default(now())
   shop        Shop            @relation(fields: [shopId], references: [id])
   invoice     Invoice?        @relation(fields: [invoiceId], references: [id])
   customer    Customer?       @relation(fields: [customerId], references: [id])
+  receivedBy  User?           @relation("PaymentReceivedBy", fields: [receivedById], references: [id])
 
   @@unique([shopId, clientId])
   @@index([shopId, createdAt])
+  @@index([receivedById])
 }
 
 // -----------------------------------------------------

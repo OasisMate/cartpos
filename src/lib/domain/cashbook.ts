@@ -8,6 +8,8 @@ export interface CashBookRow {
   label: string
   ref: string | null
   amount: number
+  /** Staff member who received/recorded this entry (null for older rows / non-payment kinds). */
+  receivedBy?: string | null
 }
 
 export interface CashBook {
@@ -47,6 +49,7 @@ export async function getCashBook(
         invoiceId: true,
         invoice: { select: { number: true } },
         customer: { select: { name: true } },
+        receivedBy: { select: { name: true } },
       },
       orderBy: { createdAt: 'asc' },
     }),
@@ -76,6 +79,7 @@ export async function getCashBook(
         label: p.note || (isSale ? 'Cash sale' : `Udhaar payment${p.customer?.name ? ` (${p.customer.name})` : ''}`),
         ref: isSale ? (p.invoice?.number ? `#${p.invoice.number}` : null) : null,
         amount: amt,
+        receivedBy: p.receivedBy?.name ?? null,
       })
     } else {
       refundOutflows.push({
@@ -85,6 +89,7 @@ export async function getCashBook(
         label: p.note || 'Refund',
         ref: p.invoice?.number ? `#${p.invoice.number}` : null,
         amount: Math.abs(amt),
+        receivedBy: p.receivedBy?.name ?? null,
       })
     }
   }

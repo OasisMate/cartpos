@@ -8,6 +8,8 @@ interface SyncPaymentInput {
   amount: number
   method: 'CASH' | 'CARD' | 'OTHER'
   note?: string
+  /** Optional: user who took the payment on the device. Falls back to the syncing user. */
+  receivedById?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest) {
               amount: p.amount,
               method: p.method,
               note: p.note || null,
+              receivedById: p.receivedById || user.id,
             },
           })
 

@@ -43,6 +43,8 @@ interface ReceiptModalProps {
     customer?: {
       name?: string | null
     } | null
+    /** Staff member who served the sale (first name shown on the receipt). */
+    servedBy?: string | null
   }
   printElementId?: string
   /** When true, opens the print flow as soon as the receipt is visible (shop setting on POS). */

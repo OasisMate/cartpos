@@ -42,6 +42,7 @@ export default async function CashBookPage({
           <td className="py-1.5">
             {r.label}
             {r.ref ? ` ${r.ref}` : ''}
+            {r.receivedBy ? <span className="text-xs text-gray-500"> . by {r.receivedBy}</span> : ''}
           </td>
           <td className="text-right py-1.5 font-medium">{formatCurrency(r.amount)}</td>
         </tr>

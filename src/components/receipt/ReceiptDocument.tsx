@@ -39,6 +39,8 @@ export interface ReceiptDocumentInvoice {
   payments?: Array<{ amount: string | number }>
   customerName?: string | null
   customer?: { name?: string | null } | null
+  /** Staff member who served the sale. Rendered as first name only on the receipt. */
+  servedBy?: string | null
 }
 
 export default function ReceiptDocument({
@@ -71,6 +73,8 @@ export default function ReceiptDocument({
   const showName = receiptHeaderDisplay === 'NAME_ONLY' || receiptHeaderDisplay === 'BOTH'
   const showLogo = receiptHeaderDisplay === 'LOGO_ONLY' || receiptHeaderDisplay === 'BOTH'
   const customerName = invoice.customerName || invoice.customer?.name || null
+  // First name only on the printed/customer-facing receipt.
+  const servedBy = invoice.servedBy ? invoice.servedBy.trim().split(/\s+/)[0] : null
 
   return (
     <div id={id} className="bg-white text-gray-900 mx-auto" style={{ maxWidth: '80mm', paddingTop: 0, marginTop: 0 }}>
@@ -131,6 +135,12 @@ export default function ReceiptDocument({
           <div className="mt-1">
             <span className="font-semibold">Customer: </span>
             <span className="font-normal">{customerName}</span>
+          </div>
+        )}
+        {servedBy && (
+          <div className="mt-1">
+            <span className="font-semibold">Served by: </span>
+            <span className="font-normal">{servedBy}</span>
           </div>
         )}
       </div>
