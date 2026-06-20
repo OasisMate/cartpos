@@ -262,27 +262,29 @@ export default function BackofficeSalesPage() {
       <ConfirmDialog />
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Sales</h1>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search invoice no. or customer..."
-            className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+            className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
           />
-          <label className="text-sm text-gray-700">Payment</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setCurrentPage(1)
-              setStatusFilter(e.target.value as any)
-            }}
-            className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="ALL">All</option>
-            <option value="PAID">Paid</option>
-            <option value="UDHAAR">Udhaar</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-700">Payment</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setCurrentPage(1)
+                setStatusFilter(e.target.value as any)
+              }}
+              className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="ALL">All</option>
+              <option value="PAID">Paid</option>
+              <option value="UDHAAR">Udhaar</option>
+            </select>
+          </div>
         </div>
       </div>
 
