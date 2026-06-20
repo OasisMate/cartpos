@@ -113,7 +113,8 @@ export default function UsersPage() {
       ) : filteredUsers.length === 0 ? (
         <EmptyState title="No users found" description="Platform users will appear here." />
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="min-w-full border-collapse">
             <thead className="bg-gradient-to-r from-blue-50 to-orange-50">
               <tr>
@@ -235,6 +236,79 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile cards */}
+        <div className="space-y-3 sm:hidden">
+          {filteredUsers.map((u) => (
+            <div key={u.id} className="rounded-lg border border-gray-200 bg-white p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-base font-semibold">{u.name[0]?.toUpperCase() || 'U'}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-gray-900 break-words">{u.name}</div>
+                  <div className="text-sm text-gray-500 flex items-center gap-1 break-all">
+                    <Mail className="h-4 w-4 flex-shrink-0" />
+                    {u.email}
+                  </div>
+                </div>
+                <span
+                  className={`px-2 py-1 rounded-md text-xs font-semibold inline-flex items-center gap-1 flex-shrink-0 ${
+                    u.role === 'PLATFORM_ADMIN' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {u.role === 'PLATFORM_ADMIN' ? (<><Shield className="h-3.5 w-3.5" />Admin</>) : 'Normal'}
+                </span>
+              </div>
+
+              {(u.phone || u.cnic) && (
+                <div className="mt-3 space-y-1 text-sm text-gray-700">
+                  {u.phone && (
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="h-4 w-4" />
+                      <span>{u.phone}</span> {u.isWhatsApp && <span className="text-green-600 text-xs">(WA)</span>}
+                    </div>
+                  )}
+                  {u.cnic && (
+                    <div className="flex items-center gap-1.5">
+                      <CreditCard className="h-4 w-4" />
+                      <span>{u.cnic}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {u.organizations.length > 0 && (
+                <div className="mt-3 space-y-1 text-sm text-gray-700">
+                  {u.organizations.map((org) => (
+                    <div key={org.orgId} className="flex items-center gap-1.5">
+                      <Building2 className="h-4 w-4 flex-shrink-0" />
+                      <span className="break-words">{org.organization.name}</span>
+                      <span className="text-xs text-gray-500">({org.orgRole})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {u.shops.length > 0 && (
+                <div className="mt-2 space-y-1 text-sm text-gray-700">
+                  {u.shops.map((shop) => (
+                    <div key={shop.shopId} className="flex items-center gap-1.5">
+                      <Store className="h-4 w-4 flex-shrink-0" />
+                      <span className="break-words">{shop.shop.name}</span>
+                      <span className="text-xs text-gray-500">({shop.shopRole})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-3 text-xs text-gray-400">
+                Joined {format(new Date(u.createdAt), 'MMM d, yyyy')}
+              </div>
+            </div>
+          ))}
+        </div>
+        </>
       )}
     </div>
   )

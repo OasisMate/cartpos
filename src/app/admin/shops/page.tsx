@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Eye } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import Button from '@/components/ui/Button'
+import IconButton from '@/components/ui/IconButton'
 import EmptyState from '@/components/ui/EmptyState'
 
 interface Shop {
@@ -30,6 +33,7 @@ interface Shop {
 
 export default function AdminShopsPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [shops, setShops] = useState<Shop[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -42,12 +46,38 @@ export default function AdminShopsPage() {
   })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [openingId, setOpeningId] = useState<string | null>(null)
 
   useEffect(() => {
     if (user?.role === 'PLATFORM_ADMIN') {
       fetchShops()
     }
   }, [user])
+
+  // Jump straight into a store's content. The parent /org layout requires a
+  // currentOrgId cookie, so (like "Enter Org") we select the org first, then
+  // navigate to the store drill-down. The store layouts read orgId/storeId from
+  // the URL, so PLATFORM_ADMIN sees the full store view.
+  async function viewStore(shop: Shop) {
+    const orgId = shop.organization?.id
+    if (!orgId || openingId) return
+    setOpeningId(shop.id)
+    try {
+      const res = await fetch('/api/org/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to open store')
+      }
+      router.push(`/org/${orgId}/stores/${shop.id}`)
+    } catch (err: any) {
+      setError(err.message || 'Failed to open store')
+      setOpeningId(null)
+    }
+  }
 
   async function fetchShops() {
     try {
@@ -120,9 +150,9 @@ export default function AdminShopsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:justify-between sm:items-center">
         <h1 className="text-2xl font-bold">Shops</h1>
-        <Button variant={showForm ? 'outline' : 'primary'} onClick={() => setShowForm(!showForm)}>
+        <Button variant={showForm ? 'outline' : 'primary'} onClick={() => setShowForm(!showForm)} className="w-full sm:w-auto">
           {showForm ? 'Cancel' : 'Create Shop'}
         </Button>
       </div>
@@ -136,7 +166,7 @@ export default function AdminShopsPage() {
                 {error}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Shop Name *
@@ -204,16 +234,18 @@ export default function AdminShopsPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      {/* Desktop table */}
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-gray-50">
             <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              <th className="px-4 py-3 w-[22%]">Shop Name</th>
-              <th className="px-4 py-3 w-[20%]">Organization</th>
-              <th className="px-4 py-3 w-[12%]">City</th>
-              <th className="px-4 py-3 w-[26%]">Owner</th>
-              <th className="px-4 py-3 w-[12%]">Stats</th>
+              <th className="px-4 py-3 w-[20%]">Shop Name</th>
+              <th className="px-4 py-3 w-[18%]">Organization</th>
+              <th className="px-4 py-3 w-[11%]">City</th>
+              <th className="px-4 py-3 w-[24%]">Owner</th>
+              <th className="px-4 py-3 w-[11%]">Stats</th>
               <th className="px-4 py-3 w-[8%]">Created</th>
+              <th className="px-4 py-3 w-[8%] text-right">View</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200 align-top">
@@ -242,10 +274,61 @@ export default function AdminShopsPage() {
                 <td className="px-4 py-3 text-xs text-gray-500">
                   {new Date(shop.createdAt).toLocaleDateString()}
                 </td>
+                <td className="px-4 py-3 text-right">
+                  <IconButton
+                    variant="primary"
+                    label={shop.organization ? `View ${shop.name}` : 'No organization'}
+                    disabled={!shop.organization || openingId === shop.id}
+                    onClick={() => viewStore(shop)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </IconButton>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {shops.length === 0 && (
+          <EmptyState title="No shops yet" description="Create your first shop to get started." />
+        )}
+      </div>
+
+      {/* Mobile cards */}
+      <div className="space-y-3 sm:hidden">
+        {shops.map((shop) => (
+          <div key={shop.id} className="rounded-lg border border-gray-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold text-gray-900 break-words">{shop.name}</div>
+                <div className="text-sm text-gray-500 break-words">
+                  {shop.organization?.name || 'No organization'}
+                  {shop.city ? ` · ${shop.city}` : ''}
+                </div>
+              </div>
+              <IconButton
+                variant="primary"
+                label={shop.organization ? `View ${shop.name}` : 'No organization'}
+                disabled={!shop.organization || openingId === shop.id}
+                onClick={() => viewStore(shop)}
+                className="flex-shrink-0"
+              >
+                <Eye className="h-4 w-4" />
+              </IconButton>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+              <div className="text-gray-500">Owner</div>
+              <div className="text-right text-gray-800 break-words">{shop.owners[0]?.user.name || '-'}</div>
+              <div className="text-gray-500">Products</div>
+              <div className="text-right text-gray-800">{shop._count.products}</div>
+              <div className="text-gray-500">Customers</div>
+              <div className="text-right text-gray-800">{shop._count.customers}</div>
+              <div className="text-gray-500">Invoices</div>
+              <div className="text-right text-gray-800">{shop._count.invoices}</div>
+              <div className="text-gray-500">Created</div>
+              <div className="text-right text-gray-800">{new Date(shop.createdAt).toLocaleDateString()}</div>
+            </div>
+          </div>
+        ))}
         {shops.length === 0 && (
           <EmptyState title="No shops yet" description="Create your first shop to get started." />
         )}

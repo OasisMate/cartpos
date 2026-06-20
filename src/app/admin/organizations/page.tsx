@@ -361,18 +361,18 @@ export default function OrganizationsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent">
             Organizations Management
           </h1>
           <p className="text-gray-600">Manage organizations and approvals</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-3 py-2 border border-gray-300 rounded-md bg-white"
+            className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md bg-white"
           >
             <option value="ALL">All Status</option>
             <option value="PENDING">Pending</option>
@@ -382,7 +382,7 @@ export default function OrganizationsPage() {
           </select>
           <button
             onClick={() => { setCreateError(''); setShowCreateModal(true) }}
-            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-md transition-colors"
+            className="w-full sm:w-auto whitespace-nowrap px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-md transition-colors"
           >
             + Create Organization
           </button>
@@ -400,8 +400,8 @@ export default function OrganizationsPage() {
         <div className="space-y-4">
           {filteredOrgs.map((org) => (
             <div key={org.id} className="bg-white border border-gray-200 rounded-lg p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
+              <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-semibold">{org.name}</h3>
                     <span
@@ -438,7 +438,7 @@ export default function OrganizationsPage() {
                     Type: <span className="font-medium">{formatOrganizationType(org.type)}</span>
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 sm:justify-end">
                   {org.status === 'ACTIVE' && (
                     <button
                       className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
@@ -622,7 +622,7 @@ export default function OrganizationsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 text-sm text-gray-600 border-t pt-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600 border-t pt-3">
                 <span>
                   <span className="font-medium">Shops:</span> {org._count.shops}
                 </span>
