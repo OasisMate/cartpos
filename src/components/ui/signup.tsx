@@ -4,6 +4,7 @@ import { useState, FormEvent, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
+import { Logo } from '@/components/ui/Logo'
 import { formatCNIC } from '@/lib/validation'
 import { validatePassword } from '@/lib/validation/password'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
@@ -189,12 +190,7 @@ export default function Signup() {
         <div className="flex-1 bg-gray-50 flex items-center justify-center p-8 md:p-12">
           <div className="w-full max-w-md">
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-500 rounded-lg mb-4">
-                <div className="w-6 h-6 bg-white rounded-sm relative">
-                  <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-2 h-3 bg-orange-500 rounded-b-sm"></div>
-                  <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 w-1 h-2 bg-red-500 rounded-t-sm"></div>
-                </div>
-              </div>
+              <Logo showText className="justify-center mb-4" href="/" />
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Request Submitted</h2>
               <p className="text-gray-600">
                 Your organization registration is pending admin approval
@@ -235,12 +231,7 @@ export default function Signup() {
         <div className="w-full max-w-6xl">
           {/* Logo/Icon */}
           <div className="text-center mb-3">
-            <div className="inline-flex items-center justify-center w-10 h-10 bg-blue-500 rounded-lg mb-2">
-              <div className="w-5 h-5 bg-white rounded-sm relative">
-                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-2 h-3 bg-orange-500 rounded-b-sm"></div>
-                <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 w-1 h-2 bg-red-500 rounded-t-sm"></div>
-              </div>
-            </div>
+            <Logo showText className="justify-center mb-2" href="/" />
             <h2 className="text-xl font-bold text-gray-900">
               Create Organization
             </h2>
