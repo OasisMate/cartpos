@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { format } from 'date-fns'
 import { User, Mail, Phone, CreditCard, Shield, Building2, Store } from 'lucide-react'
 import EmptyState from '@/components/ui/EmptyState'
+import { UserAvatar } from '@/components/ui/UserAvatar'
 
 interface AdminUser {
   id: string
@@ -13,6 +14,7 @@ interface AdminUser {
   phone: string | null
   cnic: string | null
   isWhatsApp: boolean
+  profileImageUrl: string | null
   role: 'PLATFORM_ADMIN' | 'NORMAL'
   createdAt: string
   organizations: Array<{
@@ -146,11 +148,7 @@ export default function UsersPage() {
                 >
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-base font-semibold">
-                          {u.name[0]?.toUpperCase() || 'U'}
-                        </span>
-                      </div>
+                      <UserAvatar name={u.name} imageUrl={u.profileImageUrl} className="h-10 w-10 text-base" />
                       <div>
                         <div className="font-semibold text-base text-gray-900">{u.name}</div>
                         <div className="text-sm text-gray-500 flex items-center gap-1 mt-1">
@@ -242,9 +240,7 @@ export default function UsersPage() {
           {filteredUsers.map((u) => (
             <div key={u.id} className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-base font-semibold">{u.name[0]?.toUpperCase() || 'U'}</span>
-                </div>
+                <UserAvatar name={u.name} imageUrl={u.profileImageUrl} className="h-10 w-10 text-base" />
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-gray-900 break-words">{u.name}</div>
                   <div className="text-sm text-gray-500 flex items-center gap-1 break-all">

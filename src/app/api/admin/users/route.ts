@@ -17,6 +17,7 @@ export async function GET() {
         phone: true,
         cnic: true,
         isWhatsApp: true,
+        profileImageUrl: true,
         role: true,
         createdAt: true,
         organizations: {

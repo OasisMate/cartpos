@@ -10,6 +10,7 @@ import { presetForType, getShopUnits, normalizeUnits } from '@/lib/domain/busine
 import { COMMON_TIMEZONES } from '@/lib/utils/timezone'
 import { validatePassword } from '@/lib/validation/password'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
+import { UserAvatar } from '@/components/ui/UserAvatar'
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
@@ -26,6 +27,11 @@ export default function SettingsPage() {
     isWhatsApp: false,
   })
   
+  // Profile photo state
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+
   // Password form state
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -202,6 +208,69 @@ export default function SettingsPage() {
       setError(err.message || 'Failed to update profile')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.includes('png') && !file.type.includes('jpeg') && !file.type.includes('jpg')) {
+      setError('Only PNG or JPEG images are allowed')
+      return
+    }
+    if (file.size > 1 * 1024 * 1024) {
+      setError('File size must be less than 1MB')
+      return
+    }
+    setAvatarFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => setAvatarPreview(reader.result as string)
+    reader.readAsDataURL(file)
+    setError('')
+  }
+
+  const handleAvatarUpload = async () => {
+    if (!avatarFile) return
+    setUploadingAvatar(true)
+    setError('')
+    try {
+      const formData = new FormData()
+      formData.append('avatar', avatarFile)
+      const response = await fetch('/api/me/avatar', { method: 'POST', body: formData })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload photo')
+      }
+      setAvatarFile(null)
+      setAvatarPreview(null)
+      setSuccess('Profile photo updated')
+      await refreshUser()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload photo')
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  const handleAvatarRemove = async () => {
+    setUploadingAvatar(true)
+    setError('')
+    try {
+      const response = await fetch('/api/me/avatar', { method: 'DELETE' })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to remove photo')
+      }
+      setAvatarFile(null)
+      setAvatarPreview(null)
+      setSuccess('Profile photo removed')
+      await refreshUser()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to remove photo')
+    } finally {
+      setUploadingAvatar(false)
     }
   }
 
@@ -466,6 +535,50 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2 mb-4">
           <User className="h-5 w-5 text-blue-600" />
           <h2 className="text-xl font-semibold text-gray-900">Profile Information</h2>
+        </div>
+
+        {/* Profile photo */}
+        <div className="flex items-center gap-4 mb-6">
+          <UserAvatar
+            name={user.name}
+            imageUrl={avatarPreview ?? user.profileImageUrl}
+            className="h-16 w-16 text-2xl"
+          />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <label className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors">
+                Choose photo
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={handleAvatarChange}
+                  disabled={uploadingAvatar}
+                  className="hidden"
+                />
+              </label>
+              {avatarFile && (
+                <button
+                  type="button"
+                  onClick={handleAvatarUpload}
+                  disabled={uploadingAvatar}
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {uploadingAvatar ? 'Saving...' : 'Save photo'}
+                </button>
+              )}
+              {user.profileImageUrl && !avatarFile && (
+                <button
+                  type="button"
+                  onClick={handleAvatarRemove}
+                  disabled={uploadingAvatar}
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-500">PNG or JPEG, up to 1MB.</p>
+          </div>
         </div>
 
         <form onSubmit={handleProfileSubmit} className="space-y-4">
@@ -1262,7 +1375,7 @@ export default function SettingsPage() {
                       <li>
                         <span className="font-medium">Make your printer the default.</span> Windows Settings, then Bluetooth and
                         devices, then Printers and scanners, click your thermal printer, then Set as default. Also turn off
-                        "Let Windows manage my default printer".
+                        {' '}&quot;Let Windows manage my default printer&quot;.
                       </li>
                       <li>
                         <span className="font-medium">Create a Chrome shortcut.</span> Right-click the desktop, then New, then

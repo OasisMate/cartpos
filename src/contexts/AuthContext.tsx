@@ -10,6 +10,7 @@ interface User {
   phone?: string | null
   cnic?: string | null
   isWhatsApp?: boolean
+  profileImageUrl?: string | null
   role: string
   organizations?: Array<{
     orgId: string

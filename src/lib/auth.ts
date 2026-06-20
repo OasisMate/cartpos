@@ -189,6 +189,7 @@ export async function getCurrentUser() {
       phone: user.phone,
       cnic: user.cnic,
       isWhatsApp: user.isWhatsApp,
+      profileImageUrl: user.profileImageUrl,
       role: user.role,
       twoFactorEnabled: user.twoFactorEnabled,
       organizations,

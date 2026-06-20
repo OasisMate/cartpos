@@ -128,6 +128,7 @@ model User {
   phone     String?     @unique
   cnic      String?     @unique
   isWhatsApp Boolean   @default(false)
+  profileImageUrl String? // profile photo stored as a base64 data URL (PNG/JPEG)
   password  String      // hashed password
   role      UserRole    @default(NORMAL)
   emailVerified Boolean  @default(false) // email ownership confirmed via verification link

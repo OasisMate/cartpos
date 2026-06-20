@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
+import { UserAvatar } from '@/components/ui/UserAvatar'
 import { BrandSpinner } from '@/components/ui/BrandSpinner'
 import Link from 'next/link'
 import NotificationBell from '@/components/layout/NotificationBell'
@@ -651,11 +652,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     aria-expanded={userMenuOpen}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-orange-500 flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-xs font-semibold">
-                          {user.name?.[0]?.toUpperCase() || 'U'}
-                        </span>
-                      </div>
+                      <UserAvatar
+                        name={user.name}
+                        imageUrl={user.profileImageUrl}
+                        className="h-7 w-7 text-xs"
+                      />
                       {open && (
                         <div className="text-sm font-medium text-gray-900 truncate">
                           {user.name}
