@@ -26,6 +26,7 @@
     "clsx": "2.1.1",
     "date-fns": "4.1.0",
     "dexie": "^4.2.1",
+    "electron-serve": "^3.0.0",
     "framer-motion": "^12.23.24",
     "jose": "^6.1.1",
     "libphonenumber-js": "^1.12.26",
@@ -33,9 +34,9 @@
     "next": "14.2.35",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "react-easy-crop": "^5.5.7",
     "recharts": "3.4.1",
-    "tailwind-merge": "3.4.0",
-    "electron-serve": "^3.0.0"
+    "tailwind-merge": "3.4.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

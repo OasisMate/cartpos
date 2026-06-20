@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import dynamic from 'next/dynamic'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { Settings as SettingsIcon, Lock, User, Mail, Phone, CreditCard, Printer, Globe, SlidersHorizontal } from 'lucide-react'
@@ -11,6 +12,12 @@ import { COMMON_TIMEZONES } from '@/lib/utils/timezone'
 import { validatePassword } from '@/lib/validation/password'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
 import { UserAvatar } from '@/components/ui/UserAvatar'
+
+// Client-only; keeps the cropper library out of the initial settings bundle.
+const AvatarCropper = dynamic(
+  () => import('@/components/ui/AvatarCropper').then((m) => m.AvatarCropper),
+  { ssr: false }
+)
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
@@ -31,6 +38,8 @@ export default function SettingsPage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  // Source image (data URL) currently open in the crop modal, null when closed.
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
 
   // Password form state
   const [passwordData, setPasswordData] = useState({
@@ -213,20 +222,29 @@ export default function SettingsPage() {
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // Reset so picking the same file again re-triggers onChange.
+    e.target.value = ''
     if (!file) return
     if (!file.type.includes('png') && !file.type.includes('jpeg') && !file.type.includes('jpg')) {
       setError('Only PNG or JPEG images are allowed')
       return
     }
-    if (file.size > 1 * 1024 * 1024) {
-      setError('File size must be less than 1MB')
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB')
       return
     }
-    setAvatarFile(file)
-    const reader = new FileReader()
-    reader.onloadend = () => setAvatarPreview(reader.result as string)
-    reader.readAsDataURL(file)
     setError('')
+    // Open the crop modal with the chosen image; the cropped result becomes the upload.
+    const reader = new FileReader()
+    reader.onloadend = () => setCropSrc(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  // Crop modal produced a 256x256 JPEG; stage it for upload and show a preview.
+  const handleCropped = (file: File) => {
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+    setCropSrc(null)
   }
 
   const handleAvatarUpload = async () => {
@@ -577,9 +595,17 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
-            <p className="text-xs text-gray-500">PNG or JPEG, up to 1MB.</p>
+            <p className="text-xs text-gray-500">PNG or JPEG, up to 5MB. You can crop after choosing.</p>
           </div>
         </div>
+
+        {cropSrc && (
+          <AvatarCropper
+            src={cropSrc}
+            onCancel={() => setCropSrc(null)}
+            onCropped={handleCropped}
+          />
+        )}
 
         <form onSubmit={handleProfileSubmit} className="space-y-4">
           <div>
