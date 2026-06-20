@@ -164,17 +164,21 @@ export default function DrawerWidget({ onStateChange }: { onStateChange?: (open:
   }
 
   const expectedClose = breakdown ? parseFloat(counted || '0') - breakdown.expected : 0
-
-  if (loading) return null
+  // Hide native number spinners so money fields match the rest of the app.
+  const noSpin = '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
 
   return (
     <>
-      {/* Trigger */}
-      {shift ? (
+      {/* Trigger — render immediately (placeholder while loading) so the header never shifts. */}
+      {loading ? (
+        <Button variant="outline" className="h-9" disabled>
+          <Wallet className="h-4 w-4 mr-1.5" /> Drawer
+        </Button>
+      ) : shift ? (
         <button
           type="button"
           onClick={() => setShowClose(true)}
-          className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-800 hover:bg-green-100"
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 text-sm font-medium text-green-800 hover:bg-green-100"
           title="Drawer is open . click to close"
         >
           <Wallet className="h-4 w-4" />
@@ -186,7 +190,7 @@ export default function DrawerWidget({ onStateChange }: { onStateChange?: (open:
         </Button>
       )}
 
-      {shift && (
+      {shift && !loading && (
         <Button variant="outline" className="h-9 px-2.5" onClick={() => setShowMove(true)} title="Record cash in/out">
           <ArrowDownCircle className="h-4 w-4" />
         </Button>
@@ -197,7 +201,7 @@ export default function DrawerWidget({ onStateChange }: { onStateChange?: (open:
         <div className="space-y-3">
           <label className="block text-sm">
             <span className="mb-1 block text-[hsl(var(--muted-foreground))]">Opening cash (float)</span>
-            <Input type="number" inputMode="decimal" value={openFloat} onChange={(e) => setOpenFloat(e.target.value)} placeholder="e.g. 5000" autoFocus />
+            <Input type="number" inputMode="decimal" className={noSpin} value={openFloat} onChange={(e) => setOpenFloat(e.target.value)} placeholder="e.g. 5000" autoFocus />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-[hsl(var(--muted-foreground))]">Label (optional)</span>
@@ -228,7 +232,7 @@ export default function DrawerWidget({ onStateChange }: { onStateChange?: (open:
             </div>
             <label className="block text-sm">
               <span className="mb-1 block text-[hsl(var(--muted-foreground))]">Counted cash</span>
-              <Input type="number" inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} placeholder="Count the drawer" autoFocus />
+              <Input type="number" inputMode="decimal" className={noSpin} value={counted} onChange={(e) => setCounted(e.target.value)} placeholder="Count the drawer" autoFocus />
             </label>
             {counted !== '' && (
               <div className={`text-sm font-medium ${Math.abs(expectedClose) < 0.01 ? 'text-green-700' : expectedClose > 0 ? 'text-blue-700' : 'text-red-700'}`}>
@@ -260,7 +264,7 @@ export default function DrawerWidget({ onStateChange }: { onStateChange?: (open:
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-[hsl(var(--muted-foreground))]">Amount</span>
-            <Input type="number" inputMode="decimal" value={moveAmount} onChange={(e) => setMoveAmount(e.target.value)} placeholder="0" autoFocus />
+            <Input type="number" inputMode="decimal" className={noSpin} value={moveAmount} onChange={(e) => setMoveAmount(e.target.value)} placeholder="0" autoFocus />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-[hsl(var(--muted-foreground))]">Reason (optional)</span>

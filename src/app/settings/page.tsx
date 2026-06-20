@@ -48,6 +48,8 @@ export default function SettingsPage() {
     confirmPassword: '',
   })
   const [showPasswordForm, setShowPasswordForm] = useState(false)
+  // Settings are split into Account (personal) and Store (shop) sections.
+  const [settingsTab, setSettingsTab] = useState<'account' | 'store'>('account')
   // Two-step verification (opt-in email 2FA)
   const [twoFAEnabled, setTwoFAEnabled] = useState(false)
   const [twoFASaving, setTwoFASaving] = useState(false)
@@ -527,6 +529,26 @@ export default function SettingsPage() {
         <p className="text-gray-600">Manage your account and preferences</p>
       </div>
 
+      {/* Section tabs: Account (personal) vs Store (shop). Store only for managers. */}
+      <div className="mb-6 inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setSettingsTab('account')}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors ${settingsTab === 'account' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+          <User className="h-4 w-4" /> Account
+        </button>
+        {isStoreManager && (
+          <button
+            type="button"
+            onClick={() => setSettingsTab('store')}
+            className={`flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors ${settingsTab === 'store' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <SettingsIcon className="h-4 w-4" /> Store
+          </button>
+        )}
+      </div>
+
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-600">{error}</p>
@@ -551,6 +573,9 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ===== ACCOUNT (personal) section ===== */}
+      {settingsTab === 'account' && (
+      <>
       {/* Profile Settings */}
       <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
         <div className="flex items-center gap-2 mb-4">
@@ -882,8 +907,11 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Shop Settings - Only for STORE_MANAGER */}
-      {isStoreManager && (
+      </>
+      )}
+
+      {/* ===== STORE (shop) section - Only for STORE_MANAGER ===== */}
+      {settingsTab === 'store' && isStoreManager && (
         <>
           {/* Receipt Header Settings */}
           <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
@@ -1360,6 +1388,45 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Sales & Cash Drawer */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <CreditCard className="h-5 w-5 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Sales &amp; Cash Drawer</h2>
+            </div>
+            {loadingSettings ? (
+              <div className="text-gray-600">Loading settings...</div>
+            ) : (
+              <form onSubmit={handleShopSettingsSubmit} className="space-y-4">
+                <div className="flex items-start">
+                  <input
+                    type="checkbox"
+                    id="requireOpenDrawer"
+                    checked={shopSettings.requireOpenDrawer}
+                    onChange={(e) => setShopSettings({ ...shopSettings, requireOpenDrawer: e.target.checked })}
+                    disabled={savingSettings}
+                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+                  />
+                  <label htmlFor="requireOpenDrawer" className="ml-2 text-sm text-gray-700">
+                    Require an open cash drawer before selling
+                    <span className="block text-xs text-gray-500">
+                      Cashiers must open their drawer (with a starting float) before they can make a sale. Leave off to keep selling free and track drawers only when opened.
+                    </span>
+                  </label>
+                </div>
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingSettings}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingSettings ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+
           {/* Printer Settings */}
           <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
@@ -1382,23 +1449,6 @@ export default function SettingsPage() {
                   />
                   <label htmlFor="autoPrint" className="ml-2 text-sm text-gray-700">
                     Auto-print receipts after sale completion
-                  </label>
-                </div>
-
-                <div className="flex items-start">
-                  <input
-                    type="checkbox"
-                    id="requireOpenDrawer"
-                    checked={shopSettings.requireOpenDrawer}
-                    onChange={(e) => setShopSettings({ ...shopSettings, requireOpenDrawer: e.target.checked })}
-                    disabled={savingSettings}
-                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
-                  />
-                  <label htmlFor="requireOpenDrawer" className="ml-2 text-sm text-gray-700">
-                    Require an open cash drawer before selling
-                    <span className="block text-xs text-gray-500">
-                      Cashiers must open their drawer (with a starting float) before they can make a sale. Leave off to keep selling free and track drawers only when opened.
-                    </span>
                   </label>
                 </div>
 
