@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { Breadcrumb } from '@/components/layout/Breadcrumb'
+import StoreContextSync from '@/components/layout/StoreContextSync'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
@@ -49,6 +50,7 @@ export default async function OrgStoreLayout({ children, params }: StoreLayoutPr
 
   return (
     <div className="space-y-6">
+      <StoreContextSync storeId={storeId} />
       <Breadcrumb
         prefix={isPlatformAdmin ? 'Platform Admin · Store' : 'Store'}
         items={[

@@ -130,7 +130,7 @@ export default function NotificationBell({ sidebarOpen }: { sidebarOpen?: boolea
       </button>
 
       {open && (
-        <div className="absolute bottom-full mb-2 left-0 w-72 max-h-96 overflow-y-auto rounded-lg border border-blue-100 bg-white shadow-lg z-50">
+        <div className="absolute bottom-full mb-2 right-0 w-72 max-w-[calc(100vw-1.5rem)] max-h-96 overflow-y-auto rounded-lg border border-blue-100 bg-white shadow-lg z-50">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 sticky top-0 bg-white">
             <span className="text-sm font-semibold text-gray-900">Notifications</span>
             <div className="flex items-center gap-2">
