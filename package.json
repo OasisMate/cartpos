@@ -2,6 +2,8 @@
   "name": "cartpos",
   "version": "1.0.0",
   "private": true,
+  "description": "CartPOS - Point of Sale for retail shops",
+  "author": "CartPOS",
   "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",

@@ -13,7 +13,7 @@ win:
     - target: portable
       arch:
         - x64
-  icon: 'public/icon-192x192.png'
+  icon: 'public/icon-512x512.png'
   # Portable builds don't require code signing
 mac:
   target:
@@ -21,13 +21,13 @@ mac:
       arch:
         - x64
         - arm64
-  icon: 'public/icon-192x192.png'
+  icon: 'public/icon-512x512.png'
 linux:
   target:
     - target: AppImage
       arch:
         - x64
-  icon: 'public/icon-192x192.png'
+  icon: 'public/icon-512x512.png'
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
