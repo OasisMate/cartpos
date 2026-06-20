@@ -1258,9 +1258,6 @@ export default function SettingsPage() {
                       CartPOS in Chrome started with the <code className="px-1 rounded bg-blue-100">--kiosk-printing</code> flag.
                     </li>
                   </ul>
-                  <p className="mt-2 text-xs text-blue-700">
-                    Full one-time setup steps are in the printing setup guide (docs/PRINTING_SETUP.md).
-                  </p>
                 </div>
 
                 <div className="pt-4">
