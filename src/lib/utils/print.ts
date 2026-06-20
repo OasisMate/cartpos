@@ -57,9 +57,10 @@ export async function printReceipt(elementId: string, options: PrintOptions = {}
   }
 
   if (silent && typeof window !== 'undefined' && window.electronAPI?.isElectron) {
-    const htmlContent = element.innerHTML
     try {
-      await window.electronAPI.printReceipt(htmlContent)
+      // Send the FULL styled 80mm document (same template the browser path uses),
+      // not the raw innerHTML - otherwise the silent desktop print comes out unstyled.
+      await window.electronAPI.printReceipt(buildReceiptPrintDocument(element))
       return
     } catch (err) {
       console.error('Electron print failed, falling back to browser print:', err)
@@ -71,52 +72,47 @@ export async function printReceipt(elementId: string, options: PrintOptions = {}
   await fallbackBrowserPrint(element, debug)
 }
 
-function fallbackBrowserPrint(element: HTMLElement, debug: boolean): Promise<void> {
-  return new Promise((resolve) => {
-    const clonedElement = element.cloneNode(true) as HTMLElement
+/**
+ * Build the full self-contained 80mm print document for a receipt element.
+ * Clones the element, strips Next.js asset references that can't resolve outside
+ * the app, then wraps the cleaned markup in the canonical thermal stylesheet.
+ * Shared by the browser iframe path AND the Electron silent-print path so both
+ * produce the exact same styled output.
+ */
+function buildReceiptPrintDocument(element: HTMLElement, debug = false): string {
+  const clonedElement = element.cloneNode(true) as HTMLElement
 
-    const scripts = clonedElement.querySelectorAll('script')
-    scripts.forEach((script) => script.remove())
+  const scripts = clonedElement.querySelectorAll('script')
+  scripts.forEach((script) => script.remove())
 
-    const styles = clonedElement.querySelectorAll('style')
-    styles.forEach((style) => {
-      const content = style.textContent || ''
-      if (content.includes('_next') || content.includes('undefined')) {
-        style.remove()
-      }
-    })
-
-    const images = clonedElement.querySelectorAll('img')
-    images.forEach((img) => {
-      const src = img.getAttribute('src')
-      if (src && (src.startsWith('/_next/') || src.includes('undefined'))) {
-        img.remove()
-      }
-    })
-
-    const links = clonedElement.querySelectorAll('link')
-    links.forEach((link) => {
-      const href = link.getAttribute('href')
-      if (href && (href.startsWith('/_next/') || href.includes('undefined'))) {
-        link.remove()
-      }
-    })
-
-    const htmlContent = clonedElement.innerHTML
-
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
-    document.body.appendChild(iframe)
-
-    const doc = iframe.contentDocument || iframe.contentWindow?.document
-    if (!doc) {
-      window.print()
-      resolve()
-      return
+  const styles = clonedElement.querySelectorAll('style')
+  styles.forEach((style) => {
+    const content = style.textContent || ''
+    if (content.includes('_next') || content.includes('undefined')) {
+      style.remove()
     }
+  })
 
-    const debugStyle = debug
-      ? `
+  const images = clonedElement.querySelectorAll('img')
+  images.forEach((img) => {
+    const src = img.getAttribute('src')
+    if (src && (src.startsWith('/_next/') || src.includes('undefined'))) {
+      img.remove()
+    }
+  })
+
+  const links = clonedElement.querySelectorAll('link')
+  links.forEach((link) => {
+    const href = link.getAttribute('href')
+    if (href && (href.startsWith('/_next/') || href.includes('undefined'))) {
+      link.remove()
+    }
+  })
+
+  const htmlContent = clonedElement.innerHTML
+
+  const debugStyle = debug
+    ? `
     body::before {
       content: '';
       position: absolute;
@@ -152,8 +148,7 @@ function fallbackBrowserPrint(element: HTMLElement, debug: boolean): Promise<voi
   `
       : ''
 
-    doc.open()
-    doc.write(`<!DOCTYPE html><html><head>
+  return `<!DOCTYPE html><html><head>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:,">
 <base href="${window.location.origin}"><style>
@@ -238,7 +233,24 @@ img { display: block !important; }
 @media print { 
   @page { margin: 0; }
 }
-</style></head><body>${debug ? '<div class="debug-text">DEBUG: Red lines show printable area boundaries. Content should stay within.</div>' : ''}${htmlContent}</body></html>`)
+</style></head><body>${debug ? '<div class="debug-text">DEBUG: Red lines show printable area boundaries. Content should stay within.</div>' : ''}${htmlContent}</body></html>`
+}
+
+function fallbackBrowserPrint(element: HTMLElement, debug: boolean): Promise<void> {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!doc) {
+      window.print()
+      resolve()
+      return
+    }
+
+    doc.open()
+    doc.write(buildReceiptPrintDocument(element, debug))
     doc.close()
 
     const win = iframe.contentWindow

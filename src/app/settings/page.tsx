@@ -1243,7 +1243,7 @@ export default function SettingsPage() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Enter the name of your default printer. This will be used as a preference when printing receipts.
+                    A label for your own reference only. Receipts always print to your Windows default printer (see below).
                   </p>
                 </div>
 
@@ -1259,6 +1259,26 @@ export default function SettingsPage() {
                   <label htmlFor="autoPrint" className="ml-2 text-sm text-gray-700">
                     Auto-print receipts after sale completion
                   </label>
+                </div>
+
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                  <p className="font-semibold mb-1">Silent printing (no print dialog)</p>
+                  <p className="mb-2 text-blue-800">
+                    Turn on Auto-print above, then set up the counter once so receipts print straight to your thermal printer:
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 text-blue-800">
+                    <li>
+                      <span className="font-medium">Desktop app:</span> nothing else to do. Receipts print to your computer&apos;s
+                      default printer. Just set your thermal printer as the Windows default.
+                    </li>
+                    <li>
+                      <span className="font-medium">Web browser:</span> set your thermal printer as the Windows default, then open
+                      CartPOS in Chrome started with the <code className="px-1 rounded bg-blue-100">--kiosk-printing</code> flag.
+                    </li>
+                  </ul>
+                  <p className="mt-2 text-xs text-blue-700">
+                    Full one-time setup steps are in the printing setup guide (docs/PRINTING_SETUP.md).
+                  </p>
                 </div>
 
                 <div className="pt-4">
