@@ -114,6 +114,7 @@ export async function PUT(request: NextRequest) {
       removeServiceChargeOnDelivery,
       enableUnitSplitting,
       enableTradePricing,
+      requireOpenDrawer,
       featureConfig,
     } = body
 
@@ -172,6 +173,7 @@ export async function PUT(request: NextRequest) {
         ...(removeServiceChargeOnDelivery !== undefined && { removeServiceChargeOnDelivery }),
         ...(enableUnitSplitting !== undefined && { enableUnitSplitting }),
         ...(enableTradePricing !== undefined && { enableTradePricing }),
+        ...(requireOpenDrawer !== undefined && { requireOpenDrawer }),
         ...(featureConfig !== undefined && { featureConfig }),
       },
       create: {
@@ -199,6 +201,7 @@ export async function PUT(request: NextRequest) {
         ...(removeServiceChargeOnDelivery !== undefined && { removeServiceChargeOnDelivery }),
         ...(enableUnitSplitting !== undefined && { enableUnitSplitting }),
         ...(enableTradePricing !== undefined && { enableTradePricing }),
+        ...(requireOpenDrawer !== undefined && { requireOpenDrawer }),
         ...(featureConfig !== undefined && featureConfig !== null && { featureConfig }),
       },
     })

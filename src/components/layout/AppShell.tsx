@@ -29,6 +29,7 @@ import {
   History,
   Megaphone,
   CalendarClock,
+  Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
@@ -346,6 +347,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             { label: t('purchases'), href: `${base}/purchases`, icon: <ShoppingBag className={ico} /> },
             { label: t('suppliers'), href: `${base}/suppliers`, icon: <Factory className={ico} /> },
             { label: t('reports'), href: `${base}/reports`, icon: <BarChart3 className={ico} /> },
+            { label: 'Cash Drawers', href: `${base}/drawers`, icon: <Wallet className={ico} /> },
           ],
         })
       }
@@ -518,6 +520,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             label: t('reports'),
             href: '/store/reports',
             icon: <BarChart3 className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          },
+          {
+            label: 'Cash Drawers',
+            href: '/store/drawers',
+            icon: <Wallet className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
           {
             label: t('expenses'),

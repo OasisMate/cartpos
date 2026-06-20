@@ -21,6 +21,7 @@ import { Minus, Plus, X, ShoppingCart, Package, Trash2, Edit3, Keyboard } from '
 // so load it lazily to keep it out of the initial POS bundle (faster first paint on mobile).
 const ReceiptModal = dynamic(() => import('@/components/receipt/ReceiptModal'), { ssr: false })
 import Modal from '@/components/ui/Modal'
+import DrawerWidget from '@/components/shifts/DrawerWidget'
 
 /** True when the keystroke is inside a text field (so global shortcuts shouldn't fire),
  *  except the scan box which is allowed to host shortcuts. */
@@ -192,6 +193,7 @@ function mapPosSettings(s: any) {
     removeServiceChargeOnDelivery: s?.removeServiceChargeOnDelivery !== false,
     enableUnitSplitting: Boolean(s?.enableUnitSplitting),
     enableTradePricing: s?.enableTradePricing !== false,
+    requireOpenDrawer: Boolean(s?.requireOpenDrawer),
   }
 }
 
@@ -236,6 +238,8 @@ export default function POSPage() {
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
   const [productStock, setProductStock] = useState<Record<string, number>>({})
   const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(true) // Default: allow
+  // Whether the cashier currently has an open cash drawer (reported by DrawerWidget).
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [shopSettings, setShopSettings] = useState<{
     logoUrl?: string | null
     receiptHeaderDisplay?: 'NAME_ONLY' | 'LOGO_ONLY' | 'BOTH'
@@ -252,6 +256,7 @@ export default function POSPage() {
     removeServiceChargeOnDelivery?: boolean
     enableUnitSplitting?: boolean
     enableTradePricing?: boolean
+    requireOpenDrawer?: boolean
   } | null>(null)
 
   // Edit Item State
@@ -992,6 +997,11 @@ export default function POSPage() {
       return
     }
 
+    if (shopSettings?.requireOpenDrawer && !drawerOpen) {
+      show({ message: 'Open your cash drawer before completing a sale', variant: 'destructive' })
+      return
+    }
+
     if (paymentStatus === 'UDHAAR' && !customerId) {
       setError('Please select a customer for udhaar sale')
       return
@@ -1583,7 +1593,18 @@ export default function POSPage() {
       {/* Left Panel - Product Selection */}
       <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] lg:overflow-y-auto">
         <div className={`p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10 ${!isOnline ? 'mt-8' : ''}`}>
-          <h1 className="text-2xl font-bold mb-4">{t('pos')}</h1>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h1 className="text-2xl font-bold">{t('pos')}</h1>
+            <div className="flex items-center gap-2">
+              <DrawerWidget onStateChange={setDrawerOpen} />
+            </div>
+          </div>
+
+          {shopSettings?.requireOpenDrawer && !drawerOpen && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Open your cash drawer to start selling. Sales are blocked until a drawer is open.
+            </div>
+          )}
 
           {showShortcutsHint && (
             <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">

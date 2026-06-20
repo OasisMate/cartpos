@@ -73,6 +73,7 @@ export default function SettingsPage() {
     removeServiceChargeOnDelivery: true,
     enableUnitSplitting: false,
     enableTradePricing: true,
+    requireOpenDrawer: false,
     batchExpiry: false,
     units: [] as string[],
   })
@@ -163,6 +164,7 @@ export default function SettingsPage() {
             removeServiceChargeOnDelivery: data.settings?.removeServiceChargeOnDelivery !== false,
             enableUnitSplitting: Boolean(data.settings?.enableUnitSplitting),
             enableTradePricing: data.settings?.enableTradePricing !== false,
+            requireOpenDrawer: Boolean(data.settings?.requireOpenDrawer),
             batchExpiry: Boolean(data.settings?.featureConfig?.batchExpiry),
             units: getShopUnits(data.settings?.featureConfig, data.businessType as any),
           })
@@ -457,6 +459,7 @@ export default function SettingsPage() {
           removeServiceChargeOnDelivery: shopSettings.removeServiceChargeOnDelivery,
           enableUnitSplitting: shopSettings.enableUnitSplitting,
           enableTradePricing: shopSettings.enableTradePricing,
+          requireOpenDrawer: shopSettings.requireOpenDrawer,
           featureConfig: { batchExpiry: shopSettings.batchExpiry, units: normalizeUnits(shopSettings.units) },
         }),
       })
@@ -1379,6 +1382,23 @@ export default function SettingsPage() {
                   />
                   <label htmlFor="autoPrint" className="ml-2 text-sm text-gray-700">
                     Auto-print receipts after sale completion
+                  </label>
+                </div>
+
+                <div className="flex items-start">
+                  <input
+                    type="checkbox"
+                    id="requireOpenDrawer"
+                    checked={shopSettings.requireOpenDrawer}
+                    onChange={(e) => setShopSettings({ ...shopSettings, requireOpenDrawer: e.target.checked })}
+                    disabled={savingSettings}
+                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+                  />
+                  <label htmlFor="requireOpenDrawer" className="ml-2 text-sm text-gray-700">
+                    Require an open cash drawer before selling
+                    <span className="block text-xs text-gray-500">
+                      Cashiers must open their drawer (with a starting float) before they can make a sale. Leave off to keep selling free and track drawers only when opened.
+                    </span>
                   </label>
                 </div>
 
