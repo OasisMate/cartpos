@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
         removeServiceChargeOnDelivery: settings.removeServiceChargeOnDelivery !== false,
         enableUnitSplitting: Boolean(settings.enableUnitSplitting),
         enableTradePricing: settings.enableTradePricing !== false,
+        requireOpenDrawer: Boolean(settings.requireOpenDrawer),
       },
       customers,
     })

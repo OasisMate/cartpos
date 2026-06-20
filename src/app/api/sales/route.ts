@@ -8,6 +8,8 @@ import {
   ForbiddenResponse
 } from '@/lib/permissions'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { prisma } from '@/lib/db/prisma'
+import { getOpenShiftId } from '@/lib/domain/shifts'
 
 // GET: List sales
 export async function GET(request: NextRequest) {
@@ -76,6 +78,22 @@ export async function POST(request: NextRequest) {
     // Check permission - all shop users can make sales
     if (!canMakeSales(user, user.currentShopId)) {
       return ForbiddenResponse('You do not have permission to make sales')
+    }
+
+    // Cash-drawer enforcement: when the shop requires an open drawer, block interactive
+    // sales until the cashier opens one. (Offline sales sync via /sync-batch, not here.)
+    const drawerSetting = await prisma.shopSettings.findUnique({
+      where: { shopId: user.currentShopId },
+      select: { requireOpenDrawer: true },
+    })
+    if (drawerSetting?.requireOpenDrawer) {
+      const openShiftId = await getOpenShiftId(prisma, user.currentShopId, user.id)
+      if (!openShiftId) {
+        return NextResponse.json(
+          { error: 'Open your cash drawer before making a sale', code: 'NO_OPEN_DRAWER' },
+          { status: 409 }
+        )
+      }
     }
 
     const body = await request.json()

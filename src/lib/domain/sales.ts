@@ -4,6 +4,7 @@ import { Decimal } from '@prisma/client/runtime/library'
 import { getProductStock, getProductStockBatch } from './purchases'
 import { formatNumber } from '@/lib/utils/money'
 import { readFeatureConfig } from './business-presets'
+import { getOpenShiftId } from './shifts'
 
 const invoiceDetailInclude = {
   lines: {
@@ -350,6 +351,8 @@ export async function createSale(
 
     // Handle payment or udhaar
     if (input.paymentStatus === 'PAID') {
+      // Attribute the cash to the cashier's open drawer, if one is open.
+      const shiftId = await getOpenShiftId(tx, shopId, userId)
       // Create payment row
       await tx.payment.create({
         data: {
@@ -358,6 +361,7 @@ export async function createSale(
           amount: new Decimal(input.total),
           method: input.paymentMethod!,
           receivedById: userId,
+          shiftId,
           note: input.amountReceived
             ? `Received: ${input.amountReceived}, Change: ${input.amountReceived - input.total}`
             : null,

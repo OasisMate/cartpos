@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { getOpenShiftId } from '@/lib/domain/shifts'
 
 // GET: recorded (synced) expenses for the current shop, most recent first.
 export async function GET(req: NextRequest) {
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
             )
         }
 
+        // Attribute the cash out to the recorder's open drawer, if any.
+        const shiftId = await getOpenShiftId(prisma, user.currentShopId, user.id)
+
         // Create Expense entry
         const expense = await prisma.expense.create({
             data: {
@@ -71,6 +75,7 @@ export async function POST(req: NextRequest) {
                 description,
                 date: new Date(date),
                 createdAt: createdAt ? new Date(createdAt) : undefined,
+                shiftId,
             },
         })
 

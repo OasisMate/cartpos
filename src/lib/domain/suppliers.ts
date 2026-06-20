@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import type { PaymentMethod, SupplierEntryType, LedgerDirection } from '@prisma/client'
+import { getOpenShiftId } from './shifts'
 
 const PAYMENT_METHODS: PaymentMethod[] = ['CASH', 'CARD', 'OTHER']
 
@@ -308,6 +309,9 @@ export async function recordSupplierPayment(
   const method: PaymentMethod =
     input.method && PAYMENT_METHODS.includes(input.method) ? input.method : 'CASH'
 
+  // Only cash supplier payments leave the till, so only those attach to a drawer.
+  const shiftId = method === 'CASH' ? await getOpenShiftId(prisma, supplier.shopId, userId) : null
+
   return prisma.supplierLedger.create({
     data: {
       shopId: supplier.shopId,
@@ -319,6 +323,7 @@ export async function recordSupplierPayment(
       note: input.note?.trim() || null,
       refType: 'payment',
       createdByUserId: userId,
+      shiftId,
     },
   })
 }

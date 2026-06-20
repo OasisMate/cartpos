@@ -98,6 +98,11 @@ export const ActivityActions = {
   // Sale actions
   CREATE_SALE: 'CREATE_SALE',
   VOID_SALE: 'VOID_SALE',
+
+  // Cash drawer / shift actions
+  OPEN_SHIFT: 'OPEN_SHIFT',
+  CLOSE_SHIFT: 'CLOSE_SHIFT',
+  CASH_MOVEMENT: 'CASH_MOVEMENT',
 } as const
 
 /**
@@ -113,5 +118,6 @@ export const EntityTypes = {
   PURCHASE: 'PURCHASE',
   ORGANIZATION: 'ORGANIZATION',
   PROFILE: 'PROFILE',
+  SHIFT: 'SHIFT',
 } as const
 

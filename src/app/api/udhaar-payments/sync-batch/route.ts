@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
+import { getOpenShiftId } from '@/lib/domain/shifts'
 
 interface SyncPaymentInput {
   id: string
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
         }
 
         await prisma.$transaction(async (tx) => {
+          const shiftId = await getOpenShiftId(tx, user.currentShopId!, user.id)
           // Create Payment row
           await tx.payment.create({
             data: {
@@ -58,6 +60,7 @@ export async function POST(request: NextRequest) {
               method: p.method,
               note: p.note || null,
               receivedById: p.receivedById || user.id,
+              shiftId,
             },
           })
 

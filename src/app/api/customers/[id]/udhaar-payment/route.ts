@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
+import { getOpenShiftId } from '@/lib/domain/shifts'
 import type { PaymentMethod } from '@prisma/client'
 
 const METHODS: PaymentMethod[] = ['CASH', 'CARD', 'OTHER']
@@ -45,6 +46,7 @@ export async function POST(
     }
 
     await prisma.$transaction(async (tx) => {
+      const shiftId = await getOpenShiftId(tx, user.currentShopId!, user.id)
       await tx.payment.create({
         data: {
           shopId: user.currentShopId!,
@@ -53,6 +55,7 @@ export async function POST(
           method,
           note,
           receivedById: user.id,
+          shiftId,
         },
       })
 

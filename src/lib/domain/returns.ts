@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
+import { getOpenShiftId } from './shifts'
 
 const D = (n: number | string | Prisma.Decimal) => new Prisma.Decimal(n)
 
@@ -230,6 +231,7 @@ export async function createReturn(shopId: string, userId: string, input: Create
     if (Math.abs(netRefund) > 0.001) {
       if (input.settlement === 'CASH') {
         // netRefund > 0 = cash out to customer (negative payment); < 0 = cash collected (positive).
+        const shiftId = await getOpenShiftId(tx, shopId, userId)
         await tx.payment.create({
           data: {
             shopId,
@@ -238,6 +240,7 @@ export async function createReturn(shopId: string, userId: string, input: Create
             amount: D(-netRefund),
             method: 'CASH',
             receivedById: userId,
+            shiftId,
             note: kind === 'EXCHANGE' ? 'Exchange settlement' : 'Return refund',
           },
         })
