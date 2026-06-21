@@ -118,13 +118,15 @@ export async function PUT(
       barcode: body.barcode,
       unit: body.unit,
       price: price,
-      tradePrice: tradePrice,
-      cartonPrice: cartonPrice,
+      // For clearable fields, an empty value that is present in the body means
+      // "clear it" (0 / '' -> null in the domain), not "leave unchanged" (undefined).
+      tradePrice: tradePrice !== undefined ? tradePrice : ('tradePrice' in body ? 0 : undefined),
+      cartonPrice: cartonPrice !== undefined ? cartonPrice : ('cartonPrice' in body ? 0 : undefined),
       costPrice: costPrice,
       trackStock: body.trackStock,
       reorderLevel: body.reorderLevel ? parseInt(body.reorderLevel) : undefined,
-      cartonSize: body.cartonSize ? parseInt(body.cartonSize) : undefined,
-      cartonBarcode: body.cartonBarcode || undefined,
+      cartonSize: body.cartonSize ? parseInt(body.cartonSize) : ('cartonSize' in body ? 0 : undefined),
+      cartonBarcode: 'cartonBarcode' in body ? (body.cartonBarcode || '') : undefined,
       packagingLevels: Array.isArray(body.packagingLevels) ? body.packagingLevels : undefined,
     }
 

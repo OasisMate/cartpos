@@ -447,10 +447,16 @@ export default function ProductsPage() {
       if (formData.barcode) payload.barcode = formData.barcode
       if (formData.costPrice) payload.costPrice = formData.costPrice
       if (formData.reorderLevel) payload.reorderLevel = formData.reorderLevel
+      // Carton/trade fields: when editing, always send (even empty) so cleared
+      // values are reset server-side instead of keeping the old value.
       if (formData.cartonSize) payload.cartonSize = formData.cartonSize
+      else if (editingProduct) payload.cartonSize = ''
       if (formData.cartonBarcode) payload.cartonBarcode = formData.cartonBarcode
+      else if (editingProduct) payload.cartonBarcode = ''
       if (formData.cartonPrice) payload.cartonPrice = formData.cartonPrice
+      else if (editingProduct) payload.cartonPrice = ''
       if (formData.tradePrice) payload.tradePrice = formData.tradePrice
+      else if (editingProduct) payload.tradePrice = ''
       
       // Add initial stock only when creating new product
       if (!editingProduct && formData.initialStock && formData.trackStock) {
