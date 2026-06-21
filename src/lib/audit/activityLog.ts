@@ -97,6 +97,7 @@ export const ActivityActions = {
   
   // Sale actions
   CREATE_SALE: 'CREATE_SALE',
+  UPDATE_SALE: 'UPDATE_SALE',
   VOID_SALE: 'VOID_SALE',
 
   // Cash drawer / shift actions

@@ -292,6 +292,12 @@ export default function POSPage() {
   const [editForm, setEditForm] = useState({ quantity: 0, price: 0 })
   const [cardFeePercentOverride, setCardFeePercentOverride] = useState<number | null>(null)
 
+  // Edit-invoice mode: reopen a completed sale to correct it in place (?edit=<invoiceId>).
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null)
+  const [editInvoiceNumber, setEditInvoiceNumber] = useState<string | null>(null)
+  const editLoadedRef = useRef(false)
+
   // Order type (restaurant): dine-in applies service charge, delivery applies delivery fee.
   const [orderType, setOrderType] = useState<'DINE_IN' | 'DELIVERY'>('DINE_IN')
   // Per-sale editable charges. Null means "use the shop default" (computed at render).
@@ -1024,9 +1030,91 @@ export default function POSPage() {
     }
   }
 
+  // Reopen a completed sale for editing: load it into the cart + payment state.
+  async function loadInvoiceForEdit(id: string) {
+    try {
+      const res = await fetch(`/api/sales/${id}`)
+      const data = await res.json()
+      if (!res.ok || !data.invoice) {
+        show({ title: 'Error', message: data.error || 'Could not load that sale', variant: 'destructive' })
+        return
+      }
+      const inv = data.invoice
+      const items: CartItem[] = (inv.lines || []).map((l: any) => {
+        const fromList = products.find((p) => p.id === l.productId)
+        const product: Product = fromList || {
+          id: l.productId,
+          name: l.product?.name ?? 'Item',
+          barcode: null,
+          unit: l.product?.unit ?? 'pcs',
+          price: Number(l.product?.price ?? l.unitPrice),
+          tradePrice: null,
+          cartonPrice: null,
+          trackStock: false,
+          cartonSize: l.product?.cartonSize ?? null,
+          cartonBarcode: l.product?.cartonBarcode ?? null,
+          packagingLevels: l.product?.packagingLevels ?? [],
+        }
+        const unitsPerItem = Number(l.unitsPerItem) || 1
+        return {
+          product,
+          quantity: Number(l.quantity),
+          unitPrice: Number(l.unitPrice),
+          lineTotal: Number(l.lineTotal),
+          unitsPerItem,
+          packName: l.packName || undefined,
+          isCarton: !l.packName && unitsPerItem > 1,
+        }
+      })
+      setCart(items)
+      const disc = Number(inv.discount) || 0
+      setDiscountMode('amount')
+      setDiscount(disc)
+      setDiscountAmtStr(disc ? String(disc) : '')
+      // Preserve any per-sale service/delivery charges (best effort; needs the feature on).
+      const svc = Number(inv.serviceCharge) || 0
+      const dlv = Number(inv.deliveryCharge) || 0
+      if (svc > 0) setServiceChargeOverride(svc)
+      if (dlv > 0) { setDeliveryChargeAmount(dlv); setOrderType('DELIVERY') }
+      setCustomerId(inv.customerId || '')
+      setPaymentStatus(inv.paymentStatus)
+      setPaymentMethod(inv.paymentMethod || 'CASH')
+      // Prefill amount received so a cash sale validates; cashier can adjust.
+      setAmountReceived(inv.paymentStatus === 'PAID' && inv.paymentMethod === 'CASH' ? String(Number(inv.total)) : '')
+      setIsEditMode(true)
+      setEditInvoiceId(inv.id)
+      setEditInvoiceNumber(inv.number || null)
+    } catch (err: any) {
+      show({ title: 'Error', message: err.message || 'Could not load that sale', variant: 'destructive' })
+    }
+  }
+
+  // Detect ?edit=<invoiceId> once products are loaded, then preload the sale.
+  useEffect(() => {
+    if (editLoadedRef.current) return
+    if (!user?.currentShopId || products.length === 0) return
+    const editId = new URLSearchParams(window.location.search).get('edit')
+    if (!editId) return
+    editLoadedRef.current = true
+    loadInvoiceForEdit(editId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.currentShopId, products])
+
+  // Leave edit mode and return to the sales list.
+  function cancelEdit() {
+    setIsEditMode(false)
+    setEditInvoiceId(null)
+    setEditInvoiceNumber(null)
+    router.push('/store/sales')
+  }
+
   function handleCompleteSale() {
     if (cart.length === 0) {
       setError('Cart is empty')
+      return
+    }
+    if (isEditMode && !isOnline) {
+      show({ message: 'You must be online to save changes to a sale', variant: 'destructive' })
       return
     }
 
@@ -1230,6 +1318,7 @@ export default function POSPage() {
           unitPrice: item.unitPrice,
           lineTotal: item.lineTotal,
           unitsPerItem: item.unitsPerItem ?? (item.isCarton ? (item.product.cartonSize || 1) : 1),
+          packName: item.packName ?? (item.isCarton ? 'Carton' : undefined),
         })),
         subtotal,
         discount,
@@ -1242,6 +1331,45 @@ export default function POSPage() {
           paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
             ? parseFloat(amountReceived)
             : undefined,
+      }
+
+      // Edit mode: update the existing invoice in place (online-only), then return to the list.
+      if (isEditMode && editInvoiceId) {
+        if (!isOnline) {
+          setError('You must be online to save changes to a sale')
+          return
+        }
+        const res = await fetch(`/api/sales/${editInvoiceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerId: sale.customerId,
+            items: sale.items,
+            subtotal: sale.subtotal,
+            discount: sale.discount,
+            serviceCharge: sale.serviceCharge,
+            deliveryCharge: sale.deliveryCharge,
+            total: sale.total,
+            paymentStatus: sale.paymentStatus,
+            paymentMethod: sale.paymentMethod,
+            amountReceived: sale.amountReceived,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          const msg = data.error || 'Failed to update sale'
+          setError(msg)
+          show({ title: 'Error', message: msg, variant: 'destructive' })
+          return
+        }
+        setShowPaymentModal(false)
+        show({ message: `Invoice #${editInvoiceNumber || ''} updated`, variant: 'success' })
+        setCart([])
+        setIsEditMode(false)
+        setEditInvoiceId(null)
+        setEditInvoiceNumber(null)
+        router.push('/store/sales')
+        return
       }
 
       // Save sale locally (offline-first) and sync if online
@@ -1659,6 +1787,18 @@ export default function POSPage() {
               <DrawerWidget onStateChange={setDrawerOpen} />
             </div>
           </div>
+
+          {isEditMode && (
+            <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+              <span className="flex items-center gap-2">
+                <Edit3 className="h-4 w-4 shrink-0" />
+                Editing invoice #{editInvoiceNumber || ''}. Adjust items or payment, then Save changes.
+              </span>
+              <button type="button" onClick={cancelEdit} className="shrink-0 rounded px-2 py-1 font-medium hover:bg-blue-100">
+                Cancel
+              </button>
+            </div>
+          )}
 
           {shopSettings?.requireOpenDrawer && !drawerOpen && (
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -2107,7 +2247,7 @@ export default function POSPage() {
                   </Button>
                 </div>
                 <Button onClick={handleCompleteSale} className="w-full h-12 text-lg font-semibold whitespace-nowrap">
-                  {t('complete_sale')} <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-70">Alt+P</kbd>
+                  {isEditMode ? 'Save changes' : <>{t('complete_sale')} <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-70">Alt+P</kbd></>}
                 </Button>
               </div>
           </div>
@@ -2172,7 +2312,7 @@ export default function POSPage() {
             onKeyDown={handlePaymentKeyDown}
             className="bg-[hsl(var(--card))] rounded-lg p-6 w-full max-w-md border border-[hsl(var(--border))] outline-none"
           >
-            <h2 className="text-xl font-bold mb-4">{t('complete_sale')}</h2>
+            <h2 className="text-xl font-bold mb-4">{isEditMode ? `Save changes to #${editInvoiceNumber || ''}` : t('complete_sale')}</h2>
 
             {error && (
               <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
@@ -2344,7 +2484,7 @@ export default function POSPage() {
                     disabled={submitting || (paymentStatus === 'PAID' && paymentMethod === 'CASH' && change < 0)}
                     className="flex-1"
                   >
-                    {submitting ? t('processing') : t('confirm')}
+                    {submitting ? t('processing') : isEditMode ? 'Save changes' : t('confirm')}
                   </Button>
                 </div>
               </div>

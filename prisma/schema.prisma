@@ -657,6 +657,11 @@ model InvoiceLine {
   quantity    Decimal    @db.Decimal(10, 3)
   unitPrice   Decimal    @db.Decimal(10, 2)
   lineTotal   Decimal    @db.Decimal(10, 2)
+  /// Base units per sold item (1 = loose, cartonSize for a carton, or a PackagingLevel factor).
+  /// Stock deducts quantity * unitsPerItem; persisted so edits/voids reverse the right base units.
+  unitsPerItem Decimal   @default(1) @db.Decimal(10, 3)
+  /// Packaging label the item was sold as (e.g. "Carton", "Box"); null = base unit.
+  packName    String?
   createdAt   DateTime   @default(now())
   invoice     Invoice     @relation(fields: [invoiceId], references: [id])
   product     Product     @relation(fields: [productId], references: [id])

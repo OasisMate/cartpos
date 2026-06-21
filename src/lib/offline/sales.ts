@@ -13,6 +13,7 @@ export interface SaleInput {
     unitPrice: number
     lineTotal: number
     unitsPerItem?: number
+    packName?: string
   }>
   subtotal: number
   discount: number

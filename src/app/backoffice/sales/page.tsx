@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
@@ -8,7 +9,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import IconButton from '@/components/ui/IconButton'
-import { Printer, Ban, Trash2, Undo2 } from 'lucide-react'
+import { Printer, Ban, Trash2, Undo2, Pencil } from 'lucide-react'
 import ReceiptModal from '@/components/receipt/ReceiptModal'
 import ReturnModal from '@/components/returns/ReturnModal'
 import { BrandSpinner } from '@/components/ui/BrandSpinner'
@@ -33,6 +34,8 @@ interface Sale {
   lines: SaleLine[]
   payments: Array<{ id: string; amount: string; method: string }>
   createdBy: { id: string; name: string } | null
+  canEdit?: boolean
+  editBlockReason?: string | null
 }
 
 interface SalesResponse {
@@ -42,6 +45,7 @@ interface SalesResponse {
 
 export default function BackofficeSalesPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const { confirm, ConfirmDialog } = useConfirm()
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
@@ -343,6 +347,15 @@ export default function BackofficeSalesPage() {
                         >
                           <Printer className="h-4 w-4" />
                         </IconButton>
+                        {s.canEdit && (
+                          <IconButton
+                            variant="neutral"
+                            label="Edit sale"
+                            onClick={() => router.push(`/store/pos?edit=${s.id}`)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </IconButton>
+                        )}
                         {isManager && s.status !== 'VOID' && (
                           <IconButton variant="neutral" label="Return / refund" onClick={() => setReturnSaleId(s.id)}>
                             <Undo2 className="h-4 w-4" />

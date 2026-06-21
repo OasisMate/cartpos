@@ -5,6 +5,7 @@ import { getProductStock, getProductStockBatch } from './purchases'
 import { formatNumber } from '@/lib/utils/money'
 import { readFeatureConfig } from './business-presets'
 import { getOpenShiftId } from './shifts'
+import { shopDayStartUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
 
 const invoiceDetailInclude = {
   lines: {
@@ -34,6 +35,8 @@ export interface SaleItemInput {
    * invoice line keeps the pack quantity + per-pack price for display.
    */
   unitsPerItem?: number
+  /** Packaging label the item was sold as (e.g. "Carton", "Box"); omitted for base-unit sales. */
+  packName?: string
 }
 
 export interface CreateSaleInput {
@@ -74,65 +77,63 @@ async function checkSalePermission(userId: string, shopId: string): Promise<bool
   return userShop?.shopRole === 'STORE_MANAGER' || userShop?.shopRole === 'CASHIER'
 }
 
-export async function createSale(
+// Base units a sold item draws from stock (1 for loose; cartonSize / level factor for packs).
+function unitsPerItemOf(item: SaleItemInput): number {
+  return Number.isFinite(item.unitsPerItem) && (item.unitsPerItem as number) > 0
+    ? (item.unitsPerItem as number)
+    : 1
+}
+
+type SaleProducts = Awaited<ReturnType<typeof prisma.product.findMany>>
+type SaleShopSettings = Awaited<ReturnType<typeof prisma.shopSettings.findUnique>>
+
+interface SaleComputation {
+  products: SaleProducts
+  shopSettings: SaleShopSettings
+  batchExpiryOn: boolean
+  serviceCharge: number
+  deliveryCharge: number
+  stockWarnings: Array<{ productName: string; available: number; requested: number }>
+}
+
+/**
+ * Shared validation + totals for creating/updating a sale. Reads products, shop settings
+ * and current stock; throws on any invalid input; returns the bits the writers need.
+ * `priorBaseUnitsByProduct` credits stock back (used by edit: the old sale is reversed,
+ * so its base units are available again) when enforcing the no-negative-stock policy.
+ */
+async function validateSaleInput(
   shopId: string,
   input: CreateSaleInput,
-  userId: string
-) {
-  // Check permission
-  const hasPermission = await checkSalePermission(userId, shopId)
-  if (!hasPermission) {
-    throw new Error('You do not have permission to create sales in this shop')
-  }
-
-  // Idempotent lookup runs inside the transaction below (avoids an extra round-trip on every new sale)
-
-  // Validate items
+  priorBaseUnitsByProduct?: Map<string, number>,
+): Promise<SaleComputation> {
   if (!input.items || input.items.length === 0) {
     throw new Error('Sale must have at least one item')
   }
 
   // Validate customer if provided (for udhaar)
   if (input.customerId) {
-    const customer = await prisma.customer.findUnique({
-      where: { id: input.customerId },
-    })
-
+    const customer = await prisma.customer.findUnique({ where: { id: input.customerId } })
     if (!customer || customer.shopId !== shopId) {
       throw new Error('Invalid customer')
     }
   }
-
-  // For udhaar, customer is required
   if (input.paymentStatus === 'UDHAAR' && !input.customerId) {
     throw new Error('Customer is required for udhaar sales')
   }
-
-  // For paid sales, payment method is required
   if (input.paymentStatus === 'PAID' && !input.paymentMethod) {
     throw new Error('Payment method is required for paid sales')
   }
 
   // Validate all products exist and belong to shop
   const productIds = input.items.map((item) => item.productId)
-  const products = await prisma.product.findMany({
-    where: {
-      id: { in: productIds },
-      shopId,
-    },
-  })
-
-  if (products.length !== productIds.length) {
+  const products = await prisma.product.findMany({ where: { id: { in: productIds }, shopId } })
+  if (products.length !== new Set(productIds).size) {
     throw new Error('One or more products not found or do not belong to this shop')
   }
 
-  // Get shop settings to check negative stock policy
-  const shopSettings = await prisma.shopSettings.findUnique({
-    where: { shopId },
-  })
-
+  const shopSettings = await prisma.shopSettings.findUnique({ where: { shopId } })
   const allowNegativeStock = shopSettings?.allowNegativeStock ?? true // Default: allow
-  // Batch/expiry shops deduct sold units from lots earliest-expiry-first (FEFO).
   const batchExpiryOn = readFeatureConfig(shopSettings?.featureConfig).batchExpiry === true
 
   // Validate quantities and line amounts (reject NaN/Infinity/negative; verify line math)
@@ -152,61 +153,46 @@ export async function createSale(
   }
 
   // Batch stock check for all products that track stock
-  const productsThatTrackStock = products.filter(p => p.trackStock)
-  const productIdsToCheck = productsThatTrackStock.map(p => p.id)
-  const stockMap = productIdsToCheck.length > 0 
+  const productIdsToCheck = products.filter((p) => p.trackStock).map((p) => p.id)
+  const stockMap = productIdsToCheck.length > 0
     ? await getProductStockBatch(shopId, productIdsToCheck)
     : new Map<string, number>()
-  
-  const stockWarnings: Array<{ productName: string; available: number; requested: number }> = []
-  
+
+  // Requested base units per product (multiple lines can target the same product).
+  const requestedByProduct = new Map<string, number>()
   for (const item of input.items) {
-    const product = products.find((p) => p.id === item.productId)!
-    if (product.trackStock) {
-      const currentStock = stockMap.get(item.productId) || 0
-      // Stock is tracked in base units; a pack draws down quantity * unitsPerItem.
-      const unitsPerItem = Number.isFinite(item.unitsPerItem) && (item.unitsPerItem as number) > 0 ? (item.unitsPerItem as number) : 1
-      const baseRequested = item.quantity * unitsPerItem
-      if (currentStock < baseRequested) {
-        // If negative stock not allowed, block the sale
-        if (!allowNegativeStock) {
-          throw new Error(
-            `Insufficient stock for ${product.name}. Available: ${formatNumber(currentStock)} ${product.unit}, Requested: ${formatNumber(baseRequested)} ${product.unit}. Negative stock is not allowed for this shop.`
-          )
-        }
-        // If allowed, collect warning but proceed
-        stockWarnings.push({
-          productName: product.name,
-          available: currentStock,
-          requested: baseRequested,
-        })
+    requestedByProduct.set(
+      item.productId,
+      (requestedByProduct.get(item.productId) || 0) + item.quantity * unitsPerItemOf(item),
+    )
+  }
+
+  const stockWarnings: SaleComputation['stockWarnings'] = []
+  for (const product of products) {
+    if (!product.trackStock) continue
+    const requested = requestedByProduct.get(product.id) || 0
+    if (requested <= 0) continue
+    const available = (stockMap.get(product.id) || 0) + (priorBaseUnitsByProduct?.get(product.id) || 0)
+    if (available < requested) {
+      if (!allowNegativeStock) {
+        throw new Error(
+          `Insufficient stock for ${product.name}. Available: ${formatNumber(available)} ${product.unit}, Requested: ${formatNumber(requested)} ${product.unit}. Negative stock is not allowed for this shop.`
+        )
       }
+      stockWarnings.push({ productName: product.name, available, requested })
     }
   }
 
-  // If there are stock warnings and negative stock is allowed, we'll include them in the response
-  // but still proceed with the sale
-
   // Validate totals. The client's `total` INCLUDES service/delivery charges and the
-  // card fee for PAID+CARD sales, so we must account for them here or sales get
-  // wrongly rejected (card fee was bug C8). Order of charges:
-  //   base = subtotal - discount
-  //   + service charge + delivery charge  -> preCardTotal
-  //   + card fee (on preCardTotal)         -> total
-  const calculatedSubtotal = input.items.reduce(
-    (sum, item) => sum + item.lineTotal,
-    0
-  )
+  // card fee for PAID+CARD sales. Order of charges:
+  //   base = subtotal - discount + service + delivery -> preCardTotal; + card fee -> total
+  const calculatedSubtotal = input.items.reduce((sum, item) => sum + item.lineTotal, 0)
   const baseTotal = calculatedSubtotal - input.discount
-
-  // Extra charges are client-provided (cashier may edit them per sale). They must be
-  // non-negative; their consistency with `total` is enforced by the check below.
   const serviceCharge = Number(input.serviceCharge ?? 0)
   const deliveryCharge = Number(input.deliveryCharge ?? 0)
   if (!Number.isFinite(serviceCharge) || serviceCharge < 0 || !Number.isFinite(deliveryCharge) || deliveryCharge < 0) {
     throw new Error('Invalid service or delivery charge')
   }
-
   const preCardTotal = baseTotal + serviceCharge + deliveryCharge
 
   let expectedTotal = preCardTotal
@@ -214,203 +200,207 @@ export async function createSale(
     const shopPct = Number(shopSettings?.cardFeePercent ?? 0)
     const allowOverride = shopSettings?.allowCardFeeOverride ?? false
     if (allowOverride) {
-      // Per-sale override is enabled: trust the client's fee but bound it to a sane
-      // range (0 .. 100% of the pre-card total) so it can't be abused.
       const impliedFee = input.total - preCardTotal
       if (impliedFee < -0.01 || impliedFee > preCardTotal + 0.01) {
         throw new Error('Total calculation mismatch')
       }
       expectedTotal = input.total
     } else {
-      // Recompute the fee from the shop's configured percent (source of truth).
       const fee = Math.round(preCardTotal * shopPct) / 100
       expectedTotal = preCardTotal + fee
     }
   }
-
   if (Math.abs(expectedTotal - input.total) > 0.01) {
     throw new Error('Total calculation mismatch')
   }
 
-  // Create sale (invoice) and lines in a transaction
-  try {
-    const invoice = await prisma.$transaction(async (tx) => {
-    if (input.clientSaleId) {
-      const existing = await tx.invoice.findFirst({
-        where: { shopId, clientSaleId: input.clientSaleId },
-        include: invoiceDetailInclude,
+  return { products, shopSettings, batchExpiryOn, serviceCharge, deliveryCharge, stockWarnings }
+}
+
+/**
+ * Write the lines, stock ledger, FEFO lot draws, and payment/udhaar ledger for a sale
+ * onto an already-existing invoice header. Shared by createSale and updateSale so both
+ * post identical side-effects.
+ */
+async function applySaleEffects(
+  tx: Prisma.TransactionClient,
+  params: {
+    invoiceId: string
+    shopId: string
+    input: CreateSaleInput
+    userId: string
+    products: SaleProducts
+    batchExpiryOn: boolean
+  },
+) {
+  const { invoiceId, shopId, input, userId, products, batchExpiryOn } = params
+
+  await tx.invoiceLine.createMany({
+    data: input.items.map((itemInput) => ({
+      invoiceId,
+      productId: itemInput.productId,
+      quantity: new Decimal(itemInput.quantity),
+      unitPrice: new Decimal(itemInput.unitPrice),
+      lineTotal: new Decimal(itemInput.lineTotal),
+      unitsPerItem: new Decimal(unitsPerItemOf(itemInput)),
+      packName: itemInput.packName || null,
+    })),
+  })
+
+  // Map productId -> line id for stock ledger references.
+  const invoiceLines = await tx.invoiceLine.findMany({
+    where: { invoiceId },
+    select: { id: true, productId: true },
+  })
+  const invoiceLineMap = new Map(invoiceLines.map((line) => [line.productId, line]))
+
+  await tx.stockLedger.createMany({
+    data: input.items.map((itemInput) => {
+      const invoiceLine = invoiceLineMap.get(itemInput.productId)
+      if (!invoiceLine) {
+        throw new Error(`Invoice line not found for product ${itemInput.productId}`)
+      }
+      return {
+        shopId,
+        productId: itemInput.productId,
+        changeQty: new Decimal(itemInput.quantity).mul(unitsPerItemOf(itemInput)).mul(-1), // base units, negative for sale
+        type: 'SALE' as const,
+        refType: 'invoice_line',
+        refId: invoiceLine.id,
+      }
+    }),
+  })
+
+  // FEFO: batch/expiry shops draw the sold base units from lots, earliest expiry first.
+  if (batchExpiryOn) {
+    for (const itemInput of input.items) {
+      const product = products.find((p) => p.id === itemInput.productId)
+      if (!product?.trackStock) continue
+      let remaining = itemInput.quantity * unitsPerItemOf(itemInput)
+      if (remaining <= 0) continue
+      const lots = await tx.stockLot.findMany({
+        where: { shopId, productId: itemInput.productId, quantity: { gt: 0 } },
+        orderBy: [{ expiry: { sort: 'asc', nulls: 'last' } }, { receivedAt: 'asc' }],
       })
-      if (existing) {
-        return { invoice: existing, stockWarnings: undefined, created: false }
+      for (const lot of lots) {
+        if (remaining <= 0.0001) break
+        const have = Number(lot.quantity)
+        const take = Math.min(have, remaining)
+        await tx.stockLot.update({ where: { id: lot.id }, data: { quantity: new Decimal(have - take) } })
+        remaining -= take
       }
     }
+  }
 
-    // Generate sequential invoice number for this shop
-    const lastInvoice = await tx.invoice.findFirst({
-      where: { shopId },
-      orderBy: { createdAt: 'desc' },
-      select: { number: true },
-    })
-    
-    let nextNumber = 1
-    if (lastInvoice?.number) {
-      const lastNum = parseInt(lastInvoice.number, 10)
-      if (!isNaN(lastNum)) {
-        nextNumber = lastNum + 1
-      }
-    }
-    const invoiceNumber = String(nextNumber).padStart(6, '0') // Format: 000001, 000002, etc.
-
-    // Create invoice header
-    const invoice = await tx.invoice.create({
+  // Payment (attributed to the cashier's open drawer, if any) or udhaar ledger entry.
+  if (input.paymentStatus === 'PAID') {
+    const shiftId = await getOpenShiftId(tx, shopId, userId)
+    await tx.payment.create({
       data: {
         shopId,
-        customerId: input.customerId || null,
-        clientSaleId: input.clientSaleId || null,
-        number: invoiceNumber,
-        paymentStatus: input.paymentStatus,
-        paymentMethod:
-          input.paymentStatus === 'PAID' ? input.paymentMethod! : null,
-        subtotal: new Decimal(input.subtotal),
-        discount: new Decimal(input.discount),
-        serviceCharge: new Decimal(serviceCharge),
-        deliveryCharge: new Decimal(deliveryCharge),
-        total: new Decimal(input.total),
-        createdByUserId: userId,
+        invoiceId,
+        amount: new Decimal(input.total),
+        method: input.paymentMethod!,
+        receivedById: userId,
+        shiftId,
+        note: input.amountReceived
+          ? `Received: ${input.amountReceived}, Change: ${input.amountReceived - input.total}`
+          : null,
       },
     })
-
-    // Create invoice lines in batch
-    await tx.invoiceLine.createMany({
-      data: input.items.map(itemInput => ({
-        invoiceId: invoice.id,
-        productId: itemInput.productId,
-        quantity: new Decimal(itemInput.quantity),
-        unitPrice: new Decimal(itemInput.unitPrice),
-        lineTotal: new Decimal(itemInput.lineTotal),
-      })),
+  } else if (input.paymentStatus === 'UDHAAR' && input.customerId) {
+    await tx.customerLedger.create({
+      data: {
+        shopId,
+        customerId: input.customerId,
+        type: 'SALE_UDHAAR',
+        direction: 'DEBIT',
+        amount: new Decimal(input.total),
+        refType: 'invoice',
+        refId: invoiceId,
+      },
     })
+  }
+}
 
-    // Query back invoice lines to get their IDs for stock ledger references
-    const invoiceLines = await tx.invoiceLine.findMany({
-      where: { invoiceId: invoice.id },
-      select: { id: true, productId: true, quantity: true },
-    })
+export async function createSale(
+  shopId: string,
+  input: CreateSaleInput,
+  userId: string
+) {
+  const hasPermission = await checkSalePermission(userId, shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to create sales in this shop')
+  }
 
-    // Create a map of productId to invoice line for reliable matching
-    const invoiceLineMap = new Map(invoiceLines.map(line => [line.productId, line]))
+  const comp = await validateSaleInput(shopId, input)
 
-    // Create stock ledger entries in batch
-    await tx.stockLedger.createMany({
-      data: input.items.map(itemInput => {
-        const invoiceLine = invoiceLineMap.get(itemInput.productId)
-        if (!invoiceLine) {
-          throw new Error(`Invoice line not found for product ${itemInput.productId}`)
-        }
-        // Deduct in base units: pack quantity * units-per-pack (1 for base-unit sales).
-        const unitsPerItem = Number.isFinite(itemInput.unitsPerItem) && (itemInput.unitsPerItem as number) > 0 ? (itemInput.unitsPerItem as number) : 1
-        return {
-          shopId,
-          productId: itemInput.productId,
-          changeQty: new Decimal(itemInput.quantity).mul(unitsPerItem).mul(-1), // Negative for sales, in base units
-          type: 'SALE' as const,
-          refType: 'invoice_line',
-          refId: invoiceLine.id,
-        }
-      }),
-    })
-
-    // FEFO: for batch/expiry shops, draw the sold base units down from lots, earliest
-    // expiry first (no-expiry lots last). The stock ledger above remains the source of
-    // truth for total stock; this keeps per-lot quantities accurate for expiry tracking.
-    if (batchExpiryOn) {
-      for (const itemInput of input.items) {
-        const product = products.find((p) => p.id === itemInput.productId)!
-        if (!product.trackStock) continue
-        const unitsPerItem = Number.isFinite(itemInput.unitsPerItem) && (itemInput.unitsPerItem as number) > 0 ? (itemInput.unitsPerItem as number) : 1
-        let remaining = itemInput.quantity * unitsPerItem
-        if (remaining <= 0) continue
-        const lots = await tx.stockLot.findMany({
-          where: { shopId, productId: itemInput.productId, quantity: { gt: 0 } },
-          orderBy: [{ expiry: { sort: 'asc', nulls: 'last' } }, { receivedAt: 'asc' }],
+  // Idempotent lookup runs inside the transaction below (avoids an extra round-trip on every new sale)
+  try {
+    const invoice = await prisma.$transaction(async (tx) => {
+      if (input.clientSaleId) {
+        const existing = await tx.invoice.findFirst({
+          where: { shopId, clientSaleId: input.clientSaleId },
+          include: invoiceDetailInclude,
         })
-        for (const lot of lots) {
-          if (remaining <= 0.0001) break
-          const have = Number(lot.quantity)
-          const take = Math.min(have, remaining)
-          await tx.stockLot.update({
-            where: { id: lot.id },
-            data: { quantity: new Decimal(have - take) },
-          })
-          remaining -= take
+        if (existing) {
+          return { invoice: existing, stockWarnings: undefined, created: false }
         }
-        // If remaining > 0, sold more than was lotted (e.g. legacy stock). Allowed — the
-        // ledger still reflects the true total; lots simply can't go below zero.
       }
-    }
 
-    // Handle payment or udhaar
-    if (input.paymentStatus === 'PAID') {
-      // Attribute the cash to the cashier's open drawer, if one is open.
-      const shiftId = await getOpenShiftId(tx, shopId, userId)
-      // Create payment row
-      await tx.payment.create({
+      // Generate sequential invoice number for this shop
+      const lastInvoice = await tx.invoice.findFirst({
+        where: { shopId },
+        orderBy: { createdAt: 'desc' },
+        select: { number: true },
+      })
+      let nextNumber = 1
+      if (lastInvoice?.number) {
+        const lastNum = parseInt(lastInvoice.number, 10)
+        if (!isNaN(lastNum)) nextNumber = lastNum + 1
+      }
+      const invoiceNumber = String(nextNumber).padStart(6, '0') // 000001, 000002, ...
+
+      const invoice = await tx.invoice.create({
         data: {
           shopId,
-          invoiceId: invoice.id,
-          amount: new Decimal(input.total),
-          method: input.paymentMethod!,
-          receivedById: userId,
-          shiftId,
-          note: input.amountReceived
-            ? `Received: ${input.amountReceived}, Change: ${input.amountReceived - input.total}`
-            : null,
+          customerId: input.customerId || null,
+          clientSaleId: input.clientSaleId || null,
+          number: invoiceNumber,
+          paymentStatus: input.paymentStatus,
+          paymentMethod: input.paymentStatus === 'PAID' ? input.paymentMethod! : null,
+          subtotal: new Decimal(input.subtotal),
+          discount: new Decimal(input.discount),
+          serviceCharge: new Decimal(comp.serviceCharge),
+          deliveryCharge: new Decimal(comp.deliveryCharge),
+          total: new Decimal(input.total),
+          createdByUserId: userId,
         },
       })
-    } else if (input.paymentStatus === 'UDHAAR' && input.customerId) {
-      // Create customer ledger entry (DEBIT - customer owes more)
-      await tx.customerLedger.create({
-        data: {
-          shopId,
-          customerId: input.customerId,
-          type: 'SALE_UDHAAR',
-          direction: 'DEBIT',
-          amount: new Decimal(input.total),
-          refType: 'invoice',
-          refId: invoice.id,
-        },
-      })
-    }
 
-    // Return invoice with lines
-    const invoiceWithDetails = await tx.invoice.findUnique({
-      where: { id: invoice.id },
-      include: {
-        lines: {
-          include: {
-            product: true,
-          },
-        },
-        customer: true,
-        payments: true,
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      await applySaleEffects(tx, {
+        invoiceId: invoice.id,
+        shopId,
+        input,
+        userId,
+        products: comp.products,
+        batchExpiryOn: comp.batchExpiryOn,
+      })
+
+      const invoiceWithDetails = await tx.invoice.findUnique({
+        where: { id: invoice.id },
+        include: invoiceDetailInclude,
+      })
+
+      return {
+        invoice: invoiceWithDetails!,
+        stockWarnings: comp.stockWarnings.length > 0 ? comp.stockWarnings : undefined,
+        created: true,
+      }
+    }, {
+      maxWait: 10000,
+      timeout: 30000,
     })
-
-    return {
-      invoice: invoiceWithDetails!,
-      stockWarnings: stockWarnings.length > 0 ? stockWarnings : undefined,
-      created: true,
-    }
-  }, {
-    maxWait: 10000, // 10 seconds max wait
-    timeout: 30000, // 30 seconds timeout
-  })
 
     return invoice
   } catch (e) {
@@ -429,6 +419,135 @@ export async function createSale(
     }
     throw e
   }
+}
+
+/**
+ * Why an invoice cannot be edited in place, or null if it can be. Used both to gate the
+ * UI (canEdit flag in listSales) and to enforce the rule in updateSale. The invoice must
+ * be loaded with `payments` (incl. shift status) and a `returns` count.
+ */
+export function invoiceEditBlockReason(
+  invoice: {
+    status: string
+    createdAt: Date
+    payments?: Array<{ shift?: { status: string } | null }>
+    returns?: Array<unknown>
+    _count?: { returns?: number }
+  },
+  shopSettings: SaleShopSettings,
+  now: Date = new Date(),
+): string | null {
+  if (invoice.status !== 'COMPLETED') return 'Only completed sales can be edited'
+  const returnsCount = invoice._count?.returns ?? invoice.returns?.length ?? 0
+  if (returnsCount > 0) return 'This sale has returns and cannot be edited'
+  if (readFeatureConfig(shopSettings?.featureConfig).batchExpiry === true) {
+    return 'Editing is not available for batch/expiry shops. Void and re-ring instead.'
+  }
+  const dayStart = shopDayStartUTC(shopSettings?.timezone || DEFAULT_TIMEZONE, now)
+  if (invoice.createdAt < dayStart) return "Only today's sales can be edited"
+  // Cash counted in a closed drawer is locked; editing would change a reconciled shift.
+  if (shopSettings?.requireOpenDrawer) {
+    const inClosedShift = (invoice.payments || []).some((p) => p.shift?.status === 'CLOSED')
+    if (inClosedShift) return 'This sale is in a closed cash drawer. Void and re-ring instead.'
+  }
+  return null
+}
+
+/**
+ * Edit an existing sale in place: reverse the old stock/ledger/payment effects and
+ * re-apply the new ones in a single transaction, keeping the same invoice id + number.
+ */
+export async function updateSale(
+  shopId: string,
+  invoiceId: string,
+  input: CreateSaleInput,
+  userId: string
+) {
+  const hasPermission = await checkSalePermission(userId, shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to edit sales in this shop')
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      lines: { select: { id: true, productId: true, quantity: true, unitsPerItem: true } },
+      payments: { include: { shift: { select: { status: true } } } },
+      _count: { select: { returns: true } },
+    },
+  })
+  if (!invoice || invoice.shopId !== shopId) {
+    throw new Error('Invoice not found')
+  }
+
+  const shopSettings = await prisma.shopSettings.findUnique({ where: { shopId } })
+  const blocked = invoiceEditBlockReason(invoice, shopSettings)
+  if (blocked) throw new Error(blocked)
+
+  // Old base units per product, credited back to availability during validation.
+  const priorByProduct = new Map<string, number>()
+  for (const l of invoice.lines) {
+    priorByProduct.set(
+      l.productId,
+      (priorByProduct.get(l.productId) || 0) + Number(l.quantity) * Number(l.unitsPerItem),
+    )
+  }
+
+  const comp = await validateSaleInput(shopId, input, priorByProduct)
+
+  const result = await prisma.$transaction(async (tx) => {
+    const oldLineIds = invoice.lines.map((l) => l.id)
+
+    // Reverse old side-effects.
+    if (oldLineIds.length > 0) {
+      await tx.stockLedger.deleteMany({ where: { refType: 'invoice_line', refId: { in: oldLineIds } } })
+    }
+    if (invoice.paymentStatus === 'UDHAAR' && invoice.customerId) {
+      await tx.customerLedger.deleteMany({ where: { refType: 'invoice', refId: invoice.id } })
+    }
+    await tx.payment.deleteMany({ where: { invoiceId: invoice.id } })
+    await tx.invoiceLine.deleteMany({ where: { invoiceId: invoice.id } })
+
+    // Update the header (keep id, number, createdAt, createdByUserId, clientSaleId).
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        customerId: input.customerId || null,
+        paymentStatus: input.paymentStatus,
+        paymentMethod: input.paymentStatus === 'PAID' ? input.paymentMethod! : null,
+        subtotal: new Decimal(input.subtotal),
+        discount: new Decimal(input.discount),
+        serviceCharge: new Decimal(comp.serviceCharge),
+        deliveryCharge: new Decimal(comp.deliveryCharge),
+        total: new Decimal(input.total),
+      },
+    })
+
+    // Re-apply the new lines, stock, and payment/udhaar.
+    await applySaleEffects(tx, {
+      invoiceId: invoice.id,
+      shopId,
+      input,
+      userId,
+      products: comp.products,
+      batchExpiryOn: comp.batchExpiryOn,
+    })
+
+    const invoiceWithDetails = await tx.invoice.findUnique({
+      where: { id: invoice.id },
+      include: invoiceDetailInclude,
+    })
+
+    return {
+      invoice: invoiceWithDetails!,
+      stockWarnings: comp.stockWarnings.length > 0 ? comp.stockWarnings : undefined,
+    }
+  }, {
+    maxWait: 10000,
+    timeout: 30000,
+  })
+
+  return result
 }
 
 export async function listSales(shopId: string, filters: {
@@ -496,7 +615,7 @@ export async function listSales(shopId: string, filters: {
             },
           },
         },
-        payments: true,
+        payments: { include: { shift: { select: { status: true } } } },
         createdBy: {
           select: {
             id: true,
@@ -506,6 +625,7 @@ export async function listSales(shopId: string, filters: {
         _count: {
           select: {
             lines: true,
+            returns: true,
           },
         },
       },
@@ -513,8 +633,16 @@ export async function listSales(shopId: string, filters: {
     prisma.invoice.count({ where }),
   ])
 
+  // Annotate each sale with whether it can be edited in place (drives the Edit button).
+  const shopSettings = await prisma.shopSettings.findUnique({ where: { shopId } })
+  const now = new Date()
+  const sales = invoices.map((inv) => {
+    const reason = invoiceEditBlockReason(inv, shopSettings, now)
+    return { ...inv, canEdit: reason === null, editBlockReason: reason }
+  })
+
   return {
-    sales: invoices,
+    sales,
     pagination: {
       page,
       limit,
@@ -557,13 +685,14 @@ export async function voidSale(shopId: string, invoiceId: string, userId: string
       data: { status: 'VOID' },
     })
 
-    // Reverse stock for each line (add back quantities) - batch insert for performance
+    // Reverse stock for each line (add back base units) - batch insert for performance.
+    // Stock is tracked in base units, so add back quantity * unitsPerItem (1 for loose sales).
     if (invoice.lines.length > 0) {
       await tx.stockLedger.createMany({
         data: invoice.lines.map(line => ({
           shopId,
           productId: line.productId,
-          changeQty: line.quantity, // positive to add back
+          changeQty: new Decimal(line.quantity).mul(line.unitsPerItem), // positive to add back, base units
           type: 'ADJUSTMENT' as const,
           refType: 'invoice_void' as const,
           refId: invoice.id,

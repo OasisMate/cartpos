@@ -108,6 +108,11 @@ stock = sum(StockLedger.changeQty) where productId = X
    - Payment record (if paid)
    - CustomerLedger entry (if udhaar)
 
+**Edit a sale (in place):**
+- Sales list → Edit (pencil) on an editable row → reopens it in POS prefilled.
+- Change items/customer/payment → Save changes. Keeps the same invoice number; reverses old stock/ledger/payment and re-applies new ones (audit: UPDATE_SALE).
+- Only today's COMPLETED sales; blocked for VOID, sales with returns, closed-drawer sales, batch/expiry shops, demo. Online-only. Otherwise: void + re-ring.
+
 **Stock Adjustments:**
 - Manual corrections for discrepancies
 - Damage/expiry tracking
