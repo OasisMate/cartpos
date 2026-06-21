@@ -66,6 +66,9 @@ async function resetDemoOrg() {
   await safeDeleteMany(() => prisma.supplier.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.shopSettings.deleteMany({ where: inShop }))
   await safeDeleteMany(() => prisma.userShop.deleteMany({ where: inShop }))
+  // Cash drawer / shift data (FK to shops + users) — must go before shops/users.
+  await safeDeleteMany(() => prisma.cashMovement.deleteMany({ where: inShop }))
+  await safeDeleteMany(() => prisma.shift.deleteMany({ where: inShop }))
 
   // Audit + notifications referencing the org/shops (may FK to Organization).
   await safeDeleteMany(() => prisma.activityLog.deleteMany({ where: { orgId: org.id } }))
