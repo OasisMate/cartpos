@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Button from '@/components/ui/Button'
 import { printReceipt } from '@/lib/utils/print'
+import { trapTab } from '@/lib/utils/focusTrap'
 import ShareWhatsAppButton from './ShareWhatsAppButton'
 import ReceiptDocument from './ReceiptDocument'
 
@@ -59,6 +60,16 @@ export default function ReceiptModal({
   autoPrint = false,
 }: ReceiptModalProps) {
   const [isPrinting, setIsPrinting] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  function handleKeyDown(e: ReactKeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      onClose()
+      return
+    }
+    trapTab(e, panelRef.current)
+  }
 
   async function handlePrint() {
     setIsPrinting(true)
@@ -100,8 +111,8 @@ export default function ReceiptModal({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onKeyDown={handleKeyDown}>
+        <div ref={panelRef} className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
           {/* Modal Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
             <h2 className="text-xl font-bold text-white">Receipt</h2>
@@ -118,7 +129,7 @@ export default function ReceiptModal({
               Close
             </Button>
             <ShareWhatsAppButton invoice={invoice} />
-            <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={handlePrint} disabled={isPrinting}>
+            <Button autoFocus className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={handlePrint} disabled={isPrinting}>
               {isPrinting ? 'Printing...' : 'Print'}
             </Button>
           </div>

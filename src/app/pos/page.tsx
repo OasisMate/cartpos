@@ -10,6 +10,7 @@ import { getProductsWithCache, getCachedProducts, findProductByBarcode, searchCa
 import { saveSale } from '@/lib/offline/sales'
 import { getCustomers, saveCustomers, saveProducts } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
+import { trapTab } from '@/lib/utils/focusTrap'
 import { sumCartLines, calculateTotals, formatNumber, formatCurrency, roundToTwo } from '@/lib/utils/money'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -30,6 +31,27 @@ function isTypingTarget(e: KeyboardEvent, exceptEl?: HTMLElement | null) {
   if (!el || el === exceptEl) return false
   const tag = el.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
+}
+
+/** Relevance rank for a product name against a search term (lower = better match):
+ *  0 exact, 1 starts-with, 2 a word starts with it, 3 contains, 4 matched elsewhere (barcode/sku). */
+function nameMatchRank(name: string, term: string): number {
+  const n = name.toLowerCase()
+  if (n === term) return 0
+  if (n.startsWith(term)) return 1
+  if (n.split(/[^a-z0-9]+/).some((w) => w.startsWith(term))) return 2
+  if (n.includes(term)) return 3
+  return 4
+}
+
+/** Sort comparator: best name match first, then alphabetical, then cheapest. */
+function compareForSearch(a: Product, b: Product, term: string): number {
+  const ra = nameMatchRank(a.name, term)
+  const rb = nameMatchRank(b.name, term)
+  if (ra !== rb) return ra - rb
+  const byName = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+  if (byName !== 0) return byName
+  return parseFloat(a.price.toString()) - parseFloat(b.price.toString())
 }
 
 /** Window-level keydown hook with a stable listener and always-fresh handler. */
@@ -1338,6 +1360,8 @@ export default function POSPage() {
   function closeReceiptModal() {
     setShowReceiptModal(false)
     setReceiptData(null)
+    // Return focus to the search/barcode input for the next sale.
+    setTimeout(() => barcodeInputRef.current?.focus(), 0)
   }
 
   // Convert ReceiptData to invoice format for ReceiptModal
@@ -1404,12 +1428,9 @@ export default function POSPage() {
             cartonSize: p.cartonSize,
             cartonBarcode: p.cartonBarcode,
           }))
-          // Sort: first by name alphabetically, then by price (ascending) for same names
-          mapped.sort((a, b) => {
-            const nameCompare = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-            if (nameCompare !== 0) return nameCompare
-            return parseFloat(a.price.toString()) - parseFloat(b.price.toString())
-          })
+          // Rank exact/prefix/word/contains matches first, then name, then price.
+          const term = barcodeInput.toLowerCase().trim()
+          mapped.sort((a, b) => compareForSearch(a, b, term))
           setFilteredProducts(mapped)
         } catch (err) {
           console.error('Error searching cached products:', err)
@@ -1425,12 +1446,8 @@ export default function POSPage() {
             (p.cartonBarcode && p.cartonBarcode.includes(barcodeInput)) ||
             ((p as any).sku && (p as any).sku.toLowerCase().includes(term))
         )
-        // Sort: first by name alphabetically, then by price (ascending) for same names
-        filtered.sort((a, b) => {
-          const nameCompare = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-          if (nameCompare !== 0) return nameCompare
-          return parseFloat(a.price.toString()) - parseFloat(b.price.toString())
-        })
+        // Rank exact/prefix/word/contains matches first, then name, then price.
+        filtered.sort((a, b) => compareForSearch(a, b, term))
         setFilteredProducts(filtered)
       }
     }
@@ -1517,15 +1534,35 @@ export default function POSPage() {
       return
     }
     if (e.key === 'Enter' || e.code === 'NumpadEnter') {
+      // 1) An explicitly highlighted result wins.
       if (highlightIndex >= 0 && visibleResults[highlightIndex]) {
         e.preventDefault()
         handleProductSearch(visibleResults[highlightIndex])
         setHighlightIndex(-1)
         return
       }
-      if (!barcodeInput.trim() && cart.length > 0) {
+      const term = barcodeInput.trim()
+      // 2) Empty box completes the sale (kept shortcut).
+      if (!term) {
+        if (cart.length > 0) { e.preventDefault(); handleCompleteSale() }
+        return
+      }
+      // 3) Text typed with results showing: add the best (top-ranked) match, so the
+      //    cashier never has to arrow down and Enter can't slip through to Complete Sale.
+      //    Skip for scans: exact barcode/carton hits and "<code> x5" quantity syntax go
+      //    through handleBarcodeSubmit (carton/quantity aware).
+      const isScanLike = /[x*]\s*\d+\s*$/i.test(term)
+      const exactBarcode = productIndex.byBarcode[term] || productIndex.byCartonBarcode[term]
+      const lower = term.toLowerCase()
+      const top = visibleResults[0]
+      const topIsTextMatch =
+        !!top &&
+        (top.name.toLowerCase().includes(lower) ||
+          ((top as any).sku && (top as any).sku.toLowerCase().includes(lower)))
+      if (!isScanLike && !exactBarcode && topIsTextMatch) {
         e.preventDefault()
-        handleCompleteSale()
+        handleProductSearch(top)
+        setHighlightIndex(-1)
         return
       }
       // else: fall through to the form submit (handleBarcodeSubmit) — scanner path unchanged
@@ -1539,6 +1576,7 @@ export default function POSPage() {
 
   // Keys handled inside the payment modal (focus is within the modal).
   function handlePaymentKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Tab') { trapTab(e, paymentModalRef.current); return }
     if (e.key === 'Escape') {
       e.preventDefault()
       setShowPaymentModal(false)
