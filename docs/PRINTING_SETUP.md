@@ -44,7 +44,10 @@ that auto-confirms the print and sends it to the default printer.
 3. Always open CartPOS from this shortcut at the counter.
 4. Make a test sale. The receipt prints silently.
 
-Edge works the same way: use `msedge.exe` with `--kiosk-printing`.
+Edge works the same way, but needs its own `--user-data-dir` so the app window stays separate:
+```
+"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --kiosk-printing --user-data-dir="C:\CartPOS-Edge" --app=https://YOUR-CARTPOS-URL
+```
 
 ### Notes / caveats
 - The flag must be on the shortcut that launches the browser. A normal Chrome window

@@ -1453,38 +1453,20 @@ export default function SettingsPage() {
                 </div>
 
                 {shopSettings.autoPrint && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                    <p className="font-semibold mb-1">Make receipts print with no popup</p>
-                    <p className="mb-3 text-blue-800">
-                      Auto-print is on. To print straight to your thermal printer without the print dialog, set this up once
-                      using either option below.
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                    <p className="font-semibold mb-1">Print with no popup (set up once)</p>
+                    <p className="mb-2 text-blue-800">
+                      Set your thermal printer as the Windows default, then open CartPOS from a desktop shortcut whose target
+                      is one of the lines below. The desktop app does this automatically.
                     </p>
-
-                    <p className="font-semibold mb-1">Option 1: Use the desktop app (easiest)</p>
-                    <p className="mb-3 text-blue-800">
-                      Contact the CartPOS team for the desktop app. Install it, log in, and you are set. It prints silently with
-                      no extra steps.
-                    </p>
-
-                    <p className="font-semibold mb-1">Option 2: No app? Set up Chrome (one time)</p>
-                    <ol className="list-decimal pl-5 space-y-2 text-blue-800">
-                      <li>
-                        <span className="font-medium">Make your printer the default.</span> Windows Settings, then Bluetooth and
-                        devices, then Printers and scanners, click your thermal printer, then Set as default. Also turn off
-                        {' '}&quot;Let Windows manage my default printer&quot;.
-                      </li>
-                      <li>
-                        <span className="font-medium">Create a Chrome shortcut.</span> Right-click the desktop, then New, then
-                        Shortcut. Paste this as the location (one line), click Next, name it CartPOS, then Finish:
-                        <code className="mt-1 block break-all rounded bg-blue-100 px-2 py-1 text-xs">
-                          {'"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk-printing --app=https://cartpos.vercel.app'}
-                        </code>
-                      </li>
-                      <li>
-                        <span className="font-medium">Always open CartPOS from that shortcut.</span> A normal Chrome tab still
-                        shows the print popup, so use the shortcut every time.
-                      </li>
-                    </ol>
+                    <p className="font-medium">Chrome:</p>
+                    <code className="mb-2 block break-all rounded bg-blue-100 px-2 py-1">
+                      {'"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk-printing --app=https://cartpos.vercel.app'}
+                    </code>
+                    <p className="font-medium">Microsoft Edge:</p>
+                    <code className="block break-all rounded bg-blue-100 px-2 py-1">
+                      {'"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe" --kiosk-printing --user-data-dir="C:\\CartPOS-Edge" --app=https://cartpos.vercel.app'}
+                    </code>
                   </div>
                 )}
 
