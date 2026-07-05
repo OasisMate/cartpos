@@ -39,6 +39,8 @@ interface ReceiptModalProps {
     paymentStatus: 'PAID' | 'UDHAAR'
     paymentMethod?: 'CASH' | 'CARD' | 'OTHER' | null
     payments?: Array<{ amount: string | number }>
+    /** Udhaar: customer's full khata after this bill, printed as "Total Balance (Udhaar)". */
+    customerBalanceAfter?: string | number | null
     // Optional customer info for Udhaar receipts
     customerName?: string | null
     customer?: {

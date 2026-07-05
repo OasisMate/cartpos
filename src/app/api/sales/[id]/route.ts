@@ -56,8 +56,25 @@ export async function GET(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
     }
 
+    // Udhaar receipts print the customer's CURRENT khata as "Total Balance (Udhaar)".
+    let customerBalanceAfter: number | undefined
+    if (invoice.paymentStatus === 'UDHAAR' && invoice.customerId) {
+      const sums = await prisma.customerLedger.groupBy({
+        by: ['direction'],
+        where: { shopId: user.currentShopId, customerId: invoice.customerId },
+        _sum: { amount: true },
+      })
+      customerBalanceAfter = sums.reduce(
+        (bal, row) =>
+          bal + (row.direction === 'DEBIT' ? 1 : -1) * Number(row._sum.amount || 0),
+        0,
+      )
+    }
+
     // servedBy drives the "Served by" line on the reprinted receipt (first name only).
-    return NextResponse.json({ invoice: { ...invoice, servedBy: invoice.createdBy?.name ?? null } })
+    return NextResponse.json({
+      invoice: { ...invoice, servedBy: invoice.createdBy?.name ?? null, customerBalanceAfter },
+    })
   } catch (error: any) {
     console.error('Get sale error:', error)
     return NextResponse.json({ error: error.message || 'Failed to get sale' }, { status: 500 })
@@ -101,6 +118,7 @@ export async function PUT(
       paymentStatus: body.paymentStatus,
       paymentMethod: body.paymentMethod,
       amountReceived: body.amountReceived ? parseFloat(body.amountReceived) : undefined,
+      paidNow: body.paidNow ? parseFloat(body.paidNow) : undefined,
     }
 
     const result = await updateSale(user.currentShopId, params.id, input, user.id)

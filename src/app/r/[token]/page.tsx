@@ -22,6 +22,8 @@ export default async function PublicReceiptPage({
       id: true,
       number: true,
       status: true,
+      shopId: true,
+      customerId: true,
       paymentStatus: true,
       paymentMethod: true,
       subtotal: true,
@@ -53,6 +55,20 @@ export default async function PublicReceiptPage({
   })
 
   if (!invoice) return notFound()
+
+  // Udhaar: the receipt's "Total Balance (Udhaar)" line shows the customer's current khata.
+  let customerBalanceAfter: number | undefined
+  if (invoice.paymentStatus === 'UDHAAR' && invoice.customerId) {
+    const sums = await prisma.customerLedger.groupBy({
+      by: ['direction'],
+      where: { shopId: invoice.shopId, customerId: invoice.customerId },
+      _sum: { amount: true },
+    })
+    customerBalanceAfter = sums.reduce(
+      (bal, row) => bal + (row.direction === 'DEBIT' ? 1 : -1) * Number(row._sum.amount || 0),
+      0,
+    )
+  }
 
   // Map to the shared ReceiptDocument shape — the EXACT printed receipt design.
   const doc = {
@@ -90,6 +106,7 @@ export default async function PublicReceiptPage({
     paymentStatus: (invoice.paymentStatus === 'UDHAAR' ? 'UDHAAR' : 'PAID') as 'PAID' | 'UDHAAR',
     paymentMethod: invoice.paymentMethod as 'CASH' | 'CARD' | 'OTHER' | null,
     payments: invoice.payments.map((p) => ({ amount: Number(p.amount) })),
+    customerBalanceAfter,
     customer: { name: invoice.customer?.name ?? null },
   }
 

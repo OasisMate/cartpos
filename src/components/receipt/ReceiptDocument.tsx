@@ -37,6 +37,8 @@ export interface ReceiptDocumentInvoice {
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER' | null
   payments?: Array<{ amount: string | number }>
+  /** Udhaar: customer's full khata after this bill (prev balance + bill - paid). Falls back to this bill's due when absent. */
+  customerBalanceAfter?: string | number | null
   customerName?: string | null
   customer?: { name?: string | null } | null
   /** Staff member who served the sale. Rendered as first name only on the receipt. */
@@ -63,9 +65,12 @@ export default function ReceiptDocument({
   const change = amountReceived ? amountReceived - total : undefined
   // Card fee is implicit in the total (total = subtotal - discount + service + delivery + fee). Derive it for display.
   const cardFee = paymentMethod === 'CARD' ? Math.max(0, total - (subtotal - discount) - serviceCharge - deliveryCharge) : 0
-  // Udhaar bills: show how much was paid and what's still owed on this bill.
+  // Udhaar bills: show how much was paid now and the customer's full khata after this bill.
   const paidTotal = (invoice.payments || []).reduce((s, p) => s + Number(p.amount), 0)
-  const balanceDue = Math.max(0, total - paidTotal)
+  const totalBalance =
+    invoice.customerBalanceAfter !== undefined && invoice.customerBalanceAfter !== null
+      ? Number(invoice.customerBalanceAfter)
+      : Math.max(0, total - paidTotal)
 
   // Receipt header display settings
   const receiptHeaderDisplay = invoice.shop?.settings?.receiptHeaderDisplay || 'NAME_ONLY'
@@ -225,8 +230,8 @@ export default function ReceiptDocument({
               <span className="font-medium">{formatNumber(paidTotal)}</span>
             </div>
             <div className="flex justify-between font-bold" style={{ fontSize: '10pt', fontWeight: 'bold' }}>
-              <span>Balance Due (Udhaar):</span>
-              <span>{formatNumber(balanceDue)}</span>
+              <span>Total Balance (Udhaar):</span>
+              <span>{formatNumber(totalBalance)}</span>
             </div>
           </>
         )}

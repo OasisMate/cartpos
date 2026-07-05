@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all data in parallel for maximum performance
-    const [products, stock, settings, customers] = await Promise.all([
+    const [products, stock, settings, customers, ledgerSums] = await Promise.all([
       // Products
       getProductsForPOS(user.currentShopId),
       
@@ -64,6 +64,13 @@ export async function GET(request: NextRequest) {
           notes: true,
         },
       }),
+
+      // Ledger sums per customer+direction, folded into a balance below
+      prisma.customerLedger.groupBy({
+        by: ['customerId', 'direction'],
+        where: { shopId: user.currentShopId },
+        _sum: { amount: true },
+      }),
     ])
 
     // Convert stock array to map for easier lookup
@@ -71,6 +78,18 @@ export async function GET(request: NextRequest) {
     stock.forEach(item => {
       stockMap[item.productId] = item.stock
     })
+
+    // Balance = DEBIT - CREDIT; positive means the customer owes the shop.
+    const balanceMap: Record<string, number> = {}
+    ledgerSums.forEach((row) => {
+      const amt = Number(row._sum.amount || 0)
+      balanceMap[row.customerId] =
+        (balanceMap[row.customerId] || 0) + (row.direction === 'DEBIT' ? amt : -amt)
+    })
+    const customersWithBalance = customers.map((c) => ({
+      ...c,
+      balance: balanceMap[c.id] || 0,
+    }))
 
     return NextResponse.json({
       products,
@@ -95,7 +114,7 @@ export async function GET(request: NextRequest) {
         enableTradePricing: settings.enableTradePricing !== false,
         requireOpenDrawer: Boolean(settings.requireOpenDrawer),
       },
-      customers,
+      customers: customersWithBalance,
     })
   } catch (error: any) {
     console.error('POS init error:', error)

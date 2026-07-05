@@ -56,6 +56,8 @@ export interface CachedCustomer {
   name: string
   phone: string | null
   notes: string | null
+  /** Khata balance as of last sync (DEBIT - CREDIT; positive = customer owes the shop). */
+  balance?: number
   isLocalOnly?: boolean
   syncStatus?: 'SYNCED' | 'PENDING'
   updatedAt: number
@@ -93,6 +95,8 @@ export interface CachedSale {
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
   amountReceived?: number
+  /** Udhaar: cash paid at the counter (may exceed total to clear old khata) */
+  paidNow?: number
   createdAt: number // timestamp
   syncStatus: 'PENDING' | 'SYNCED'
   syncError?: string

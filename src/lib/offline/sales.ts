@@ -23,6 +23,8 @@ export interface SaleInput {
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
   amountReceived?: number
+  /** Udhaar: cash paid at the counter (may exceed total to clear old khata) */
+  paidNow?: number
 }
 
 /**
@@ -51,6 +53,7 @@ export async function syncSaleToServer(sale: CachedSale): Promise<boolean> {
         paymentStatus: sale.paymentStatus,
         paymentMethod: sale.paymentMethod,
         amountReceived: sale.amountReceived,
+        paidNow: sale.paidNow,
       }),
     })
 
@@ -104,6 +107,7 @@ export async function syncPendingSalesBatch(shopId: string): Promise<{ synced: n
       paymentStatus: (sale as CachedSale).paymentStatus,
       paymentMethod: (sale as CachedSale).paymentMethod,
       amountReceived: (sale as CachedSale).amountReceived,
+      paidNow: (sale as CachedSale).paidNow,
     }),
     endpoint: '/api/sales/sync-batch',
   })

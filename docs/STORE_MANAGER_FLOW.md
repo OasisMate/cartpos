@@ -101,12 +101,15 @@ stock = sum(StockLedger.changeQty) where productId = X
 2. Add to cart, set quantity
 3. Apply discount (optional)
 4. Select payment: Cash/Card/Other or Udhaar
+   - Udhaar: picking a customer shows their khata (red "Owes Rs X" / green "Advance Rs X")
+   - Udhaar: optional "Paid Now (Rs)" field records cash handed over with the bill; may exceed the total (extra clears old khata); live "New total balance" preview
 5. Complete → Creates:
    - Invoice
    - InvoiceLine entries
    - StockLedger entries (SALE, -quantity)
-   - Payment record (if paid)
-   - CustomerLedger entry (if udhaar)
+   - Payment record (if paid; udhaar pay-now also creates a CASH Payment into the open drawer)
+   - CustomerLedger entry (if udhaar: SALE_UDHAAR debit for the bill + PAYMENT_RECEIVED credit for pay-now)
+   - Receipt prints Paid + "Total Balance (Udhaar)" = full khata after the sale (reprints/share links show current khata)
 
 **Edit a sale (in place):**
 - Sales list → Edit (pencil) on an editable row → reopens it in POS prefilled.

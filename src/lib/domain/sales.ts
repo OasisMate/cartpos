@@ -54,6 +54,8 @@ export interface CreateSaleInput {
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
   amountReceived?: number // For paid sales
+  /** Udhaar sales only: cash handed over at the counter. May exceed the bill total (extra clears old khata). */
+  paidNow?: number
 }
 
 // Check if user has permission to create sales in a shop
@@ -123,6 +125,9 @@ async function validateSaleInput(
   }
   if (input.paymentStatus === 'PAID' && !input.paymentMethod) {
     throw new Error('Payment method is required for paid sales')
+  }
+  if (input.paidNow !== undefined && (!Number.isFinite(input.paidNow) || input.paidNow < 0)) {
+    throw new Error('Invalid paid-now amount')
   }
 
   // Validate all products exist and belong to shop
@@ -320,6 +325,35 @@ async function applySaleEffects(
         refId: invoiceId,
       },
     })
+
+    // Cash handed over at the counter: goes into the drawer and credits the khata.
+    // refType 'invoice' so edit/delete cleanup reverses it alongside the debit.
+    const paidNow = Number(input.paidNow ?? 0)
+    if (paidNow > 0) {
+      const shiftId = await getOpenShiftId(tx, shopId, userId)
+      await tx.payment.create({
+        data: {
+          shopId,
+          invoiceId,
+          customerId: input.customerId,
+          amount: new Decimal(paidNow),
+          method: 'CASH',
+          receivedById: userId,
+          shiftId,
+        },
+      })
+      await tx.customerLedger.create({
+        data: {
+          shopId,
+          customerId: input.customerId,
+          type: 'PAYMENT_RECEIVED',
+          direction: 'CREDIT',
+          amount: new Decimal(paidNow),
+          refType: 'invoice',
+          refId: invoiceId,
+        },
+      })
+    }
   }
 }
 
@@ -713,6 +747,33 @@ export async function voidSale(shopId: string, invoiceId: string, userId: string
           refId: invoice.id,
         },
       })
+
+      // Pay-now cash taken with this bill: hand it back (negative payment) and
+      // cancel its khata credit (DEBIT), so the customer lands exactly where they started.
+      const paidTotal = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0)
+      if (paidTotal > 0) {
+        await tx.payment.create({
+          data: {
+            shopId,
+            invoiceId: invoice.id,
+            customerId: invoice.customerId,
+            amount: new Decimal(-paidTotal),
+            method: 'CASH',
+            note: 'Void sale - reversal',
+          },
+        })
+        await tx.customerLedger.create({
+          data: {
+            shopId,
+            customerId: invoice.customerId,
+            type: 'ADJUSTMENT',
+            direction: 'DEBIT',
+            amount: new Decimal(paidTotal),
+            refType: 'invoice_void',
+            refId: invoice.id,
+          },
+        })
+      }
     }
 
     // If PAID, create negative payment record to reflect reversal

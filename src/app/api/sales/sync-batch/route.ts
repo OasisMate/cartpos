@@ -22,6 +22,7 @@ interface SyncSaleInput {
   paymentStatus: 'PAID' | 'UDHAAR'
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
   amountReceived?: number
+  paidNow?: number
 }
 
 // POST: Batch sync sales from offline clients
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
           paymentStatus: sale.paymentStatus,
           paymentMethod: sale.paymentMethod,
           amountReceived: sale.amountReceived,
+          paidNow: sale.paidNow,
         }
 
         const saleResult = await createSale(user.currentShopId, input, user.id)

@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
       paymentStatus: body.paymentStatus,
       paymentMethod: body.paymentMethod,
       amountReceived: body.amountReceived ? parseFloat(body.amountReceived) : undefined,
+      paidNow: body.paidNow ? parseFloat(body.paidNow) : undefined,
     }
 
     const result = await createSale(user.currentShopId, input, user.id)

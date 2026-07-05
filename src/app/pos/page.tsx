@@ -94,6 +94,8 @@ interface Customer {
   id: string
   name: string
   phone: string | null
+  /** Khata balance (DEBIT - CREDIT); positive = customer owes the shop. Offline: as of last sync. */
+  balance?: number
 }
 
 interface CartItem {
@@ -136,6 +138,10 @@ interface ReceiptData {
   amountReceived?: number
   change?: number
   customerName?: string
+  /** Udhaar: cash paid at the counter with this bill */
+  paidNow?: number
+  /** Udhaar: customer's full khata after this sale (prev balance + bill - paid now) */
+  customerBalanceAfter?: number
 }
 
 // How many products to render in the tappable browse grid. With large catalogs
@@ -258,6 +264,8 @@ export default function POSPage() {
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'OTHER'>('CASH')
   const [customerId, setCustomerId] = useState('')
   const [amountReceived, setAmountReceived] = useState('')
+  // Udhaar: cash the customer hands over with this bill (optional; may exceed the total to clear old khata)
+  const [paidNowStr, setPaidNowStr] = useState('')
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -409,7 +417,7 @@ export default function POSPage() {
 
         const cachedCustomers = await getCustomers(shopId)
         if (cachedCustomers.length > 0) {
-          setCustomers(cachedCustomers.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
+          setCustomers(cachedCustomers.map((c) => ({ id: c.id, name: c.name, phone: c.phone, balance: c.balance })))
           hasLocalData = true
         }
 
@@ -444,6 +452,7 @@ export default function POSPage() {
               id: c.id,
               name: c.name,
               phone: c.phone,
+              balance: Number(c.balance || 0),
             }))
             setCustomers(customers)
             await saveCustomers(shopId, customers)
@@ -467,7 +476,7 @@ export default function POSPage() {
 
           const cached = await getCustomers(shopId)
           if (cached.length > 0) {
-            setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone })))
+            setCustomers(cached.map((c) => ({ id: c.id, name: c.name, phone: c.phone, balance: c.balance })))
           } else {
             const response = await fetch('/api/customers?limit=1000')
             if (response.ok) {
@@ -563,10 +572,11 @@ export default function POSPage() {
             setProductStock(data.stock || {})
             
             // Update customers
-            const customers = (data.customers || []).map((c: any) => ({ 
-              id: c.id, 
-              name: c.name, 
-              phone: c.phone 
+            const customers = (data.customers || []).map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              phone: c.phone,
+              balance: Number(c.balance || 0),
             }))
             setCustomers(customers)
             await saveCustomers(shopId, customers)
@@ -1081,6 +1091,9 @@ export default function POSPage() {
       setPaymentMethod(inv.paymentMethod || 'CASH')
       // Prefill amount received so a cash sale validates; cashier can adjust.
       setAmountReceived(inv.paymentStatus === 'PAID' && inv.paymentMethod === 'CASH' ? String(Number(inv.total)) : '')
+      // Prefill pay-now from payments already on this udhaar bill so saving the edit keeps them.
+      const priorPaid = (inv.payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0)
+      setPaidNowStr(inv.paymentStatus === 'UDHAAR' && priorPaid > 0 ? String(priorPaid) : '')
       setIsEditMode(true)
       setEditInvoiceId(inv.id)
       setEditInvoiceNumber(inv.number || null)
@@ -1158,6 +1171,7 @@ export default function POSPage() {
     setPaymentMethod('CASH')
     setCustomerId('')
     setAmountReceived('')
+    setPaidNowStr('')
     setError('')
     if (barcodeInputRef.current) {
       barcodeInputRef.current.focus()
@@ -1211,6 +1225,7 @@ export default function POSPage() {
     setPaymentMethod('CASH')
     setCustomerId('')
     setAmountReceived('')
+    setPaidNowStr('')
     setError('')
     if (barcodeInputRef.current) {
       barcodeInputRef.current.focus()
@@ -1230,6 +1245,7 @@ export default function POSPage() {
     setPaymentMethod(held.paymentMethod)
     setCustomerId(held.customerId)
     setAmountReceived('')
+    setPaidNowStr('')
 
     const remaining = heldSales.filter((h) => h.id !== held.id)
     setHeldSales(remaining)
@@ -1304,6 +1320,18 @@ export default function POSPage() {
         }
       }
 
+      // Udhaar pay-now: optional cash handed over with the bill (may exceed total to clear old khata)
+      let paidNow: number | undefined
+      if (paymentStatus === 'UDHAAR' && paidNowStr.trim() !== '') {
+        const parsed = parseFloat(paidNowStr)
+        if (Number.isNaN(parsed) || parsed < 0) {
+          setError('Paid now must be 0 or more')
+          setSubmitting(false)
+          return
+        }
+        paidNow = parsed > 0 ? roundToTwo(parsed) : undefined
+      }
+
       // Generate client-side ID for offline-first
       const saleId = cuid()
 
@@ -1331,6 +1359,7 @@ export default function POSPage() {
           paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
             ? parseFloat(amountReceived)
             : undefined,
+        paidNow,
       }
 
       // Edit mode: update the existing invoice in place (online-only), then return to the list.
@@ -1353,6 +1382,7 @@ export default function POSPage() {
             paymentStatus: sale.paymentStatus,
             paymentMethod: sale.paymentMethod,
             amountReceived: sale.amountReceived,
+            paidNow: sale.paidNow,
           }),
         })
         const data = await res.json()
@@ -1384,6 +1414,11 @@ export default function POSPage() {
       // Build receipt data before clearing cart
       const shopInfo = user?.shops?.find((s) => s.shopId === user?.currentShopId)
       const selectedCustomer = customers.find((c) => c.id === customerId)
+      // Full khata after this sale: what they owed + this bill - cash handed over now.
+      const balanceAfter =
+        paymentStatus === 'UDHAAR'
+          ? roundToTwo(Number(selectedCustomer?.balance ?? 0) + total - (paidNow ?? 0))
+          : undefined
       const cashAmount =
         paymentStatus === 'PAID' && paymentMethod === 'CASH' && amountReceived
           ? parseFloat(amountReceived)
@@ -1425,6 +1460,15 @@ export default function POSPage() {
         amountReceived: cashAmount,
         change: cashAmount ? cashAmount - total : undefined,
         customerName: selectedCustomer?.name,
+        paidNow,
+        customerBalanceAfter: balanceAfter,
+      }
+
+      // Keep the in-memory khata current so back-to-back sales show the right balance.
+      if (paymentStatus === 'UDHAAR' && customerId && balanceAfter !== undefined) {
+        setCustomers((prev) =>
+          prev.map((c) => (c.id === customerId ? { ...c, balance: balanceAfter } : c))
+        )
       }
 
       setReceiptData(receiptSnapshot)
@@ -1444,6 +1488,7 @@ export default function POSPage() {
       setPaymentMethod('CASH')
       setCustomerId('')
       setAmountReceived('')
+      setPaidNowStr('')
       // Reset restaurant order state for the next bill.
       setOrderType('DINE_IN')
       setServiceChargeOverride(null)
@@ -1522,7 +1567,13 @@ export default function POSPage() {
     total: receiptData.total,
     paymentStatus: receiptData.paymentStatus,
     paymentMethod: receiptData.paymentMethod,
-    payments: receiptData.amountReceived ? [{ amount: receiptData.amountReceived }] : undefined,
+    payments:
+      receiptData.paymentStatus === 'UDHAAR'
+        ? (receiptData.paidNow ? [{ amount: receiptData.paidNow }] : [])
+        : receiptData.amountReceived
+          ? [{ amount: receiptData.amountReceived }]
+          : undefined,
+    customerBalanceAfter: receiptData.customerBalanceAfter,
     customerName: receiptData.customerName,
     servedBy: user?.name ?? null,
   } : null
@@ -1718,7 +1769,7 @@ export default function POSPage() {
     }
     const tag = (e.target as HTMLElement).tagName
     if (tag === 'INPUT' || tag === 'TEXTAREA') return
-    if (e.key.toLowerCase() === 'c') { e.preventDefault(); setPaymentStatus('PAID'); setCustomerId('') }
+    if (e.key.toLowerCase() === 'c') { e.preventDefault(); setPaymentStatus('PAID'); setCustomerId(''); setPaidNowStr('') }
     else if (e.key.toLowerCase() === 'u') { e.preventDefault(); setPaymentStatus('UDHAAR') }
   }
 
@@ -2331,6 +2382,7 @@ export default function POSPage() {
                     setPaymentStatus(e.target.value as 'PAID' | 'UDHAAR')
                     if (e.target.value === 'PAID') {
                       setCustomerId('')
+                      setPaidNowStr('')
                     }
                   }}
                   className="input"
@@ -2371,6 +2423,51 @@ export default function POSPage() {
                       + {t('add')}
                     </Button>
                   </div>
+                  {customerId && !isEditMode && (() => {
+                    const bal = Number(customers.find((c) => c.id === customerId)?.balance ?? 0)
+                    return (
+                      <p
+                        className={`mt-1.5 text-sm font-medium ${
+                          bal > 0
+                            ? 'text-red-600'
+                            : bal < 0
+                              ? 'text-green-600'
+                              : 'text-[hsl(var(--muted-foreground))]'
+                        }`}
+                      >
+                        {bal > 0
+                          ? `Owes Rs ${formatNumber(bal)}`
+                          : bal < 0
+                            ? `Advance Rs ${formatNumber(-bal)}`
+                            : 'No balance'}
+                      </p>
+                    )
+                  })()}
+                </div>
+              )}
+
+              {paymentStatus === 'UDHAAR' && customerId && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Paid Now (Rs)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={paidNowStr}
+                    onChange={(e) => setPaidNowStr(e.target.value)}
+                    placeholder="0 (optional)"
+                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  {!isEditMode && (() => {
+                    const prev = Number(customers.find((c) => c.id === customerId)?.balance ?? 0)
+                    const paid = parseFloat(paidNowStr) || 0
+                    const newBal = roundToTwo(prev + total - paid)
+                    return (
+                      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                        New total balance: Rs {formatNumber(newBal)}
+                      </p>
+                    )
+                  })()}
                 </div>
               )}
 
@@ -2765,11 +2862,11 @@ export default function POSPage() {
                   if (!res.ok) {
                     throw new Error(data.error || 'Failed to create customer')
                   }
-                  const created = data.customer as { id: string; name: string; phone: string | null }
+                  const created = data.customer as { id: string; name: string; phone: string | null; balance?: number }
                   // Update local customers list and select new customer
                   setCustomers((prev) => [
                     ...prev,
-                    { id: created.id, name: created.name, phone: created.phone },
+                    { id: created.id, name: created.name, phone: created.phone, balance: Number(created.balance || 0) },
                   ])
                   setCustomerId(created.id)
                   setShowNewCustomerModal(false)
