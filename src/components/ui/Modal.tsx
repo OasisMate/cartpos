@@ -15,7 +15,7 @@ const sizeClasses: Record<Size, string> = {
 
 /**
  * Shared modal wrapper. Provides a consistent overlay, panel, title bar and
- * close behaviour (backdrop click + X button) across the app.
+ * close behaviour (backdrop click + X button + Esc) across the app.
  */
 export default function Modal({
   open,
@@ -30,6 +30,22 @@ export default function Modal({
   size?: Size
   children: React.ReactNode
 }) {
+  const onCloseRef = React.useRef(onClose)
+  onCloseRef.current = onClose
+
+  React.useEffect(() => {
+    if (!open) return
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        e.preventDefault()
+        onCloseRef.current()
+      }
+    }
+    // Capture phase: the open modal must win the Esc before any page-level handler.
+    window.addEventListener('keydown', fn, true)
+    return () => window.removeEventListener('keydown', fn, true)
+  }, [open])
+
   // Render only on the client (portal needs document) and only when open.
   if (!open || typeof document === 'undefined') return null
 

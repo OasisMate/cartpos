@@ -66,26 +66,22 @@ function useHotkeys(handler: (e: KeyboardEvent) => void, enabled: boolean) {
   }, [enabled])
 }
 
-/** The keyboard shortcuts shown in the cheatsheet. */
+/** The keyboard shortcuts shown in the cheatsheet. Enter moves the sale forward,
+ *  Esc backs out of anything, bare keys edit the cart when the scan box is empty. */
 const POS_SHORTCUTS: Array<{ keys: string; action: string }> = [
   { keys: 'Enter', action: 'Add typed item / scanned barcode (use "x5" for qty)' },
-  { keys: '↑ / ↓', action: 'Move through search results' },
-  { keys: 'Enter (on a result)', action: 'Add the highlighted result' },
-  { keys: 'Enter (empty box)', action: 'Open checkout' },
-  { keys: 'Esc', action: 'Clear the search box' },
-  { keys: 'Alt + P', action: 'Complete sale (checkout)' },
+  { keys: 'Enter (empty box)', action: 'Open checkout, then Enter confirms the sale' },
+  { keys: '↑ / ↓', action: 'Pick a search result, or select a cart line (empty box)' },
+  { keys: '+ / -', action: 'Change qty of the selected cart line (empty box)' },
+  { keys: 'Del', action: 'Remove the selected cart line (empty box)' },
+  { keys: 'Esc', action: 'Close any window / clear search, back to scan' },
+  { keys: 'C / U (in checkout)', action: 'Set Paid / Udhaar' },
+  { keys: 'Alt + P', action: 'Pay (checkout)' },
   { keys: 'Alt + H', action: 'Hold sale' },
-  { keys: 'Alt + L', action: 'Open held sales' },
-  { keys: 'Alt + K', action: 'Clear cart' },
-  { keys: 'Alt + R', action: 'Toggle Retail / Trade pricing' },
-  { keys: 'Alt + D', action: 'Jump to discount' },
-  { keys: 'Alt + S', action: 'Back to the scan box' },
-  { keys: 'Alt + ↑ / ↓', action: 'Select a cart line' },
-  { keys: 'Alt + + / -', action: 'Change qty of selected line' },
-  { keys: 'Alt + Del', action: 'Remove selected line' },
-  { keys: 'In checkout: C / U', action: 'Set Paid / Udhaar' },
-  { keys: 'In checkout: Enter', action: 'Confirm sale' },
-  { keys: '?', action: 'Show this shortcuts list' },
+  { keys: 'Alt + R', action: 'Resume held sales' },
+  { keys: 'Alt + C', action: 'Clear cart' },
+  { keys: 'Alt + T', action: 'Retail / Trade price' },
+  { keys: '?', action: 'Show this guide (Esc closes it)' },
 ]
 
 // Product interface is imported from lib/offline/products
@@ -1700,8 +1696,18 @@ export default function POSPage() {
   }
 
   // Keys handled while focus is in the scan box (dropdown nav + Enter behaviour).
+  // With the box EMPTY the bare keys edit the cart instead: ↑/↓ select a line,
+  // +/- change its qty, Del removes it. No modifier needed; typing is unaffected
+  // because the keys only act when there is nothing to type into a search for.
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     const hasResults = barcodeInput.trim() !== '' && visibleResults.length > 0
+    if (barcodeInput.trim() === '') {
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveCartSelection(1); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); moveCartSelection(-1); return }
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); bumpSelectedQty(1); return }
+      if (e.key === '-') { e.preventDefault(); bumpSelectedQty(-1); return }
+      if (e.key === 'Delete') { e.preventDefault(); removeSelectedLine(); return }
+    }
     if (e.key === 'ArrowDown' && !e.altKey && hasResults) {
       e.preventDefault()
       setHighlightIndex((i) => Math.min(i + 1, visibleResults.length - 1))
@@ -1748,8 +1754,9 @@ export default function POSPage() {
       return
     }
     if (e.key === 'Escape') {
-      if (highlightIndex >= 0) { setHighlightIndex(-1); return }
-      if (barcodeInput) setBarcodeInput('')
+      // preventDefault marks the Esc as consumed so the global close handler skips it.
+      if (highlightIndex >= 0) { e.preventDefault(); setHighlightIndex(-1); return }
+      if (barcodeInput) { e.preventDefault(); setBarcodeInput('') }
     }
   }
 
@@ -1783,30 +1790,55 @@ export default function POSPage() {
     !!quickAddProduct || showShortcutsModal || showNewCustomerModal || showQuickAddProductModal
 
   // Global command shortcuts (disabled while any modal is open; modals own their keys).
+  // Mnemonic Alt keys only (first letter = action); old Alt+L / Alt+K keep working as
+  // silent aliases so trained fingers don't break. Alt+D/E/F are browser-owned - avoided.
   useHotkeys((e) => {
+    if (e.defaultPrevented) return
     if (e.key === '?') {
       const blockedInOtherInput = isTypingTarget(e, barcodeInputRef.current)
       const inScanBoxWithText = e.target === barcodeInputRef.current && barcodeInput.trim() !== ''
       if (!blockedInOtherInput && !inScanBoxWithText) { e.preventDefault(); openShortcuts() }
       return
     }
-    if (!e.altKey) return
+    if (!e.altKey) {
+      // Bare cart keys as a fallback when focus is outside every input (the scan box
+      // runs the same actions itself via handleSearchKeyDown when it is empty).
+      if (isTypingTarget(e, barcodeInputRef.current) || e.target === barcodeInputRef.current) return
+      switch (e.key) {
+        case 'ArrowDown': e.preventDefault(); moveCartSelection(1); break
+        case 'ArrowUp': e.preventDefault(); moveCartSelection(-1); break
+        case '+': case '=': e.preventDefault(); bumpSelectedQty(1); break
+        case '-': e.preventDefault(); bumpSelectedQty(-1); break
+        case 'Delete': e.preventDefault(); removeSelectedLine(); break
+      }
+      return
+    }
     if (isTypingTarget(e, barcodeInputRef.current)) return // allow in scan box, block in other fields
     switch (e.code) {
       case 'KeyP': e.preventDefault(); handleCompleteSale(); break
       case 'KeyH': e.preventDefault(); handleHoldSale(); break
-      case 'KeyL': e.preventDefault(); if (heldSales.length) setShowHeldSalesModal(true); break
-      case 'KeyK': e.preventDefault(); handleClearCart(); break
-      case 'KeyR': e.preventDefault(); if (shopSettings?.enableTradePricing !== false) setPriceMode((m) => (m === 'RETAIL' ? 'TRADE' : 'RETAIL')); break
-      case 'KeyD': e.preventDefault(); discountInputRef.current?.focus(); break
-      case 'KeyS': e.preventDefault(); barcodeInputRef.current?.focus(); break
-      case 'ArrowDown': e.preventDefault(); moveCartSelection(1); break
-      case 'ArrowUp': e.preventDefault(); moveCartSelection(-1); break
-      case 'Equal': case 'NumpadAdd': e.preventDefault(); bumpSelectedQty(1); break
-      case 'Minus': case 'NumpadSubtract': e.preventDefault(); bumpSelectedQty(-1); break
-      case 'Delete': e.preventDefault(); removeSelectedLine(); break
+      case 'KeyR': case 'KeyL': e.preventDefault(); if (heldSales.length) setShowHeldSalesModal(true); break
+      case 'KeyC': case 'KeyK': e.preventDefault(); handleClearCart(); break
+      case 'KeyT': e.preventDefault(); if (shopSettings?.enableTradePricing !== false) setPriceMode((m) => (m === 'RETAIL' ? 'TRADE' : 'RETAIL')); break
     }
   }, !anyModalOpen)
+
+  // Esc closes the top-most POS modal from anywhere; with nothing open it returns
+  // to a clean scan box. Modals that already consumed the Esc (preventDefault) are skipped.
+  useHotkeys((e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return
+    const close = (fn: () => void) => { e.preventDefault(); fn() }
+    if (showShortcutsModal) return close(() => setShowShortcutsModal(false))
+    if (showQuickAddProductModal) return close(() => setShowQuickAddProductModal(false))
+    if (showNewCustomerModal) return close(() => setShowNewCustomerModal(false))
+    if (quickAddProduct) return close(() => { setQuickAddProduct(null); setQuickAddQuantity('1') })
+    if (editingItem) return close(() => setEditingItem(null))
+    if (showHoldNoteModal) return close(() => setShowHoldNoteModal(false))
+    if (showHeldSalesModal) return close(() => setShowHeldSalesModal(false))
+    if (showReceiptModal) return close(closeReceiptModal)
+    if (showPaymentModal) return close(() => { setShowPaymentModal(false); setError('') })
+    close(() => { setBarcodeInput(''); setHighlightIndex(-1); barcodeInputRef.current?.focus() })
+  }, true)
 
   if (!user?.currentShopId) {
     return (
@@ -2286,7 +2318,7 @@ export default function POSPage() {
                     className="flex-1 h-12 text-base sm:text-lg font-semibold whitespace-nowrap"
                     onClick={handleClearCart}
                   >
-                    Clear Cart <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-60">Alt+K</kbd>
+                    Clear Cart <kbd className="ml-1 hidden sm:inline font-mono text-[10px] opacity-60">Alt+C</kbd>
                   </Button>
                   <Button
                     type="button"
