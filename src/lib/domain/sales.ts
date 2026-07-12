@@ -113,12 +113,17 @@ async function validateSaleInput(
     throw new Error('Sale must have at least one item')
   }
 
-  // Validate customer if provided (for udhaar)
+  // Validate customer if provided (for udhaar). Offline-created customers sync to the
+  // server under a new id (the device id survives as clientId), so accept either and
+  // canonicalize to the server id.
   if (input.customerId) {
-    const customer = await prisma.customer.findUnique({ where: { id: input.customerId } })
-    if (!customer || customer.shopId !== shopId) {
+    const customer = await prisma.customer.findFirst({
+      where: { shopId, OR: [{ id: input.customerId }, { clientId: input.customerId }] },
+    })
+    if (!customer) {
       throw new Error('Invalid customer')
     }
+    input.customerId = customer.id
   }
   if (input.paymentStatus === 'UDHAAR' && !input.customerId) {
     throw new Error('Customer is required for udhaar sales')

@@ -8,7 +8,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { getProductsWithCache, getCachedProducts, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 import { saveSale } from '@/lib/offline/sales'
-import { getCustomers, saveCustomers, saveProducts } from '@/lib/offline/indexedDb'
+import { getCustomers, saveCustomers, saveProducts, addCustomer as addLocalCustomer } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
 import { trapTab } from '@/lib/utils/focusTrap'
 import { sumCartLines, calculateTotals, formatNumber, formatCurrency, roundToTwo } from '@/lib/utils/money'
@@ -2885,6 +2885,26 @@ export default function POSPage() {
                 e.preventDefault()
                 setCreatingCustomer(true)
                 try {
+                  // Offline: save locally with a device-generated id. It syncs to the server
+                  // later; udhaar sales made meanwhile reference this id and the server
+                  // resolves it via clientId.
+                  if (!isOnline) {
+                    const localId = cuid()
+                    const name = newCustomerForm.name.trim()
+                    const phone = newCustomerForm.phone.trim() || null
+                    await addLocalCustomer({
+                      id: localId,
+                      shopId: user!.currentShopId!,
+                      name,
+                      phone,
+                      notes: newCustomerForm.notes.trim() || null,
+                    })
+                    setCustomers((prev) => [...prev, { id: localId, name, phone, balance: 0 }])
+                    setCustomerId(localId)
+                    setShowNewCustomerModal(false)
+                    setNewCustomerForm({ name: '', phone: '', notes: '', openingBalance: '' })
+                    return
+                  }
                   const res = await fetch('/api/customers', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2951,7 +2971,8 @@ export default function POSPage() {
                     onChange={(e) =>
                       setNewCustomerForm({ ...newCustomerForm, openingBalance: e.target.value })
                     }
-                    placeholder="0.00"
+                    placeholder={isOnline ? '0.00' : 'Available when online'}
+                    disabled={!isOnline}
                   />
                 </div>
               </div>

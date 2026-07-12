@@ -12,7 +12,14 @@ type Props = {
 
 export function SyncStatusBanner({ shopId }: Props) {
   const isOnline = useOnlineStatus()
-  const [summary, setSummary] = useState({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0 })
+  const [summary, setSummary] = useState<{
+    total: number
+    sales: number
+    purchases: number
+    customers: number
+    udhaarPayments: number
+    firstError?: string
+  }>({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0 })
   const [syncing, setSyncing] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
 
@@ -54,8 +61,15 @@ export function SyncStatusBanner({ shopId }: Props) {
     setSyncing(true)
     setLastError(null)
     try {
-      await runAllSyncTasks(shopId)
+      const result = await runAllSyncTasks(shopId)
       await refresh()
+      if (result.failed > 0) {
+        setLastError(
+          result.firstError
+            ? `${result.failed} could not sync: ${result.firstError}`
+            : `${result.failed} could not sync`
+        )
+      }
     } catch (e: unknown) {
       setLastError(e instanceof Error ? e.message : 'Sync failed')
     } finally {
@@ -82,7 +96,11 @@ export function SyncStatusBanner({ shopId }: Props) {
             {!isOnline ? (
               <span className="mt-0.5 block text-xs text-amber-800/90">Reconnect to upload to the server.</span>
             ) : null}
-            {lastError ? <span className="mt-0.5 block text-xs text-red-700">{lastError}</span> : null}
+            {lastError ? (
+              <span className="mt-0.5 block text-xs text-red-700">{lastError}</span>
+            ) : summary.firstError ? (
+              <span className="mt-0.5 block text-xs text-red-700">Last error: {summary.firstError}</span>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">

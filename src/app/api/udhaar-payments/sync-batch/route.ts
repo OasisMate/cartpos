@@ -33,11 +33,18 @@ export async function POST(request: NextRequest) {
 
     for (const p of payments) {
       try {
-        // Validate customer belongs to shop
-        const customer = await prisma.customer.findUnique({ where: { id: p.customerId } })
-        if (!customer || customer.shopId !== user.currentShopId) {
+        // Validate customer belongs to shop. Offline-created customers sync under a new
+        // server id (device id survives as clientId), so accept either and canonicalize.
+        const customer = await prisma.customer.findFirst({
+          where: {
+            shopId: user.currentShopId,
+            OR: [{ id: p.customerId }, { clientId: p.customerId }],
+          },
+        })
+        if (!customer) {
           throw new Error('Invalid customer for this shop')
         }
+        const customerId = customer.id
 
         // Idempotency: if this offline payment already synced, skip (don't double-credit).
         const existing = await prisma.payment.findUnique({
@@ -55,7 +62,7 @@ export async function POST(request: NextRequest) {
             data: {
               shopId: user.currentShopId!,
               clientId: p.id,
-              customerId: p.customerId,
+              customerId,
               amount: p.amount,
               method: p.method,
               note: p.note || null,
@@ -68,7 +75,7 @@ export async function POST(request: NextRequest) {
           await tx.customerLedger.create({
             data: {
               shopId: user.currentShopId!,
-              customerId: p.customerId,
+              customerId,
               type: 'PAYMENT_RECEIVED',
               direction: 'CREDIT',
               amount: p.amount,

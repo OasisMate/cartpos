@@ -11,6 +11,8 @@ export type PendingSyncSummary = {
   purchases: number
   customers: number
   udhaarPayments: number
+  /** Last stored sync error on any pending record, so the banner can say why it is stuck. */
+  firstError?: string
 }
 
 export async function getPendingSyncSummary(shopId: string | undefined): Promise<PendingSyncSummary> {
@@ -25,12 +27,18 @@ export async function getPendingSyncSummary(shopId: string | undefined): Promise
     getPendingUdhaarPayments(shopId),
   ])
 
+  const firstError =
+    sales.find((r) => r.syncError)?.syncError ||
+    purchases.find((r) => r.syncError)?.syncError ||
+    udhaarPayments.find((r) => r.syncError)?.syncError
+
   return {
     sales: sales.length,
     purchases: purchases.length,
     customers: customers.length,
     udhaarPayments: udhaarPayments.length,
     total: sales.length + purchases.length + customers.length + udhaarPayments.length,
+    firstError,
   }
 }
 
