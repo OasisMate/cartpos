@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getPendingSyncSummary, formatPendingSyncLabel } from '@/lib/offline/pendingSyncSummary'
 import { runAllSyncTasks } from '@/lib/offline/orchestrator'
+import { buildSyncDiagnostics } from '@/lib/offline/diagnostics'
+import { useAuth } from '@/contexts/AuthContext'
 import { CloudUpload, Loader2 } from 'lucide-react'
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
 
 export function SyncStatusBanner({ shopId }: Props) {
   const isOnline = useOnlineStatus()
+  const { user } = useAuth()
   const [summary, setSummary] = useState<{
     total: number
     sales: number
@@ -24,6 +27,8 @@ export function SyncStatusBanner({ shopId }: Props) {
   }>({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0 })
   const [syncing, setSyncing] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
+  const [reporting, setReporting] = useState(false)
+  const [reportMsg, setReportMsg] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!shopId) {
@@ -79,6 +84,36 @@ export function SyncStatusBanner({ shopId }: Props) {
     }
   }
 
+  async function handleReport() {
+    if (!shopId || reporting) return
+    setReporting(true)
+    setReportMsg(null)
+    try {
+      const bundle = await buildSyncDiagnostics(shopId, { orgId: user?.currentOrgId ?? undefined, userId: user?.id })
+      try {
+        const res = await fetch('/api/sync-error-reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: bundle }),
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        setReportMsg('Problem reported, we will look into it.')
+      } catch {
+        // Offline / upload failed: save a file the shopkeeper can send on WhatsApp.
+        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `cartpos-sync-report-${bundle.generatedAt}.json`
+        document.body.appendChild(a); a.click(); a.remove()
+        URL.revokeObjectURL(url)
+        setReportMsg('Could not reach the server. A file was saved - please send it to us on WhatsApp.')
+      }
+    } finally {
+      setReporting(false)
+    }
+  }
+
   return (
     <div
       className={`fixed ${topClass} left-0 right-0 z-[45] border-b border-amber-200 bg-amber-50 text-amber-950 shadow-sm`}
@@ -103,6 +138,9 @@ export function SyncStatusBanner({ shopId }: Props) {
             ) : summary.firstError ? (
               <span className="mt-0.5 block text-xs text-red-700">Last error: {summary.firstError}</span>
             ) : null}
+            {reportMsg ? (
+              <span className="mt-0.5 block text-xs text-emerald-700">{reportMsg}</span>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -121,6 +159,16 @@ export function SyncStatusBanner({ shopId }: Props) {
               'Sync now'
             )}
           </button>
+          {(lastError || summary.firstError) ? (
+            <button
+              type="button"
+              className="btn btn-ghost h-9 px-3 text-sm disabled:opacity-50"
+              disabled={reporting}
+              onClick={() => void handleReport()}
+            >
+              {reporting ? 'Reporting...' : 'Report problem'}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
