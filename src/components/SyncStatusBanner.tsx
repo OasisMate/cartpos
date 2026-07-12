@@ -18,14 +18,16 @@ export function SyncStatusBanner({ shopId }: Props) {
     purchases: number
     customers: number
     udhaarPayments: number
+    expenses: number
+    stockAdjustments: number
     firstError?: string
-  }>({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0 })
+  }>({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0 })
   const [syncing, setSyncing] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!shopId) {
-      setSummary({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0 })
+      setSummary({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0 })
       return
     }
     try {
