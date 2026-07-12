@@ -402,10 +402,13 @@ model StockLedger {
   type        StockMoveType
   refType     String?        // e.g. "purchase_line", "invoice_line", "adjustment"
   refId       String?
+  /// Offline client id - dedupes stock adjustments created offline so re-sync can't duplicate them.
+  clientId    String?
   createdAt   DateTime       @default(now())
   shop        Shop           @relation(fields: [shopId], references: [id])
   product     Product        @relation(fields: [productId], references: [id])
 
+  @@unique([shopId, clientId])
   @@index([shopId, productId])
   @@index([shopId, productId, type])
   @@index([shopId, createdAt])
@@ -775,6 +778,8 @@ model Expense {
   amount      Decimal  @db.Decimal(10, 2)
   category    String
   description String?
+  /// Offline client id - dedupes expenses created offline so re-sync can't duplicate them.
+  clientId    String?
   date        DateTime @default(now())
   /// Cash drawer (shift) this expense was paid from, if one was open when recorded.
   shiftId     String?
@@ -785,6 +790,7 @@ model Expense {
   user User @relation(fields: [userId], references: [id])
   shift Shift? @relation(fields: [shiftId], references: [id])
 
+  @@unique([shopId, clientId])
   @@index([shopId, date])
   @@index([shiftId])
 }
@@ -912,5 +918,24 @@ enum CashMoveType {
   OWNER_DRAW  // owner takes cash from the drawer
   FLOAT_ADD   // extra change/float added during the shift
   OTHER
+}
+
+enum SyncReportStatus {
+  NEW
+  REVIEWED
+}
+
+/// Diagnostic report a shop device sends when offline records fail to sync.
+/// ids kept loose (no FK) so a report survives if the shop/user is later removed.
+model SyncErrorReport {
+  id        String           @id @default(cuid())
+  orgId     String?
+  shopId    String?
+  userId    String
+  status    SyncReportStatus @default(NEW)
+  payload   Json
+  createdAt DateTime         @default(now())
+
+  @@index([status, createdAt])
 }
 
