@@ -1,5 +1,5 @@
 import { addExpenseLocal, getPendingExpenses, markExpenseAsSynced, markExpenseSyncError, CachedExpense } from './indexedDb'
-import { fetchJSON } from '@/lib/utils/http'
+import { syncPendingBatch } from './sync'
 
 // Expense input type
 export interface ExpenseInput {
@@ -19,47 +19,36 @@ export async function saveExpenseLocally(expense: ExpenseInput): Promise<void> {
 }
 
 /**
- * Sync expense to server (if online)
- */
-export async function syncExpenseToServer(expense: CachedExpense): Promise<boolean> {
-    try {
-        await fetchJSON('/api/expenses', {
-            method: 'POST',
-            body: JSON.stringify({
-                category: expense.category,
-                amount: expense.amount,
-                description: expense.description,
-                date: new Date(expense.date).toISOString(),
-                createdAt: new Date(expense.createdAt).toISOString(),
-            }),
-        })
-
-        await markExpenseAsSynced(expense.id)
-        return true
-    } catch (error: any) {
-        await markExpenseSyncError(expense.id, error.message || 'Sync failed')
-        console.error('Error syncing expense:', error)
-        return false
-    }
-}
-
-/**
  * Save expense locally and sync if online
  */
 export async function saveExpense(expense: ExpenseInput, isOnline: boolean): Promise<{ saved: boolean; synced: boolean }> {
-    // Always save locally first (offline-first)
     await saveExpenseLocally(expense)
-
-    // Try to sync if online
     if (isOnline) {
-        const cachedExpense = await getPendingExpenses(expense.shopId).then((expenses) =>
-            expenses.find((e) => e.id === expense.id)
-        )
-        if (cachedExpense) {
-            const synced = await syncExpenseToServer(cachedExpense)
-            return { saved: true, synced }
-        }
+        // Prompt push; safe to retry (idempotent). Background pass + banner cover offline.
+        void syncPendingExpensesBatch(expense.shopId)
     }
-
     return { saved: true, synced: false }
+}
+
+/**
+ * Batch sync pending expenses to server (idempotent via clientId = local id).
+ */
+export async function syncPendingExpensesBatch(
+    shopId: string
+): Promise<{ synced: number; failed: number; firstError?: string }> {
+    return await syncPendingBatch({
+        shopId,
+        getPending: getPendingExpenses,
+        markSynced: markExpenseAsSynced,
+        markError: markExpenseSyncError,
+        toPayload: (rec) => ({
+            id: (rec as CachedExpense).id,
+            category: (rec as CachedExpense).category,
+            amount: (rec as CachedExpense).amount,
+            description: (rec as CachedExpense).description,
+            date: (rec as CachedExpense).date,
+            createdAt: (rec as CachedExpense).createdAt,
+        }),
+        endpoint: '/api/expenses/sync-batch',
+    })
 }
