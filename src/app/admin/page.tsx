@@ -10,7 +10,7 @@ export default async function AdminPage() {
     redirect('/')
   }
 
-  const [organizationsCount, shopsCount, usersCount, invoicesToday] = await Promise.all([
+  const [organizationsCount, shopsCount, usersCount, invoicesToday, syncReportsNew] = await Promise.all([
     prisma.organization.count(),
     prisma.shop.count(),
     prisma.user.count(),
@@ -22,6 +22,7 @@ export default async function AdminPage() {
         status: 'COMPLETED',
       },
     }),
+    prisma.syncErrorReport.count({ where: { status: 'NEW' } }),
   ])
 
   return (
@@ -49,6 +50,7 @@ export default async function AdminPage() {
           <QuickAction href="/admin/organizations" label="Organizations" icon={Building2} primary />
           <QuickAction href="/admin/users" label="Users" icon={Users} />
           <QuickAction href="/admin/shops" label="Shops" icon={Store} />
+          <QuickAction href="/admin/sync-reports" label={syncReportsNew > 0 ? `Sync reports (${syncReportsNew})` : 'Sync reports'} icon={FileText} />
         </div>
       </div>
     </div>
