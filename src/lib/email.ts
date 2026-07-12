@@ -247,6 +247,39 @@ export function generateAccessRequestEmail(params: {
 }
 
 /**
+ * Notify a platform admin that a shop device reported a failed sync.
+ */
+export function generateSyncReportEmail(params: {
+  shopName: string | null
+  shopId: string | null
+  reportedBy: string
+  pendingTotal: number
+  firstError: string
+  reviewLink: string
+}): string {
+  const shopCell = params.shopName
+    ? `${params.shopName}${params.shopId ? ` <span style="color:#9ca3af;font-weight:400;">(${params.shopId})</span>` : ''}`
+    : params.shopId || '(unknown)'
+  const rows = [
+    detailRow('Shop', shopCell),
+    detailRow('Reported by', params.reportedBy),
+    detailRow('Pending records', String(params.pendingTotal)),
+    detailRow('Error', params.firstError),
+  ].join('')
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Sync problem reported</h1>
+    <p style="margin:0 0 4px;">A shop device could not sync its data and the operator sent a diagnostic report. Review it to find the root cause.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:18px 0;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
+      ${rows}
+    </table>
+    ${ctaButton(params.reviewLink, 'Review Report')}
+    <p style="margin:8px 0 0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      You're receiving this because you're a Cart POS platform administrator.
+    </p>`
+  return emailLayout(content, `Sync problem reported (${params.pendingTotal} pending)`)
+}
+
+/**
  * Welcome email - sent when a platform admin approves an organization.
  * Includes a short getting-started guide and the usage SOPs.
  */
