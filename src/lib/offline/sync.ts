@@ -13,6 +13,11 @@ interface SyncConfig<LocalRecord, Payload> {
 /** Keep each request small so serverless functions finish well within their time limit. */
 const CHUNK_SIZE = 20
 
+const lastAttemptStatuses: Record<string, number> = {}
+export function getLastAttemptStatuses(): Record<string, number> {
+  return { ...lastAttemptStatuses }
+}
+
 export async function syncPendingBatch<LocalRecord, Payload>(
   config: SyncConfig<LocalRecord, Payload>
 ): Promise<SyncResult> {
@@ -36,7 +41,11 @@ export async function syncPendingBatch<LocalRecord, Payload>(
           body: JSON.stringify({
             sales: chunk.map(toPayload),
           }),
+        }).catch((e) => {
+          lastAttemptStatuses[endpoint] = 0
+          throw e
         })
+        lastAttemptStatuses[endpoint] = response.status
         if (!response.ok) {
           throw new Error(
             response.status === 401
