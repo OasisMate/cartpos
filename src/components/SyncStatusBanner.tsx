@@ -5,6 +5,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getPendingSyncSummary, formatPendingSyncLabel } from '@/lib/offline/pendingSyncSummary'
 import { runAllSyncTasks } from '@/lib/offline/orchestrator'
 import { buildSyncDiagnostics } from '@/lib/offline/diagnostics'
+import { StuckSalesModal } from '@/components/StuckSalesModal'
 import { useAuth } from '@/contexts/AuthContext'
 import { CloudUpload, Loader2 } from 'lucide-react'
 
@@ -23,16 +24,18 @@ export function SyncStatusBanner({ shopId }: Props) {
     udhaarPayments: number
     expenses: number
     stockAdjustments: number
+    stuckUdhaarSales: number
     firstError?: string
-  }>({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0 })
+  }>({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0, stuckUdhaarSales: 0 })
   const [syncing, setSyncing] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
   const [reporting, setReporting] = useState(false)
   const [reportMsg, setReportMsg] = useState<string | null>(null)
+  const [showStuck, setShowStuck] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!shopId) {
-      setSummary({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0 })
+      setSummary({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0, stuckUdhaarSales: 0 })
       return
     }
     try {
@@ -133,7 +136,12 @@ export function SyncStatusBanner({ shopId }: Props) {
             {!isOnline ? (
               <span className="mt-0.5 block text-xs text-amber-800/90">Reconnect to upload to the server.</span>
             ) : null}
-            {lastError ? (
+            {summary.stuckUdhaarSales > 0 ? (
+              <span className="mt-0.5 block text-xs text-red-700">
+                {summary.stuckUdhaarSales} credit sale{summary.stuckUdhaarSales === 1 ? '' : 's'} need a customer. Tap
+                &ldquo;Fix credit sales&rdquo;.
+              </span>
+            ) : lastError ? (
               <span className="mt-0.5 block text-xs text-red-700">{lastError}</span>
             ) : summary.firstError ? (
               <span className="mt-0.5 block text-xs text-red-700">Last error: {summary.firstError}</span>
@@ -159,6 +167,15 @@ export function SyncStatusBanner({ shopId }: Props) {
               'Sync now'
             )}
           </button>
+          {summary.stuckUdhaarSales > 0 ? (
+            <button
+              type="button"
+              className="btn h-9 whitespace-nowrap border border-amber-300 bg-white px-3 text-sm text-amber-900 hover:bg-amber-100"
+              onClick={() => setShowStuck(true)}
+            >
+              Fix credit sales ({summary.stuckUdhaarSales})
+            </button>
+          ) : null}
           {(lastError || summary.firstError) ? (
             <button
               type="button"
@@ -171,6 +188,10 @@ export function SyncStatusBanner({ shopId }: Props) {
           ) : null}
         </div>
       </div>
+
+      {showStuck && shopId ? (
+        <StuckSalesModal shopId={shopId} onClose={() => setShowStuck(false)} onChanged={() => void refresh()} />
+      ) : null}
     </div>
   )
 }

@@ -1272,6 +1272,15 @@ export default function POSPage() {
         return
       }
 
+      // Authoritative udhaar guard: the pre-modal check runs before the modal opens, but the
+      // payment type can still be flipped to UDHAAR inside the modal (e.g. the 'u' shortcut).
+      // Re-validate here so a credit sale can never be saved without a customer to owe it.
+      if (paymentStatus === 'UDHAAR' && !customerId) {
+        setError('Please select a customer for udhaar sale')
+        setSubmitting(false)
+        return
+      }
+
       const subtotal = sumCartLines(cart)
       const { total: baseTotal } = calculateTotals(subtotal, discount)
 
@@ -1770,7 +1779,10 @@ export default function POSPage() {
       return
     }
     if (e.key === 'Enter' || e.code === 'NumpadEnter') {
-      const disabled = submitting || (paymentStatus === 'PAID' && paymentMethod === 'CASH' && change < 0)
+      const disabled =
+        submitting ||
+        (paymentStatus === 'PAID' && paymentMethod === 'CASH' && change < 0) ||
+        (paymentStatus === 'UDHAAR' && !customerId)
       if (!disabled) { e.preventDefault(); submitSale() }
       return
     }
@@ -2610,7 +2622,11 @@ export default function POSPage() {
                   </Button>
                   <Button
                     onClick={submitSale}
-                    disabled={submitting || (paymentStatus === 'PAID' && paymentMethod === 'CASH' && change < 0)}
+                    disabled={
+                      submitting ||
+                      (paymentStatus === 'PAID' && paymentMethod === 'CASH' && change < 0) ||
+                      (paymentStatus === 'UDHAAR' && !customerId)
+                    }
                     className="flex-1"
                   >
                     {submitting ? t('processing') : isEditMode ? 'Save changes' : t('confirm')}

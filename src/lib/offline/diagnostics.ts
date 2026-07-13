@@ -38,7 +38,11 @@ export async function buildSyncDiagnostics(
   const records = {
     sales: cap(sales).map((s: any) => ({
       id: s.id, createdAt: s.createdAt, syncError: s.syncError,
-      detail: { total: s.total, paymentStatus: s.paymentStatus, productIds: (s.items || []).map((i: any) => i.productId) },
+      // customerId is an id (not PII) and is essential for diagnosing udhaar sync failures.
+      detail: {
+        total: s.total, paymentStatus: s.paymentStatus, customerId: s.customerId || null,
+        productIds: (s.items || []).map((i: any) => i.productId),
+      },
     })),
     purchases: cap(purchases).map((p: any) => ({
       id: p.id, createdAt: p.createdAt, syncError: p.syncError,

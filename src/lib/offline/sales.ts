@@ -120,6 +120,13 @@ export async function syncPendingSalesBatch(shopId: string): Promise<{ synced: n
  * marks skippedIds as SYNCED; submit lock prevents double checkout.
  */
 export async function saveSale(sale: SaleInput, isOnline: boolean): Promise<{ saved: boolean; synced: boolean }> {
+  // Defense-in-depth: an udhaar (credit) sale MUST carry a customer, or it can never sync
+  // (the server rejects it and it stays stuck on the device). Refuse to persist it locally
+  // rather than create a record that is doomed to fail.
+  if (sale.paymentStatus === 'UDHAAR' && !sale.customerId) {
+    throw new Error('Customer is required for udhaar sale')
+  }
+
   await saveSaleLocally(sale)
 
   if (isOnline) {

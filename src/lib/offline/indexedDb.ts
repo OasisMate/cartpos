@@ -354,6 +354,32 @@ export async function deleteSale(saleId: string): Promise<void> {
   await db.sales.delete(saleId)
 }
 
+/**
+ * Recovery helpers for sales stuck because their customer link is missing.
+ * These edit an already-saved local sale so it can finally sync, without losing the money.
+ */
+export async function attachCustomerToStuckSale(saleId: string, customerId: string): Promise<void> {
+  await db.sales.update(saleId, { customerId, syncStatus: 'PENDING', syncError: undefined })
+}
+
+export async function convertStuckSaleToPaidCash(saleId: string): Promise<void> {
+  await db.sales.update(saleId, {
+    paymentStatus: 'PAID',
+    paymentMethod: 'CASH',
+    customerId: undefined,
+    paidNow: undefined,
+    syncStatus: 'PENDING',
+    syncError: undefined,
+  })
+}
+
+/** Sales stuck on this device because they are udhaar (credit) but carry no customer to owe the debt. */
+export async function getStuckUdhaarSales(shopId: string): Promise<CachedSale[]> {
+  if (!shopId) return []
+  const pending = await db.sales.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
+  return pending.filter((s) => s.paymentStatus === 'UDHAAR' && !s.customerId)
+}
+
 // Purchase store type (for offline purchases)
 export interface CachedPurchase {
   id: string // client-generated ID
