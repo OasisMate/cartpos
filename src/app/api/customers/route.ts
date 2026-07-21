@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { validateCustomerFields } from '@/lib/domain/customers'
 
 // GET: List customers for current shop (with optional search/balance filter)
 export async function GET(request: NextRequest) {
@@ -108,8 +109,10 @@ export async function POST(request: NextRequest) {
     const notes = (body.notes || '').trim() || null
     const openingBalanceRaw = body.openingBalance
 
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    const invalid = await validateCustomerFields(user.currentShopId, name, phone || '')
+    if (invalid) {
+      const { status, ...payload } = invalid
+      return NextResponse.json(payload, { status })
     }
 
     const openingBalance =

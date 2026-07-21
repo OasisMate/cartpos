@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
+import { normalizePhone } from '@/lib/validation'
 
 interface SyncCustomerInput {
   id: string
@@ -29,6 +30,27 @@ export async function POST(request: NextRequest) {
 
     for (const c of customers) {
       try {
+        // Reject a synced customer whose phone already belongs to a DIFFERENT
+        // customer in this shop. Offline can't check uniqueness at entry time,
+        // so we enforce it here and surface the clash in the sync report.
+        const target = c.phone ? normalizePhone(c.phone.trim(), 'PK') : null
+        if (target) {
+          const others = await prisma.customer.findMany({
+            where: { shopId: user.currentShopId, phone: { not: null }, clientId: { not: c.id } },
+            select: { name: true, phone: true },
+            take: 500,
+          })
+          const clash = others.find((o) => o.phone && normalizePhone(o.phone, 'PK') === target)
+          if (clash) {
+            results.skipped++
+            results.errors.push({
+              id: c.id,
+              error: `Mobile number already belongs to ${clash.name}; not synced to avoid a duplicate.`,
+            })
+            continue
+          }
+        }
+
         // Idempotent on (shopId, clientId): re-syncing the same offline customer
         // updates the existing row instead of creating a duplicate.
         await prisma.customer.upsert({

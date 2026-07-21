@@ -11,7 +11,7 @@ import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
 import EmptyState from '@/components/ui/EmptyState'
 import IconButton from '@/components/ui/IconButton'
-import { Pencil, Eye } from 'lucide-react'
+import { Pencil, Eye, Trash2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/money'
 import UdhaarReminderButton from '@/components/customers/UdhaarReminderButton'
 
@@ -35,7 +35,29 @@ export default function CustomersPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({ name: '', phone: '', notes: '', openingBalance: '' })
   const [submitting, setSubmitting] = useState(false)
-  const currentShopName = user?.shops?.find((s) => s.shopId === user?.currentShopId)?.shop.name ?? null
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const currentShop = user?.shops?.find((s) => s.shopId === user?.currentShopId)
+  const currentShopName = currentShop?.shop.name ?? null
+  const isManager = user?.role === 'PLATFORM_ADMIN' || currentShop?.shopRole === 'STORE_MANAGER'
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/customers/${deleteTarget.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to delete customer')
+      setCustomers((prev) => prev.filter((c) => c.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete customer')
+      setDeleteTarget(null)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   useEffect(() => {
     if (user?.currentShopId) {
@@ -214,11 +236,15 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Phone</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Mobile <span className="text-red-500">*</span>
+                  </label>
                   <Input
+                    type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="Optional"
+                    placeholder="e.g. 03001234567"
+                    required
                   />
                 </div>
                 <div>
@@ -259,6 +285,27 @@ export default function CustomersPage() {
                 </Button>
               </div>
             </form>
+      </Modal>
+
+      {/* Delete confirmation */}
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete customer"
+        size="sm"
+      >
+        <p className="text-sm mb-4">
+          Delete <span className="font-medium">{deleteTarget?.name}</span>? This can&apos;t be undone.
+          Customers with any sales, payments, or balance can&apos;t be deleted.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button type="button" variant="danger" onClick={handleDelete} disabled={deleting}>
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </div>
       </Modal>
 
       {loading ? (
@@ -320,6 +367,18 @@ export default function CustomersPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Link>
+                        {isManager && (
+                          <IconButton
+                            variant="danger"
+                            label="Delete customer"
+                            onClick={() => {
+                              setError('')
+                              setDeleteTarget(c)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </IconButton>
+                        )}
                       </div>
                     </TD>
                   </TR>

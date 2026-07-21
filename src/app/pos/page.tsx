@@ -10,6 +10,7 @@ import { getProductsWithCache, getCachedProducts, findProductByBarcode, searchCa
 import { saveSale } from '@/lib/offline/sales'
 import { getCustomers, saveCustomers, saveProducts, addCustomer as addLocalCustomer } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
+import { validatePhone } from '@/lib/validation'
 import { trapTab } from '@/lib/utils/focusTrap'
 import { sumCartLines, calculateTotals, formatNumber, formatCurrency, roundToTwo } from '@/lib/utils/money'
 import Button from '@/components/ui/Button'
@@ -348,6 +349,9 @@ export default function POSPage() {
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '', notes: '', openingBalance: '' })
   const cartScrollRef = useRef<HTMLDivElement | null>(null)
   const [creatingCustomer, setCreatingCustomer] = useState(false)
+  // When a quick-add hits a duplicate mobile, hold the existing customer so the
+  // cashier can select them instead of creating a second record.
+  const [dupCustomer, setDupCustomer] = useState<{ id: string; name: string; phone: string | null } | null>(null)
   const [unfoundBarcode, setUnfoundBarcode] = useState<string | null>(null)
   const [showQuickAddProductModal, setShowQuickAddProductModal] = useState(false)
   const [quickAddProductForm, setQuickAddProductForm] = useState({ name: '', barcode: '', price: '', unit: 'pcs' })
@@ -2460,6 +2464,7 @@ export default function POSPage() {
                       variant="outline"
                       className="whitespace-nowrap"
                       onClick={() => {
+                        setDupCustomer(null)
                         setNewCustomerForm({ name: '', phone: '', notes: '', openingBalance: '' })
                         setShowNewCustomerModal(true)
                       }}
@@ -2899,6 +2904,14 @@ export default function POSPage() {
             <form
               onSubmit={async (e) => {
                 e.preventDefault()
+                if (!validatePhone(newCustomerForm.phone.trim(), 'PK')) {
+                  show({
+                    title: 'Invalid mobile number',
+                    message: 'Enter a valid Pakistani mobile number (e.g. 03001234567).',
+                    variant: 'destructive',
+                  })
+                  return
+                }
                 setCreatingCustomer(true)
                 try {
                   // Offline: save locally with a device-generated id. It syncs to the server
@@ -2927,6 +2940,16 @@ export default function POSPage() {
                     body: JSON.stringify(newCustomerForm),
                   })
                   const data = await res.json()
+                  if (res.status === 409 && data.existing) {
+                    // Duplicate mobile: offer the existing customer instead.
+                    setDupCustomer(data.existing)
+                    setCustomers((prev) =>
+                      prev.some((c) => c.id === data.existing.id)
+                        ? prev
+                        : [...prev, { id: data.existing.id, name: data.existing.name, phone: data.existing.phone, balance: 0 }]
+                    )
+                    return
+                  }
                   if (!res.ok) {
                     throw new Error(data.error || 'Failed to create customer')
                   }
@@ -2963,13 +2986,40 @@ export default function POSPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">{t('phone')}</label>
+                  <label className="block text-sm font-medium mb-1">
+                    {t('phone')} <span className="text-red-500">*</span>
+                  </label>
                   <Input
+                    type="tel"
                     value={newCustomerForm.phone}
-                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })}
-                    placeholder="Optional"
+                    onChange={(e) => {
+                      setDupCustomer(null)
+                      setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })
+                    }}
+                    placeholder="e.g. 03001234567"
+                    required
                   />
                 </div>
+                {dupCustomer && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+                    <p className="mb-2 text-amber-800">
+                      A customer with this mobile already exists:{' '}
+                      <span className="font-medium">{dupCustomer.name}</span>
+                    </p>
+                    <Button
+                      type="button"
+                      className="h-8"
+                      onClick={() => {
+                        setCustomerId(dupCustomer.id)
+                        setShowNewCustomerModal(false)
+                        setDupCustomer(null)
+                        setNewCustomerForm({ name: '', phone: '', notes: '', openingBalance: '' })
+                      }}
+                    >
+                      Use this customer
+                    </Button>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium mb-1">Notes</label>
                   <Input
@@ -2998,6 +3048,7 @@ export default function POSPage() {
                   variant="outline"
                   onClick={() => {
                     setShowNewCustomerModal(false)
+                    setDupCustomer(null)
                     setNewCustomerForm({ name: '', phone: '', notes: '', openingBalance: '' })
                   }}
                   disabled={creatingCustomer}
