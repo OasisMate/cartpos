@@ -8,7 +8,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { getProductsWithCache, getCachedProducts, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 import { saveSale } from '@/lib/offline/sales'
-import { getCustomers, saveCustomers, saveProducts, addCustomer as addLocalCustomer } from '@/lib/offline/indexedDb'
+import { getCustomers, saveCustomers, saveProducts, addCustomer as addLocalCustomer, saveShopSettings, getCachedShopSettings } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
 import { validatePhone } from '@/lib/validation'
 import { trapTab } from '@/lib/utils/focusTrap'
@@ -421,6 +421,14 @@ export default function POSPage() {
           hasLocalData = true
         }
 
+        // Apply cached shop settings so charges (esp. the card fee) are correct while offline.
+        // Without this an offline card sale is rung up at 0% fee and the server rejects it forever.
+        const cachedSettings = await getCachedShopSettings(shopId)
+        if (cachedSettings) {
+          if (cachedSettings.allowNegativeStock !== undefined) setAllowNegativeStock(cachedSettings.allowNegativeStock)
+          setShopSettings(mapPosSettings(cachedSettings))
+        }
+
         // If offline or we already have local data, UI can render without waiting for network
         if (!isOnline || hasLocalData) {
           setLoading(false)
@@ -462,6 +470,7 @@ export default function POSPage() {
               setAllowNegativeStock(data.settings.allowNegativeStock)
             }
               setShopSettings(mapPosSettings(data.settings))
+              await saveShopSettings(shopId, data.settings)
           } else {
             throw new Error('Init endpoint failed')
           }
@@ -506,6 +515,7 @@ export default function POSPage() {
               setAllowNegativeStock(settingsData.settings.allowNegativeStock)
             }
             setShopSettings(mapPosSettings(settingsData.settings))
+            await saveShopSettings(shopId, settingsData.settings)
           }
         }
       } catch (err) {

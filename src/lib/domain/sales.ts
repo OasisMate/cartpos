@@ -209,16 +209,21 @@ async function validateSaleInput(
   if (input.paymentStatus === 'PAID' && input.paymentMethod === 'CARD') {
     const shopPct = Number(shopSettings?.cardFeePercent ?? 0)
     const allowOverride = shopSettings?.allowCardFeeOverride ?? false
-    if (allowOverride) {
-      const impliedFee = input.total - preCardTotal
-      if (impliedFee < -0.01 || impliedFee > preCardTotal + 0.01) {
-        throw new Error('Total calculation mismatch')
-      }
-      expectedTotal = input.total
-    } else {
-      const fee = Math.round(preCardTotal * shopPct) / 100
-      expectedTotal = preCardTotal + fee
+    const configuredFee = Math.round(preCardTotal * shopPct) / 100
+    // Highest fee the client could legitimately have charged. With override the cashier can
+    // dial the percent up (the POS caps it at 100%), so allow up to the full pre-card total;
+    // otherwise the shop's configured percent is the ceiling.
+    const maxFee = allowOverride ? preCardTotal : configuredFee
+    const impliedFee = input.total - preCardTotal
+    // Accept any fee actually charged, from 0 up to that ceiling, and record what the customer
+    // paid. We do NOT force the server's computed fee: fee enforcement belongs at ring-up, not
+    // sync. A completed, paid sale must never be permanently stranded because the device rang it
+    // up with a stale/zero fee (e.g. offline before settings loaded) - that stalls the whole
+    // sync queue and loses the sale from the books.
+    if (impliedFee < -0.01 || impliedFee > maxFee + 0.01) {
+      throw new Error('Total calculation mismatch')
     }
+    expectedTotal = input.total
   }
   if (Math.abs(expectedTotal - input.total) > 0.01) {
     throw new Error('Total calculation mismatch')

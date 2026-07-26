@@ -17,13 +17,16 @@ export type PendingSyncSummary = {
   stockAdjustments: number
   /** Udhaar sales stuck because they carry no customer - resolvable on the device. */
   stuckUdhaarSales: number
+  /** Any pending sale the server has rejected at least once (has a syncError) - includes the
+   *  udhaar-without-customer ones plus card-fee mismatches etc. All are fixable in the modal. */
+  stuckSales: number
   /** Last stored sync error on any pending record, so the banner can say why it is stuck. */
   firstError?: string
 }
 
 export async function getPendingSyncSummary(shopId: string | undefined): Promise<PendingSyncSummary> {
   if (!shopId) {
-    return { total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0, stuckUdhaarSales: 0 }
+    return { total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0, stuckUdhaarSales: 0, stuckSales: 0 }
   }
 
   const [sales, purchases, customers, udhaarPayments, expenses, stockAdjustments] = await Promise.all([
@@ -43,6 +46,7 @@ export async function getPendingSyncSummary(shopId: string | undefined): Promise
     stockAdjustments.find((r) => r.syncError)?.syncError
 
   const stuckUdhaarSales = sales.filter((s) => s.paymentStatus === 'UDHAAR' && !s.customerId).length
+  const stuckSales = sales.filter((s) => !!s.syncError).length
 
   return {
     sales: sales.length,
@@ -52,6 +56,7 @@ export async function getPendingSyncSummary(shopId: string | undefined): Promise
     expenses: expenses.length,
     stockAdjustments: stockAdjustments.length,
     stuckUdhaarSales,
+    stuckSales,
     total:
       sales.length +
       purchases.length +

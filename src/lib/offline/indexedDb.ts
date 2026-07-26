@@ -187,6 +187,19 @@ export async function deleteMeta(key: string): Promise<void> {
   await db.meta.delete(key)
 }
 
+// Shop settings cache (meta store). Cached so the POS can apply the correct card fee,
+// service/delivery charges etc. while offline - without this, an offline card sale is rung up
+// with a 0% fee and the server then rejects it forever on sync ("Total calculation mismatch").
+export async function saveShopSettings(shopId: string, settings: any): Promise<void> {
+  if (!shopId || !settings) return
+  await setMeta(`settings:${shopId}`, settings)
+}
+
+export async function getCachedShopSettings(shopId: string): Promise<any | null> {
+  if (!shopId) return null
+  return (await getMeta(`settings:${shopId}`)) ?? null
+}
+
 // Helper functions for products store
 export async function saveProducts(shopId: string, products: Omit<CachedProduct, 'shopId' | 'updatedAt'>[]): Promise<void> {
   // Skip if no shopId (Platform Admin case)
@@ -378,6 +391,17 @@ export async function getStuckUdhaarSales(shopId: string): Promise<CachedSale[]>
   if (!shopId) return []
   const pending = await db.sales.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
   return pending.filter((s) => s.paymentStatus === 'UDHAAR' && !s.customerId)
+}
+
+/**
+ * Pending sales that have failed to sync at least once (a syncError is recorded). Covers every
+ * class of stuck sale - udhaar-without-customer AND paid/card sales the server rejected (e.g. a
+ * stale-fee "Total calculation mismatch") - so the recovery UI can surface and clear them all.
+ */
+export async function getStuckSales(shopId: string): Promise<CachedSale[]> {
+  if (!shopId) return []
+  const pending = await db.sales.where('[shopId+syncStatus]').equals([shopId, 'PENDING']).toArray()
+  return pending.filter((s) => !!s.syncError)
 }
 
 // Purchase store type (for offline purchases)

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  getStuckUdhaarSales,
+  getStuckSales,
   getCustomers,
   attachCustomerToStuckSale,
   convertStuckSaleToPaidCash,
@@ -21,9 +21,11 @@ type Props = {
 }
 
 /**
- * Device-local recovery for udhaar (credit) sales that got saved without a customer and can
- * never sync. The sale data (items, amount, date) is safe on the device; the shopkeeper just
- * needs to say who owes it, mark it paid, or discard it. Then it syncs.
+ * Device-local recovery for sales stuck in the sync queue. Two classes:
+ *  - Udhaar (credit) sales saved without a customer: pick who owes it, mark it paid, or discard.
+ *  - Any other rejected sale (e.g. a card sale rung up offline with a stale/zero fee): retry the
+ *    sync (the server now accepts the charged total) or discard it.
+ * The sale data (items, amount, date) is safe on the device; nothing is lost until discarded.
  */
 export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
   const [sales, setSales] = useState<CachedSale[]>([])
@@ -36,7 +38,7 @@ export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [stuck, custs] = await Promise.all([getStuckUdhaarSales(shopId), getCustomers(shopId)])
+      const [stuck, custs] = await Promise.all([getStuckSales(shopId), getCustomers(shopId)])
       stuck.sort((a, b) => a.createdAt - b.createdAt)
       custs.sort((a, b) => a.name.localeCompare(b.name))
       setSales(stuck)
@@ -95,6 +97,20 @@ export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
     }
   }
 
+  // Re-attempt the sync for a rejected sale whose data is already correct (e.g. a card sale that
+  // was stuck on a stale-fee mismatch). afterChange() pushes the pending queue to the server.
+  async function handleRetry(sale: CachedSale) {
+    setBusyId(sale.id)
+    setError(null)
+    try {
+      await afterChange()
+    } catch {
+      setError('Could not sync the sale. Check your connection and try again.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function handleDiscard(sale: CachedSale) {
     setBusyId(sale.id)
     setError(null)
@@ -114,10 +130,10 @@ export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-[hsl(var(--border))] p-4">
           <div>
-            <h2 className="text-lg font-bold">Fix stuck credit sales</h2>
+            <h2 className="text-lg font-bold">Fix stuck sales</h2>
             <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">
-              These udhaar sales have no customer, so they cannot sync. Pick who owes each one, mark it
-              paid, or discard it. Nothing is lost until you discard.
+              These sales could not sync. For a credit sale, pick who owes it or mark it paid. For any
+              other sale, try syncing again. Or discard it. Nothing is lost until you discard.
             </p>
           </div>
           <button
@@ -139,7 +155,7 @@ export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
             <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">Loading…</p>
           ) : sales.length === 0 ? (
             <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
-              No stuck credit sales. You are all caught up.
+              No stuck sales. You are all caught up.
             </p>
           ) : (
             <ul className="space-y-3">
@@ -147,6 +163,9 @@ export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
                 const busy = busyId === sale.id
                 const itemCount = (sale.items || []).reduce((n, i) => n + (i.quantity || 0), 0)
                 const date = new Date(sale.createdAt).toLocaleString()
+                // Udhaar-without-customer needs the shopkeeper to say who owes it; any other stuck
+                // sale (e.g. a card-fee mismatch) is already valid and just needs a re-sync.
+                const needsCustomer = sale.paymentStatus === 'UDHAAR' && !sale.customerId
                 return (
                   <li key={sale.id} className="rounded-lg border border-[hsl(var(--border))] p-3">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -155,6 +174,9 @@ export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
                         {itemCount} item{itemCount === 1 ? '' : 's'} · {date}
                       </span>
                     </div>
+                    {sale.syncError ? (
+                      <p className="mt-1 text-xs text-amber-700">{sale.syncError}</p>
+                    ) : null}
 
                     {confirmDiscardId === sale.id ? (
                       <div className="mt-3 rounded border border-red-200 bg-red-50 p-2">
@@ -180,7 +202,7 @@ export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
                           </button>
                         </div>
                       </div>
-                    ) : (
+                    ) : needsCustomer ? (
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                         <select
                           className="input h-9 flex-1 text-sm"
@@ -223,6 +245,25 @@ export function StuckSalesModal({ shopId, onClose, onChanged }: Props) {
                             Discard
                           </button>
                         </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-primary h-9 px-3 text-sm disabled:opacity-50"
+                          disabled={busy}
+                          onClick={() => void handleRetry(sale)}
+                        >
+                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Try syncing again'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost h-9 px-3 text-sm text-red-600 disabled:opacity-50"
+                          disabled={busy}
+                          onClick={() => setConfirmDiscardId(sale.id)}
+                        >
+                          Discard
+                        </button>
                       </div>
                     )}
                   </li>

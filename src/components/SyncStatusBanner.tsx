@@ -25,8 +25,9 @@ export function SyncStatusBanner({ shopId }: Props) {
     expenses: number
     stockAdjustments: number
     stuckUdhaarSales: number
+    stuckSales: number
     firstError?: string
-  }>({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0, stuckUdhaarSales: 0 })
+  }>({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0, stuckUdhaarSales: 0, stuckSales: 0 })
   const [syncing, setSyncing] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
   const [reporting, setReporting] = useState(false)
@@ -35,7 +36,7 @@ export function SyncStatusBanner({ shopId }: Props) {
 
   const refresh = useCallback(async () => {
     if (!shopId) {
-      setSummary({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0, stuckUdhaarSales: 0 })
+      setSummary({ total: 0, sales: 0, purchases: 0, customers: 0, udhaarPayments: 0, expenses: 0, stockAdjustments: 0, stuckUdhaarSales: 0, stuckSales: 0 })
       return
     }
     try {
@@ -139,7 +140,12 @@ export function SyncStatusBanner({ shopId }: Props) {
             {summary.stuckUdhaarSales > 0 ? (
               <span className="mt-0.5 block text-xs text-red-700">
                 {summary.stuckUdhaarSales} credit sale{summary.stuckUdhaarSales === 1 ? '' : 's'} need a customer. Tap
-                &ldquo;Fix credit sales&rdquo;.
+                &ldquo;Fix stuck sales&rdquo;.
+              </span>
+            ) : summary.stuckSales > 0 ? (
+              <span className="mt-0.5 block text-xs text-red-700">
+                {summary.stuckSales} sale{summary.stuckSales === 1 ? '' : 's'} could not sync. Tap &ldquo;Fix stuck
+                sales&rdquo;.
               </span>
             ) : lastError ? (
               <span className="mt-0.5 block text-xs text-red-700">{lastError}</span>
@@ -167,13 +173,13 @@ export function SyncStatusBanner({ shopId }: Props) {
               'Sync now'
             )}
           </button>
-          {summary.stuckUdhaarSales > 0 ? (
+          {summary.stuckSales > 0 ? (
             <button
               type="button"
               className="btn h-9 whitespace-nowrap border border-amber-300 bg-white px-3 text-sm text-amber-900 hover:bg-amber-100"
               onClick={() => setShowStuck(true)}
             >
-              Fix credit sales ({summary.stuckUdhaarSales})
+              Fix stuck sales ({summary.stuckSales})
             </button>
           ) : null}
           {(lastError || summary.firstError) ? (
