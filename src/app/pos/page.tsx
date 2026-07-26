@@ -1295,6 +1295,15 @@ export default function POSPage() {
         return
       }
 
+      // Never take a card payment before shop settings have loaded at least once on this device:
+      // without them we cannot know the card fee, so the sale would be rung up at 0% and then
+      // rejected by the server. Force cash/credit until the device syncs settings.
+      if (paymentStatus === 'PAID' && paymentMethod === 'CARD' && shopSettings === null) {
+        setError('Card payments are unavailable until this device connects once to load shop settings. Use cash or credit for now.')
+        setSubmitting(false)
+        return
+      }
+
       const subtotal = sumCartLines(cart)
       const { total: baseTotal } = calculateTotals(subtotal, discount)
 
@@ -2550,9 +2559,14 @@ export default function POSPage() {
                       className="input"
                     >
                       <option value="CASH">{t('cash')}</option>
-                      <option value="CARD">{t('card')}</option>
+                      <option value="CARD" disabled={shopSettings === null}>{t('card')}</option>
                       <option value="OTHER">{t('other')}</option>
                     </select>
+                    {shopSettings === null && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        Card unavailable until this device connects once to load shop settings.
+                      </p>
+                    )}
                   </div>
 
                   {/* Card fee override (if enabled and payment method is CARD) */}
