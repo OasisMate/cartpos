@@ -1179,7 +1179,7 @@ export default function SettingsPage() {
                       />
                       <label htmlFor="enableQuotations" className="ml-2 text-sm text-gray-700">
                         <span className="font-medium">Quotations</span>
-                        <span className="block text-xs text-gray-500">Create price estimates that convert to sales (hardware, electric, wholesale).</span>
+                        <span className="block text-xs text-gray-500">Give a customer a written price estimate, then turn it into a sale in one click.</span>
                       </label>
                     </div>
                   )}
@@ -1197,7 +1197,7 @@ export default function SettingsPage() {
                       />
                       <label htmlFor="enableTradePricing" className="ml-2 text-sm text-gray-700">
                         <span className="font-medium">Trade pricing</span>
-                        <span className="block text-xs text-gray-500">Show the Retail / Trade price toggle at checkout (wholesale, hardware, electric).</span>
+                        <span className="block text-xs text-gray-500">Show a Retail / Trade price toggle at checkout for dealers and bulk buyers.</span>
                       </label>
                     </div>
                   )}
@@ -1215,7 +1215,7 @@ export default function SettingsPage() {
                       />
                       <label htmlFor="enableUnitSplitting" className="ml-2 text-sm text-gray-700">
                         <span className="font-medium">Multi-level packaging</span>
-                        <span className="block text-xs text-gray-500">Sell at different pack levels (carton / box / loose unit) e.g. pharmacy.</span>
+                        <span className="block text-xs text-gray-500">Sell the same product by carton, box or loose unit, each with its own price.</span>
                       </label>
                     </div>
                   )}

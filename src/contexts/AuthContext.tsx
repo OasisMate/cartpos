@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { isPublicRoute } from '@/lib/auth/public-routes'
 
 interface User {
   id: string
@@ -156,11 +157,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Empty dependency array - only run on mount
 
-  // Protect routes - redirect to login if not authenticated
-  // Note: Middleware handles most redirects, but this is a fallback for client-side navigation
+  // Protect routes - redirect to login if not authenticated.
+  // Note: Middleware handles most redirects, but this is a fallback for client-side
+  // navigation. It MUST honour the same public-route list as the middleware, or a
+  // logged-out visitor gets bounced off pages the middleware just allowed (emailed
+  // verify / reset links, shared receipts). '/' is exempt because it does its own
+  // stale-session handling.
   useEffect(() => {
-    if (!loading && !user && pathname !== '/login' && pathname !== '/signup' && pathname !== '/') {
-      // Don't redirect if already on login page, signup page, or home
+    if (!loading && !user && pathname !== '/' && !isPublicRoute(pathname)) {
       router.push('/login')
     }
   }, [user, loading, pathname, router])

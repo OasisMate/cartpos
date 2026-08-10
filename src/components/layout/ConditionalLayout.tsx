@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import AppShell from '@/components/layout/AppShell'
+import { isPublicRoute } from '@/lib/auth/public-routes'
 
 export default function ConditionalLayout({
   children,
@@ -9,15 +10,13 @@ export default function ConditionalLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const isLoginPage = pathname === '/login'
-  const isSignupPage = pathname === '/signup'
-  const isWaitingApprovalPage = pathname === '/waiting-approval'
-  // Public shareable receipt (/r/<token>): no login, no app chrome — the
-  // customer should see only the receipt, not the shop's navigation.
-  const isPublicReceipt = pathname.startsWith('/r/')
 
-  // Don't wrap auth / public pages with AppShell
-  if (isLoginPage || isSignupPage || isWaitingApprovalPage || isPublicReceipt) {
+  // Don't wrap auth / public pages with AppShell. A visitor on one of these has no
+  // session, so app navigation would only offer links that bounce them to /login.
+  // Covers /login, /signup, /verify-email, /forgot-password, /reset-password and
+  // /r/<token> (public shareable receipt: the customer should see only the receipt).
+  // '/waiting-approval' has a session but no usable shop yet, so it stays bare too.
+  if (isPublicRoute(pathname) || pathname === '/waiting-approval') {
     return <>{children}</>
   }
 

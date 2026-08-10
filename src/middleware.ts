@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
+import { isPublicRoute as isPublicPath } from '@/lib/auth/public-routes'
 
 const secretKey = process.env.JWT_SECRET
 if (!secretKey || secretKey.length < 32) {
@@ -38,10 +39,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password', '/api/health']
-  // /r/<token> = public shareable receipt (no login); token is signed, so it's unguessable.
-  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/r/')
+  // Public routes that don't require authentication (shared with the AuthContext
+  // client-side guard so the two can't drift). See lib/auth/public-routes.ts.
+  const isPublicRoute = isPublicPath(pathname)
 
   // Allow API routes to handle their own auth
   if (pathname.startsWith('/api/')) {
