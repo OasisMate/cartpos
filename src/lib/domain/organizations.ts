@@ -1,5 +1,12 @@
-import type { ShopRole } from '@prisma/client'
+import type { OrganizationType, Prisma, ShopRole } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
+import {
+  normalizeUnits,
+  presetForType,
+  presetShopSettingsData,
+  readFeatureConfig,
+  unitsForType,
+} from '@/lib/domain/business-presets'
 import { hashPassword } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 import { sendEmail, generateWelcomeEmail } from '@/lib/email'
@@ -178,6 +185,71 @@ export async function listOrganizations() {
   )
   
   return orgsWithUsers
+}
+
+/**
+ * Change an organization's business type, optionally re-seeding each shop's
+ * feature flags from the new type's preset (see `business-presets.ts`).
+ *
+ * Presets normally only run at signup, so a shop that picked the wrong type
+ * keeps the wrong features forever. Re-applying overwrites the preset-owned
+ * flags but keeps a hand-edited unit list: units are only refreshed when the
+ * shop is still on the old type's defaults.
+ */
+export async function changeOrganizationType(
+  orgId: string,
+  newType: OrganizationType,
+  opts: { reapplyPresets?: boolean } = {}
+) {
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { type: true, shops: { select: { id: true } } },
+  })
+  if (!org) throw new Error('Organization not found')
+
+  const oldType = org.type
+  const updated = await prisma.organization.update({
+    where: { id: orgId },
+    data: { type: newType },
+    select: { id: true, name: true, type: true },
+  })
+
+  let shopsUpdated = 0
+  if (opts.reapplyPresets && org.shops.length) {
+    const preset = presetShopSettingsData(newType)
+    const oldDefaults = unitsForType(oldType)
+    const newDefaults = unitsForType(newType)
+
+    for (const shop of org.shops) {
+      const existing = await prisma.shopSettings.findUnique({
+        where: { shopId: shop.id },
+        select: { featureConfig: true },
+      })
+      const cfg = readFeatureConfig(existing?.featureConfig)
+      const currentUnits = normalizeUnits(cfg.units)
+      // Only replace units the owner never touched.
+      const untouched =
+        currentUnits.length === 0 ||
+        (currentUnits.length === oldDefaults.length &&
+          currentUnits.every((u, i) => u === oldDefaults[i]))
+
+      const { featureConfig: presetConfig, ...columns } = preset
+      const featureConfig = {
+        ...cfg,
+        batchExpiry: presetForType(newType).batchExpiry,
+        units: untouched ? newDefaults : currentUnits,
+      } as Prisma.InputJsonObject
+
+      await prisma.shopSettings.upsert({
+        where: { shopId: shop.id },
+        create: { shopId: shop.id, ...columns, featureConfig },
+        update: { ...columns, featureConfig },
+      })
+      shopsUpdated++
+    }
+  }
+
+  return { organization: updated, previousType: oldType, shopsUpdated }
 }
 
 export async function approveOrganization(orgId: string, adminUserId: string) {

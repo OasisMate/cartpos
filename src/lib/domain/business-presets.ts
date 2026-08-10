@@ -50,6 +50,10 @@ export const DEFAULT_UNITS = ['pcs', 'kg', 'g', 'L', 'mL', 'pack', 'box', 'dozen
 /** Starter unit list per business type. Only list types that differ from DEFAULT_UNITS. */
 const UNIT_PRESETS: Partial<Record<OrganizationType, string[]>> = {
   PHARMACY: ['tablet', 'capsule', 'strip', 'bottle', 'sachet', 'ml', 'vial', 'tube', 'pen', 'box', 'pcs'],
+  SURGICAL_STORE: ['pcs', 'box', 'pack', 'set', 'pair', 'roll', 'kit', 'dozen', 'meter'],
+  DENTAL_STORE: ['pcs', 'box', 'pack', 'set', 'kit', 'bottle', 'tube', 'pair'],
+  LAB_SUPPLIES: ['pcs', 'box', 'pack', 'bottle', 'vial', 'test', 'kit', 'ml', 'L'],
+  VETERINARY_STORE: ['pcs', 'bottle', 'vial', 'sachet', 'ml', 'L', 'kg', 'bag', 'box', 'strip', 'tablet'],
   RESTAURANT: ['plate', 'item', 'piece', 'cup', 'glass', 'bowl', 'pcs'],
   HARDWARE_STORE: ['pcs', 'ft', 'meter', 'kg', 'bag', 'box', 'roll', 'set', 'pair'],
   SANITARY_STORE: ['pcs', 'ft', 'meter', 'set', 'box', 'roll', 'pair'],
@@ -134,6 +138,19 @@ const PRESETS: Partial<Record<OrganizationType, Partial<BusinessFeatureFlags>>> 
 
   // Pharmacy: multi-level packaging (carton/box/tablet) + batch/expiry tracking.
   PHARMACY: { enableUnitSplitting: true, batchExpiry: true },
+
+  // Medical trade: quote hospitals/clinics, sell at dealer rates, and the stock
+  // (sutures, gloves, reagents, vaccines) carries expiry dates.
+  SURGICAL_STORE: { enableQuotations: true, enableTradePricing: true, batchExpiry: true },
+  DENTAL_STORE: { enableQuotations: true, enableTradePricing: true, batchExpiry: true },
+  LAB_SUPPLIES: { enableQuotations: true, enableTradePricing: true, batchExpiry: true },
+  // Vet also sells loose out of a box, like a pharmacy.
+  VETERINARY_STORE: {
+    enableQuotations: true,
+    enableTradePricing: true,
+    batchExpiry: true,
+    enableUnitSplitting: true,
+  },
 
   // Hospitality: service charge on dine-in, optional delivery fee.
   RESTAURANT: {

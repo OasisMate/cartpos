@@ -70,6 +70,7 @@ export const ActivityActions = {
   
   // Organization actions
   UPDATE_ORG_SETTINGS: 'UPDATE_ORG_SETTINGS',
+  UPDATE_ORG_TYPE: 'UPDATE_ORG_TYPE',
   APPROVE_ORG: 'APPROVE_ORG',
   SUSPEND_ORG: 'SUSPEND_ORG',
   REJECT_ORG: 'REJECT_ORG',

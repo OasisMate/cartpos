@@ -8,6 +8,7 @@ import { Logo } from '@/components/ui/Logo'
 import { formatCNIC } from '@/lib/validation'
 import { validatePassword } from '@/lib/validation/password'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
+import { BUSINESS_TYPE_GROUPS } from '@/lib/domain/business-types'
 
 export default function Signup() {
   const router = useRouter()
@@ -399,42 +400,15 @@ export default function Signup() {
                     disabled={loading}
                   >
                     <option value="">Select business type</option>
-                    <optgroup label="Grocery & General">
-                      <option value="GENERAL_STORE">General Store</option>
-                      <option value="KIRYANA_STORE">Kiryana / Grocery</option>
-                      <option value="CONVENIENCE_STORE">Convenience Store</option>
-                      <option value="SUPERMARKET">Supermarket</option>
-                      <option value="WHOLESALE">Wholesale</option>
-                      <option value="RETAIL_STORE">Retail Store</option>
-                    </optgroup>
-                    <optgroup label="Pharmacy & Health">
-                      <option value="PHARMACY">Pharmacy / Medical Store</option>
-                      <option value="OPTICAL_STORE">Optical Store</option>
-                    </optgroup>
-                    <optgroup label="Electronics & Mobile">
-                      <option value="ELECTRONICS_STORE">Electronics Store</option>
-                      <option value="MOBILE_ACCESSORIES">Mobile & Accessories</option>
-                    </optgroup>
-                    <optgroup label="Fashion & Beauty">
-                      <option value="CLOTHING_STORE">Clothing / Garments</option>
-                      <option value="FOOTWEAR_STORE">Footwear</option>
-                      <option value="COSMETICS_STORE">Cosmetics & Beauty</option>
-                      <option value="JEWELRY_STORE">Jewellery</option>
-                    </optgroup>
-                    <optgroup label="Home & Hardware">
-                      <option value="HARDWARE_STORE">Hardware Store</option>
-                      <option value="SANITARY_STORE">Sanitary & Tiles</option>
-                      <option value="FURNITURE_STORE">Furniture</option>
-                    </optgroup>
-                    <optgroup label="Food">
-                      <option value="BAKERY">Bakery & Sweets</option>
-                      <option value="RESTAURANT">Restaurant / Food</option>
-                    </optgroup>
-                    <optgroup label="Other">
-                      <option value="AUTO_PARTS">Auto Parts & Accessories</option>
-                      <option value="STATIONERY_STORE">Stationery & Books</option>
-                      <option value="OTHER">Other</option>
-                    </optgroup>
+                    {BUSINESS_TYPE_GROUPS.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
                 <div>

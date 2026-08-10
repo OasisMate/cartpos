@@ -86,6 +86,12 @@ Slices (each: build → typecheck → commit → QA later):
   stored in `featureConfig.units`. Product Unit dropdown now uses it. Spec:
   `docs/superpowers/specs/2026-06-19-shop-units-design.md`.
 
+- **DONE (2026-08-11) — health/medical cluster:** 4 new types (`SURGICAL_STORE`, `DENTAL_STORE`,
+  `LAB_SUPPLIES`, `VETERINARY_STORE`), all preset to quotations + trade pricing + batch/expiry (vet
+  also unit splitting). Driven by client ASIA CARE + TECH (surgical). Dropdown list consolidated into
+  `lib/domain/business-types.ts`; platform admin can now reassign an org's type and optionally
+  re-apply presets. Details in TESTING_LOG.
+
 ## Open decisions (ask before the relevant phase)
 - Phase 3 vertical ORDER (confirm against QA + verified research, real demand).
 - Whether to migrate any current typed flags into `featureConfig` (default: no, keep typed).

@@ -4,13 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCNIC } from '@/lib/validation'
-
-function formatOrganizationType(type: string): string {
-  return type
-    .split('_')
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(' ')
-}
+import { BUSINESS_TYPE_GROUPS, formatOrganizationType } from '@/lib/domain/business-types'
 
 interface RequestedByUser {
   id: string
@@ -80,6 +74,37 @@ export default function OrganizationsPage() {
     ownerName: '', ownerEmail: '', ownerPassword: '', ownerPhone: '',
   }
   const [createForm, setCreateForm] = useState(emptyCreateForm)
+  // Change business type (re-seeds shop feature presets when asked)
+  const [typeOrg, setTypeOrg] = useState<Organization | null>(null)
+  const [typeValue, setTypeValue] = useState('')
+  const [typeReapply, setTypeReapply] = useState(true)
+  const [savingType, setSavingType] = useState(false)
+  const [typeError, setTypeError] = useState('')
+
+  async function saveBusinessType() {
+    if (!typeOrg) return
+    setSavingType(true)
+    setTypeError('')
+    try {
+      const res = await fetch(`/api/admin/organizations/${typeOrg.id}/business-type`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: typeValue, reapplyPresets: typeReapply }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to change business type')
+      setNotice(
+        `${typeOrg.name} is now ${formatOrganizationType(typeValue)}` +
+          (typeReapply ? ` (${data.shopsUpdated} shop settings re-seeded)` : '')
+      )
+      setTypeOrg(null)
+      await fetchOrgs()
+    } catch (e: any) {
+      setTypeError(e.message || 'Failed to change business type')
+    } finally {
+      setSavingType(false)
+    }
+  }
 
   async function createOrg() {
     setCreating(true)
@@ -436,6 +461,17 @@ export default function OrganizationsPage() {
                   )}
                   <p className="text-sm text-gray-600">
                     Type: <span className="font-medium">{formatOrganizationType(org.type)}</span>
+                    <button
+                      className="ml-2 text-xs text-blue-600 hover:underline"
+                      onClick={() => {
+                        setTypeOrg(org)
+                        setTypeValue(org.type)
+                        setTypeReapply(true)
+                        setTypeError('')
+                      }}
+                    >
+                      Change
+                    </button>
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -661,6 +697,60 @@ export default function OrganizationsPage() {
       )}
 
       {/* Create Organization Modal */}
+      {typeOrg && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-1">Change Business Type</h3>
+            <p className="text-sm text-gray-600 mb-4">{typeOrg.name}</p>
+            {typeError && <div className="mb-3 p-2 bg-red-100 text-red-700 rounded text-sm">{typeError}</div>}
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
+              value={typeValue}
+              onChange={(e) => setTypeValue(e.target.value)}
+            >
+              {BUSINESS_TYPE_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <label className="flex items-start gap-2 mt-4 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={typeReapply}
+                onChange={(e) => setTypeReapply(e.target.checked)}
+              />
+              <span>
+                Re-apply this type&apos;s feature presets to all shops in the org (quotations, trade
+                pricing, charges, batch/expiry). Overwrites those toggles. A customised product unit
+                list is kept.
+              </span>
+            </label>
+            <div className="flex gap-3 justify-end mt-5">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                onClick={() => setTypeOrg(null)}
+                disabled={savingType}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                onClick={saveBusinessType}
+                disabled={savingType || !typeValue || typeValue === typeOrg.type}
+              >
+                {savingType ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
@@ -680,15 +770,15 @@ export default function OrganizationsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Business Type *</label>
                   <select className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" value={createForm.organizationType}
                     onChange={(e) => setCreateForm({ ...createForm, organizationType: e.target.value })}>
-                    <option value="RETAIL_STORE">Retail Store</option>
-                    <option value="WHOLESALE">Wholesale</option>
-                    <option value="SUPERMARKET">Supermarket</option>
-                    <option value="GENERAL_STORE">General Store</option>
-                    <option value="CONVENIENCE_STORE">Convenience Store</option>
-                    <option value="PHARMACY">Pharmacy</option>
-                    <option value="ELECTRONICS_STORE">Electronics Store</option>
-                    <option value="CLOTHING_STORE">Clothing Store</option>
-                    <option value="OTHER">Other</option>
+                    {BUSINESS_TYPE_GROUPS.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
                 <div>
