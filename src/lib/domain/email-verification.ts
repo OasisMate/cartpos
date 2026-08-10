@@ -5,6 +5,7 @@ import {
   generateVerificationEmail,
   generateVerificationReminderEmail,
   generateAccessRequestEmail,
+  generateTrialStartedEmail,
 } from '@/lib/email'
 import { notifyPlatformAdmins } from '@/lib/domain/notifications'
 import { TRIAL_DAYS } from '@/lib/billing/trial'
@@ -79,6 +80,66 @@ async function notifyAdminsOfAccessRequest(userId: string, origin?: string): Pro
 }
 
 /**
+ * Welcome the owner and tell them exactly when their trial ends.
+ *
+ * Sent once, on verification, because that is the moment the account actually
+ * becomes usable. Naming the end date here is what stops the eventual read-only
+ * lockout feeling like a trap.
+ *
+ * Never throws: a failed welcome email must not fail the verification itself.
+ */
+async function sendTrialStartedEmail(userId: string, origin?: string): Promise<void> {
+  try {
+    const org = await prisma.organization.findFirst({
+      where: { requestedBy: userId },
+      select: {
+        name: true,
+        subscription: {
+          select: { status: true, trialEndsAt: true, plan: { select: { name: true } } },
+        },
+      },
+    })
+    // Only for a genuine new signup that is actually on a trial. An org that was
+    // grandfathered, or created by an admin, gets nothing.
+    const sub = org?.subscription
+    if (!org || !sub || sub.status !== 'TRIALING' || !sub.trialEndsAt) return
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    })
+    if (!user?.email) return
+
+    const trialEndsOn = sub.trialEndsAt.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+
+    const settings = await prisma.billingSettings.findUnique({
+      where: { id: 'default' },
+      select: { whatsappNumber: true },
+    })
+
+    await sendEmail({
+      to: user.email,
+      subject: `Your Cart POS trial is active until ${trialEndsOn}`,
+      html: generateTrialStartedEmail({
+        ownerName: user.name,
+        orgName: org.name,
+        trialDays: TRIAL_DAYS,
+        trialEndsOn,
+        planName: sub.plan?.name ?? 'Business',
+        loginLink: `${baseUrl(origin)}/login`,
+        supportPhone: settings?.whatsappNumber ?? null,
+      }),
+    })
+  } catch (error) {
+    console.error('Failed to send trial started email:', error)
+  }
+}
+
+/**
  * Issue a fresh verification token and email it. Invalidates any prior unused
  * tokens for the user so only the latest link works. Never throws.
  */
@@ -143,6 +204,8 @@ export async function verifyEmailToken(
     prisma.emailVerificationToken.update({ where: { id: record.id }, data: { used: true } }),
   ])
 
+  // Owner first: their welcome matters more than our internal alert.
+  await sendTrialStartedEmail(record.userId, origin)
   await notifyAdminsOfAccessRequest(record.userId, origin)
   return { status: 'verified' }
 }
@@ -179,6 +242,7 @@ export async function verifyEmailCode(
     prisma.emailVerificationToken.update({ where: { id: record.id }, data: { used: true } }),
   ])
 
+  await sendTrialStartedEmail(user.id, origin)
   await notifyAdminsOfAccessRequest(user.id, origin)
   return { status: 'verified' }
 }

@@ -221,6 +221,49 @@ function detailRow(label: string, value: string): string {
  * Notify a platform admin that a verified signup is awaiting approval.
  */
 /**
+ * Welcome the shop owner once their email is verified and their trial is live.
+ *
+ * The date is the point of this email. "14 days" is vague and forgettable; a
+ * specific date they can put in a diary is not, and it means the eventual
+ * expiry is never a surprise.
+ */
+export function generateTrialStartedEmail(params: {
+  ownerName?: string | null
+  orgName: string
+  trialDays: number
+  trialEndsOn: string
+  planName: string
+  loginLink: string
+  supportPhone?: string | null
+}): string {
+  const greeting = params.ownerName ? `Assalam o Alaikum ${params.ownerName},` : 'Assalam o Alaikum,'
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Your ${params.trialDays}-day free trial has started</h1>
+    <p style="margin:0 0 12px;">${greeting}</p>
+    <p style="margin:0 0 12px;">
+      Your email is confirmed and <strong>${params.orgName}</strong> is ready to use. You have full access to
+      everything Cart POS offers, with nothing locked and no card required.
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:18px 0;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
+      ${detailRow('Business', params.orgName)}
+      ${detailRow('Plan during trial', `${params.planName} (everything included)`)}
+      ${detailRow('Free until', `<strong>${params.trialEndsOn}</strong>`)}
+    </table>
+    <p style="margin:0 0 12px;">
+      Before <strong>${params.trialEndsOn}</strong>, choose the plan that fits your shop. If you do not choose,
+      your account simply becomes read-only: your sales, stock and customer records all stay safe, and
+      everything comes back the moment you pick a plan.
+    </p>
+    ${ctaButton(params.loginLink, 'Start using Cart POS')}
+    <p style="margin:16px 0 0;color:#6b7280;font-size:14px;">
+      Need help getting your products in, or want a walkthrough? Just reply to this email${
+        params.supportPhone ? ` or message us on ${params.supportPhone}` : ''
+      }.
+    </p>`
+  return emailLayout(content, `Your Cart POS trial is active until ${params.trialEndsOn}`)
+}
+
+/**
  * Tell platform admins a new business signed up and started its trial.
  *
  * Signup no longer waits for approval, so this is an FYI rather than a task.
