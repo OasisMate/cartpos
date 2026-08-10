@@ -39,7 +39,7 @@ Each item: what it is + why it matters + rough effort, so we can decide fast lat
 - `Number()` -> `Decimal` consistency; oversell TOCTOU race (row-lock in tx). Effort: Med.
 
 ## H. Commercialization (only when ready to charge)
-- **Trial / billing** — the monetization gate. Effort: High.
+- **Trial / billing** — the monetization gate. Effort: High. Design approved 2026-08-11: see local `docs/BILLING_PLAN.md` (gitignored).
 - **FBR tax compliance (PK)** — strong selling point for tax-registered shops; evaluate scope before committing. Effort: Heavy.
 
 ## I. Tech debt / maintainability

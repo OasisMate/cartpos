@@ -45,12 +45,18 @@ model Organization {
   // (and is reversible until then). Never set for ACTIVE orgs.
   deletionScheduledAt DateTime?
   deletionScheduledBy String?
+  // Free-text "How did you hear about us?" captured at signup. Tells us which
+  // channel actually produces paying shops.
+  referralSource   String?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
   shops       Shop[]
   users       OrganizationUser[]
   activityLogs ActivityLog[]
+  subscription Subscription?
+  paymentClaims PaymentClaim[]
+  subscriptionPayments SubscriptionPayment[]
 
   @@index([name])
   @@index([status])
@@ -102,6 +108,13 @@ model Shop {
   phone       String?
   addressLine1 String?
   addressLine2 String?
+  // Frozen shop: reads still work, every write is refused (402). Two causes,
+  // told apart by pausedReason: the owner closed it, or a plan downgrade paused
+  // it. Never deletes anything; flipping isActive back restores the shop as-is.
+  isActive     Boolean      @default(true)
+  pausedAt     DateTime?
+  pausedReason PauseReason?
+  pausedBy     String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   organization Organization  @relation(fields: [orgId], references: [id])
@@ -213,6 +226,11 @@ model UserShop {
   userId    String
   shopId    String
   shopRole  ShopRole
+  // Seat paused by a plan downgrade. The membership row is kept so upgrading
+  // restores the exact same access. Seat caps are enforced when INVITING, never
+  // at login, so this is only ever set by an explicit downgrade.
+  isActive  Boolean   @default(true)
+  pausedAt  DateTime?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id])
   shop      Shop      @relation(fields: [shopId], references: [id])
@@ -903,7 +921,11 @@ model CashMovement {
   createdAt DateTime      @default(now())
 
   shop      Shop          @relation(fields: [shopId], references: [id])
-  shift     Shift         @relation(fields: [shiftId], references: [id])
+  // Cascade matches what the live DB has had since
+  // 20260621010000_add_cash_drawer_shifts. Declared here so `migrate diff` stops
+  // proposing to downgrade it to RESTRICT: a drawer's movements belong to the
+  // shift and go with it.
+  shift     Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   user      User          @relation(fields: [userId], references: [id])
 
   @@index([shiftId])
@@ -943,3 +965,174 @@ model SyncErrorReport {
   @@index([status, createdAt])
 }
 
+
+// -----------------------------------------------------
+// Billing / subscriptions
+//
+// Manual collection: the shop transfers by bank / JazzCash / Easypaisa, submits
+// a PaymentClaim, and a platform admin verifies it into a SubscriptionPayment.
+// No gateway exists for Pakistan yet; these tables are gateway-shaped so adding
+// one later is a new writer, not a redesign.
+// -----------------------------------------------------
+
+/// A purchasable tier. Prices and caps live here, never in code, so a price
+/// change is one row. Seeded as SOLO / TEAM / BUSINESS.
+model Plan {
+  id             String   @id @default(cuid())
+  code           String   @unique // SOLO | TEAM | BUSINESS
+  name           String          // "Solo" | "Team" | "Business"
+  tagline        String?         // "Just me" | "Me + 2 cashiers" | "Unlimited staff"
+  monthlyPrice   Decimal  @db.Decimal(10, 2)
+  maxShops       Int?            // null = unlimited
+  maxUsers       Int?            // total seats incl. the owner. null = unlimited
+  maxCashiers    Int?            // ShopRole.CASHIER cap. 0 on Solo.
+  allowOrgLevel  Boolean  @default(false) // unlocks /org, multi-shop, activity log
+  extraShopPrice Decimal? @db.Decimal(10, 2)
+  features       String[]        // FeatureKey list, see lib/billing/features.ts
+  isPopular      Boolean  @default(false) // renders the "Most Popular" badge
+  isActive       Boolean  @default(true)  // false = retired, existing subs keep it
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscriptions  Subscription[]
+
+  @@index([isActive, sortOrder])
+}
+
+/// One per organization. The single source of truth for what they can do.
+model Subscription {
+  id             String             @id @default(cuid())
+  organizationId String             @unique
+  planId         String
+  status         SubscriptionStatus @default(TRIALING)
+  cycle          BillingCycle       @default(MONTHLY)
+
+  /// Price agreed with THIS customer, snapshotted. Never read Plan.monthlyPrice
+  /// live. This one column gives us free/friend accounts (0), referral
+  /// discounts, and automatic grandfathering when prices rise later.
+  agreedMonthlyPrice Decimal        @db.Decimal(10, 2)
+  priceNote      String?            // e.g. "friend of Hamza, free"
+  priceSetBy     String?
+
+  trialEndsAt      DateTime?
+  /// null = never expires. Used for orgs grandfathered in at launch.
+  currentPeriodEnd DateTime?
+  extraShops       Int              @default(0)
+  /// Solo tier may swap which single shop is active once per billing period.
+  shopSwapUsedAt   DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan           Plan               @relation(fields: [planId], references: [id])
+
+  @@index([status])
+  @@index([currentPeriodEnd])
+}
+
+/// A verified payment. NOTE: `Payment` is already taken in this schema
+/// (customer payments, on Shop), hence the longer name.
+model SubscriptionPayment {
+  id             String        @id @default(cuid())
+  organizationId String
+  amount         Decimal              @db.Decimal(10, 2)
+  method         BillingPaymentMethod
+  reference      String?              // bank ref / transaction id
+  cycle          BillingCycle
+  monthsAdded    Int
+  periodStart    DateTime
+  periodEnd      DateTime
+  receivedAt     DateTime
+  recordedBy     String
+  note           String?
+  createdAt      DateTime      @default(now())
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, receivedAt])
+}
+
+/// What the shop tells us they paid, pending admin review. Exists so payments
+/// arrive as a structured queue instead of being reconciled from WhatsApp chat.
+model PaymentClaim {
+  id             String        @id @default(cuid())
+  organizationId String
+  amount         Decimal              @db.Decimal(10, 2)
+  method         BillingPaymentMethod
+  reference      String?
+  paidOn         DateTime
+  cycle          BillingCycle
+  note           String?
+  /// Base64 data URL, same proven pattern as the shop logo. Max 2MB.
+  /// PURGED on verify: amount/reference/date stay forever, the image does not.
+  receiptImage   String?
+  status         ClaimStatus   @default(PENDING)
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  rejectReason   String?
+  paymentId      String?       // the SubscriptionPayment created on verify
+  submittedBy    String
+  createdAt      DateTime      @default(now())
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([organizationId])
+}
+
+/// Singleton (id = "default"). Where shops send money. Admin-editable so bank
+/// details change without a deploy.
+model BillingSettings {
+  id              String   @id @default("default")
+  bankName        String?
+  accountTitle    String?
+  accountNumber   String?
+  iban            String?
+  jazzcashNumber  String?
+  easypaisaNumber String?
+  whatsappNumber  String?
+  supportEmail    String?
+  instructions    String?  // free text shown on /billing
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  EXPIRED
+  CANCELLED
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+}
+
+/// How a shop paid US for their subscription. Distinct from `PaymentMethod`,
+/// which is how a customer paid the shop (CASH / CARD / OTHER).
+enum BillingPaymentMethod {
+  BANK_TRANSFER
+  JAZZCASH
+  EASYPAISA
+  CASH
+  OTHER
+}
+
+enum ClaimStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+/// Why a shop or seat is frozen. Drives the message the user sees and who can
+/// unfreeze it: the owner reopens OWNER_CLOSED, only paying clears PLAN_DOWNGRADE.
+enum PauseReason {
+  OWNER_CLOSED
+  PLAN_DOWNGRADE
+}
