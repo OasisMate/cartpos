@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { isDatabaseConnectionError } from './db/db-utils'
 import { withRetry } from './db/connection-retry'
 import { presetForType, readFeatureConfig, getShopUnits } from './domain/business-presets'
+import { resolveBillingState } from './billing/subscription'
 
 const secretKey = process.env.JWT_SECRET
 if (!secretKey || secretKey.length < 32) {
@@ -128,20 +129,35 @@ export async function getCurrentUser() {
             twoFactorEnabled: true,
             organizations: {
               include: {
-                organization: true,
+                organization: {
+                  include: {
+                    // One extra join on a query that already runs, so the
+                    // paywall never costs a round trip. See lib/billing.
+                    subscription: { include: { plan: true } },
+                  },
+                },
               },
             },
             shops: {
               include: {
                 shop: {
                   include: {
-                    organization: { select: { isDemo: true, type: true } },
+                    organization: {
+                      select: {
+                        isDemo: true,
+                        type: true,
+                        // Managers and cashiers have no OrganizationUser row, so
+                        // their billing state has to come via their shop's org.
+                        subscription: { include: { plan: true } },
+                      },
+                    },
                     settings: {
                       select: {
                         enableQuotations: true,
                         enableServiceCharge: true,
                         enableDeliveryCharge: true,
                         enableUnitSplitting: true,
+                        enableTradePricing: true,
                         featureConfig: true,
                       },
                     },
@@ -189,9 +205,21 @@ export async function getCurrentUser() {
       serviceCharge: currentSettings?.enableServiceCharge ?? preset.enableServiceCharge,
       deliveryCharge: currentSettings?.enableDeliveryCharge ?? preset.enableDeliveryCharge,
       unitSplitting: currentSettings?.enableUnitSplitting ?? preset.enableUnitSplitting,
+      tradePricing: currentSettings?.enableTradePricing ?? preset.enableTradePricing,
       batchExpiry,
       units: getShopUnits(currentSettings?.featureConfig, currentType),
     }
+
+    // Billing state for whichever org this user is acting in. Org admins have an
+    // OrganizationUser row; managers and cashiers do not, so fall back to the
+    // org that owns their current shop. resolveBillingState never throws and
+    // returns full access whenever anything is missing.
+    const billingOrg =
+      (currentShop as any)?.organization ??
+      organizations.find((o) => o.orgId === currentOrgId)?.organization ??
+      organizations[0]?.organization ??
+      null
+    const billing = resolveBillingState(billingOrg)
 
     return {
       id: user.id,
@@ -209,6 +237,9 @@ export async function getCurrentUser() {
       shops,
       currentShopId,
       features,
+      // What their plan allows and whether writes are permitted right now.
+      // See lib/billing/guards.ts for how routes consume this.
+      billing,
       // True when the current org is a demo/test fixture → destructive actions blocked (see lib/demo.ts).
       // Store managers / cashiers have no OrganizationUser row, so derive demo status from the
       // current SHOP's org (their actual context); fall back to org membership for org admins.

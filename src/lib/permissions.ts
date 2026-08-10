@@ -162,3 +162,20 @@ export const NotFoundResponse = (message = 'Resource not found') =>
     headers: { 'Content-Type': 'application/json' },
   })
 
+/**
+ * Read-only lockout: the account is fine, the subscription is not (or the shop
+ * is closed). 402 rather than 403 so the client can tell "you are not allowed"
+ * apart from "you need to pay", and route the user to /billing.
+ *
+ * `code` lets the offline sync client decide whether to keep a queued record
+ * and retry, or surface it to the cashier as permanently refused.
+ */
+export const PaymentRequiredResponse = (
+  message = 'Your subscription has expired.',
+  code: 'BILLING_EXPIRED' | 'SHOP_PAUSED' | 'PLAN_LIMIT' = 'BILLING_EXPIRED'
+) =>
+  new Response(JSON.stringify({ error: message, code }), {
+    status: 402,
+    headers: { 'Content-Type': 'application/json' },
+  })
+

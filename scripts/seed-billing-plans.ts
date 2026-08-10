@@ -101,13 +101,16 @@ async function main() {
   }
 
   const business = DRY_RUN
-    ? { id: 'DRY' }
-    : await prisma.plan.findUniqueOrThrow({ where: { code: 'BUSINESS' } })
+    ? { id: 'DRY', monthlyPrice: PLANS.find((p) => p.code === 'BUSINESS')!.monthlyPrice }
+    : await prisma.plan.findUniqueOrThrow({
+        where: { code: 'BUSINESS' },
+        select: { id: true, monthlyPrice: true },
+      })
 
   // ---- Subscriptions for existing orgs ---------------------------
   const TRIAL_DAYS = 14
   const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
-  const businessPrice = DRY_RUN ? 5999 : Number(business.monthlyPrice)
+  const businessPrice = Number(business.monthlyPrice)
 
   const orgs = await prisma.organization.findMany({
     select: {
