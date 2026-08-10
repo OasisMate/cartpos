@@ -1,13 +1,21 @@
 /**
- * Seed the three plans and grandfather every existing organization.
+ * Seed the three plans and give every existing organization a subscription.
  *
- * Idempotent: safe to re-run. Upserts plans by `code`, and only creates a
- * Subscription for orgs that do not already have one.
+ * Two different outcomes, decided ONLY by the org's current status:
  *
- * GRANDFATHERING IS THE POINT. Every org that exists when billing ships gets
- * Business at agreedMonthlyPrice 0 with currentPeriodEnd = null (never expires).
- * Rose Mart, Mughal Corp and anything else live must never be gated by this
- * work. Charging them, if ever, is a manual per-org decision later.
+ *   ACTIVE org      -> grandfathered. Business, agreedMonthlyPrice 0,
+ *                      currentPeriodEnd null (never expires). These are the
+ *                      shops already running on trust; they must never be gated
+ *                      by this work. Charging them, if ever, is a manual choice.
+ *
+ *   anything else   -> the normal new flow. Business 14-day trial at the real
+ *   (PENDING /         list price, so they convert like any new signup.
+ *   SUSPENDED /        PENDING orgs have never actually been able to log in, so
+ *   INACTIVE)          Phase 3 refreshes the clock when it activates them and
+ *                      nobody loses trial days waiting on us.
+ *
+ * Idempotent and self-correcting: re-running fixes an org that was seeded into
+ * the wrong bucket.
  *
  * Run: npx tsx scripts/seed-billing-plans.ts
  *      npx tsx scripts/seed-billing-plans.ts --dry-run
@@ -96,43 +104,95 @@ async function main() {
     ? { id: 'DRY' }
     : await prisma.plan.findUniqueOrThrow({ where: { code: 'BUSINESS' } })
 
-  // ---- Grandfather existing orgs ---------------------------------
+  // ---- Subscriptions for existing orgs ---------------------------
+  const TRIAL_DAYS = 14
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
+  const businessPrice = DRY_RUN ? 5999 : Number(business.monthlyPrice)
+
   const orgs = await prisma.organization.findMany({
-    select: { id: true, name: true, isDemo: true, subscription: { select: { id: true } } },
+    select: {
+      id: true,
+      name: true,
+      isDemo: true,
+      status: true,
+      subscription: { select: { id: true, priceNote: true, status: true } },
+    },
     orderBy: { createdAt: 'asc' },
   })
 
-  let created = 0
-  let skipped = 0
+  let grandfathered = 0
+  let trialed = 0
+  let corrected = 0
+  let untouched = 0
 
   for (const org of orgs) {
-    if (org.subscription) {
-      skipped++
+    const label = `${org.name.trim()}${org.isDemo ? ' [demo]' : ''} (${org.status})`
+    const shouldGrandfather = org.status === 'ACTIVE'
+
+    // What this org SHOULD have.
+    const target = shouldGrandfather
+      ? {
+          status: 'ACTIVE' as const,
+          agreedMonthlyPrice: 0,
+          trialEndsAt: null,
+          currentPeriodEnd: null, // never expires
+          priceNote: 'grandfathered at launch',
+        }
+      : {
+          status: 'TRIALING' as const,
+          agreedMonthlyPrice: businessPrice,
+          trialEndsAt,
+          currentPeriodEnd: null, // TRIALING: the deadline is trialEndsAt
+          priceNote: `14-day trial at launch (org was ${org.status})`,
+        }
+
+    const existing = org.subscription
+
+    // Already correct? Leave it alone. Only auto-correct rows this script wrote,
+    // so a price hand-set in /admin/subscriptions is never stomped.
+    if (existing) {
+      const isSeedWritten = existing.priceNote?.includes('at launch') ?? false
+      const alreadyRight = existing.status === target.status
+      if (alreadyRight || !isSeedWritten) {
+        untouched++
+        continue
+      }
+      if (DRY_RUN) {
+        console.log(`would CORRECT ${label}: ${existing.status} -> ${target.status}`)
+        corrected++
+        continue
+      }
+      await prisma.subscription.update({
+        where: { id: existing.id },
+        data: { ...target, planId: business.id, priceSetBy: 'seed-billing-plans' },
+      })
+      console.log(`corrected: ${label} -> ${target.status}`)
+      corrected++
       continue
     }
-    const label = `${org.name}${org.isDemo ? ' [demo]' : ''}`
+
     if (DRY_RUN) {
-      console.log(`would grandfather: ${label}`)
-      created++
+      console.log(`would ${shouldGrandfather ? 'grandfather' : 'trial'}: ${label}`)
+      shouldGrandfather ? grandfathered++ : trialed++
       continue
     }
+
     await prisma.subscription.create({
       data: {
         organizationId: org.id,
         planId: business.id,
-        status: 'ACTIVE',
         cycle: 'MONTHLY',
-        agreedMonthlyPrice: 0,
-        currentPeriodEnd: null, // never expires
-        priceNote: 'grandfathered at launch',
         priceSetBy: 'seed-billing-plans',
+        ...target,
       },
     })
-    console.log(`grandfathered: ${label}`)
-    created++
+    console.log(`${shouldGrandfather ? 'grandfathered' : 'trial started'}: ${label}`)
+    shouldGrandfather ? grandfathered++ : trialed++
   }
 
-  console.log(`\nplans: ${PLANS.length} | orgs grandfathered: ${created} | already had one: ${skipped}`)
+  console.log(
+    `\nplans: ${PLANS.length} | grandfathered: ${grandfathered} | trials: ${trialed} | corrected: ${corrected} | untouched: ${untouched}`
+  )
 
   // ---- Billing settings placeholder ------------------------------
   if (!DRY_RUN) {
@@ -145,14 +205,20 @@ async function main() {
   }
 
   // ---- Safety check ----------------------------------------------
+  // The one thing that must never be true: an org that is live and running
+  // today having a deadline attached to it.
   if (!DRY_RUN) {
-    const gated = await prisma.subscription.count({
-      where: { currentPeriodEnd: { not: null } },
+    const atRisk = await prisma.subscription.findMany({
+      where: {
+        organization: { status: 'ACTIVE', isDemo: false },
+        OR: [{ currentPeriodEnd: { not: null } }, { trialEndsAt: { not: null } }],
+      },
+      select: { organization: { select: { name: true } }, status: true },
     })
     console.log(
-      gated === 0
-        ? 'SAFE: no existing org has an expiry date'
-        : `WARNING: ${gated} subscription(s) have an expiry date - check these are new signups, not grandfathered orgs`
+      atRisk.length === 0
+        ? 'SAFE: no ACTIVE org has an expiry or trial deadline'
+        : `WARNING: ${atRisk.map((a) => a.organization.name).join(', ')} are ACTIVE but have a deadline`
     )
   }
 }
