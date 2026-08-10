@@ -3,6 +3,11 @@ import { getCurrentUser } from '@/lib/auth'
 import { createSale, CreateSaleInput } from '@/lib/domain/sales'
 import { prisma } from '@/lib/db/prisma'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import {
+  getShopFreezeState,
+  acceptsOfflineRecord,
+  offlineRejectMessage,
+} from '@/lib/billing/shop-state'
 
 interface SyncSaleInput {
   id: string // client-generated ID
@@ -23,6 +28,9 @@ interface SyncSaleInput {
   paymentMethod?: 'CASH' | 'CARD' | 'OTHER'
   amountReceived?: number
   paidNow?: number
+  /** Device clock at the moment the cashier rang it up. Decides whether a sale
+   *  queued offline predates a shop freeze and therefore really happened. */
+  clientCreatedAt?: number | null
 }
 
 // POST: Batch sync sales from offline clients
@@ -47,6 +55,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ synced: 0, skipped: 0, errors: [] })
     }
 
+    // A frozen shop still accepts sales that happened before the freeze: the
+    // money physically changed hands and the drawer has to balance. Anything
+    // rung up after it was closed is refused, per record, with a reason the
+    // cashier can see rather than a silent drop.
+    const freeze = await getShopFreezeState(user.currentShopId)
+
     const results = {
       synced: 0,
       skipped: 0,
@@ -58,6 +72,11 @@ export async function POST(request: NextRequest) {
 
     for (const sale of sales) {
       try {
+        if (!acceptsOfflineRecord(freeze, sale.clientCreatedAt)) {
+          results.errors.push({ id: sale.id, error: offlineRejectMessage(freeze!) })
+          continue
+        }
+
         const input: CreateSaleInput = {
           clientSaleId: sale.id,
           customerId: sale.customerId || undefined,

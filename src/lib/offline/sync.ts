@@ -39,7 +39,15 @@ export async function syncPendingBatch<LocalRecord, Payload>(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sales: chunk.map(toPayload),
+            // clientCreatedAt is stamped centrally rather than in each
+            // toPayload mapper. The server needs it to tell a record that
+            // genuinely happened while the shop was open from one created
+            // after it was closed: the first is real money and must be
+            // accepted, the second must not. See lib/billing/shop-state.ts.
+            sales: chunk.map((rec) => ({
+              ...(toPayload(rec) as object),
+              clientCreatedAt: (rec as any)?.createdAt ?? null,
+            })),
           }),
         }).catch((e) => {
           lastAttemptStatuses[endpoint] = 0

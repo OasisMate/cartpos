@@ -35,6 +35,10 @@ export async function GET() {
       currentShopId: user.currentShopId,
       isDemoOrg: user.isDemoOrg,
       features: user.features,
+      // Plan, deadline and whether writes are allowed. Drives the expiry banner,
+      // the read-only state and which nav items render. Enforcement itself is
+      // server-side; this is only so the UI can be honest about it.
+      billing: user.billing,
     },
   })
 }

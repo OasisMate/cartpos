@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { getOpenShiftId } from '@/lib/domain/shifts'
+import {
+  getShopFreezeState,
+  acceptsOfflineRecord,
+  offlineRejectMessage,
+} from '@/lib/billing/shop-state'
 
 interface SyncExpenseInput {
   id: string
@@ -10,6 +15,8 @@ interface SyncExpenseInput {
   description?: string | null
   date: number
   createdAt?: number
+  /** Device clock when it was recorded; decides acceptance into a frozen shop. */
+  clientCreatedAt?: number | null
 }
 
 export async function POST(request: NextRequest) {
@@ -35,8 +42,15 @@ export async function POST(request: NextRequest) {
       skippedIds: [] as string[],
     }
 
+    const freeze = await getShopFreezeState(user.currentShopId)
+
     for (const e of expenses) {
       try {
+        if (!acceptsOfflineRecord(freeze, e.clientCreatedAt ?? e.createdAt)) {
+          results.errors.push({ id: e.id, error: offlineRejectMessage(freeze!) })
+          continue
+        }
+
         const amt = Number(e.amount)
         if (!e.category || !e.date || !Number.isFinite(amt) || amt <= 0) {
           throw new Error('Category, date, and a valid positive amount are required')

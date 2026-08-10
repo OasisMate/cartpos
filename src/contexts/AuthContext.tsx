@@ -31,6 +31,10 @@ interface User {
       name: string
       city: string | null
       phone?: string | null
+      // Frozen shop: readable, not writable. See lib/billing/shop-state.ts.
+      isActive?: boolean
+      pausedAt?: string | null
+      pausedReason?: 'OWNER_CLOSED' | 'PLAN_DOWNGRADE' | null
     }
   }>
   currentShopId?: string | null
@@ -41,7 +45,35 @@ interface User {
     serviceCharge: boolean
     deliveryCharge: boolean
     unitSplitting: boolean
+    tradePricing: boolean
     batchExpiry: boolean
+  }
+  /**
+   * Plan and subscription state. UI only: it decides what to render and what to
+   * warn about. The server enforces the same rules independently, so a tampered
+   * client gains nothing.
+   */
+  billing?: {
+    enforced: boolean
+    bypass: boolean
+    planCode: string
+    planName: string
+    status: string
+    canWrite: boolean
+    daysLeft: number | null
+    deadline: string | null
+    inTrial: boolean
+    inGrace: boolean
+    features: string[]
+    maxShops: number | null
+    maxUsers: number | null
+    maxCashiers: number | null
+    allowOrgLevel: boolean
+    agreedMonthlyPrice: number
+    extraShops: number
+    extraShopPrice: number | null
+    cycle: string
+    blockedReason: string
   }
 }
 

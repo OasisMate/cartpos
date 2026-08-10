@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
+import {
+  getShopFreezeState,
+  acceptsOfflineRecord,
+  offlineRejectMessage,
+} from '@/lib/billing/shop-state'
 
 interface SyncAdjustmentInput {
   id: string
@@ -9,6 +14,8 @@ interface SyncAdjustmentInput {
   type: 'DAMAGE' | 'EXPIRY' | 'RETURN' | 'SELF_USE' | 'ADJUSTMENT'
   notes?: string
   createdAt?: number
+  /** Device clock when it was recorded; decides acceptance into a frozen shop. */
+  clientCreatedAt?: number | null
 }
 
 export async function POST(request: NextRequest) {
@@ -34,8 +41,14 @@ export async function POST(request: NextRequest) {
       skippedIds: [] as string[],
     }
 
+    const freeze = await getShopFreezeState(user.currentShopId)
+
     for (const a of adjustments) {
       try {
+        if (!acceptsOfflineRecord(freeze, a.clientCreatedAt ?? a.createdAt)) {
+          results.errors.push({ id: a.id, error: offlineRejectMessage(freeze!) })
+          continue
+        }
         if (!a.productId || a.quantity === undefined || !a.type) {
           throw new Error('Missing required fields')
         }

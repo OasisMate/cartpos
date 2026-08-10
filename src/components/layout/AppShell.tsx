@@ -38,6 +38,7 @@ import { UserAvatar } from '@/components/ui/UserAvatar'
 import { BrandSpinner } from '@/components/ui/BrandSpinner'
 import Link from 'next/link'
 import NotificationBell from '@/components/layout/NotificationBell'
+import { AccessBanner } from '@/components/billing/AccessBanner'
 
 // Submenu link component for store options (small text, no icons, hover-only)
 function SubmenuLink({ 
@@ -771,6 +772,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               Demo mode. Explore freely. Destructive actions (delete, void) are disabled.
             </div>
           )}
+          <AccessBanner />
           <div className="p-6">{children}</div>
 
           {switchBusy && (

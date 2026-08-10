@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { getOpenShiftId } from '@/lib/domain/shifts'
+import {
+  getShopFreezeState,
+  acceptsOfflineRecord,
+  offlineRejectMessage,
+} from '@/lib/billing/shop-state'
 
 interface SyncPaymentInput {
   id: string
+  /** Device clock when it was recorded; decides acceptance into a frozen shop. */
+  clientCreatedAt?: number | null
   customerId: string
   amount: number
   method: 'CASH' | 'CARD' | 'OTHER'
@@ -31,8 +38,16 @@ export async function POST(request: NextRequest) {
 
     const results = { synced: 0, skipped: 0, errors: [] as Array<{ id: string; error: string }> }
 
+    // Cash a customer actually handed over before the shop closed still counts.
+    const freeze = await getShopFreezeState(user.currentShopId)
+
     for (const p of payments) {
       try {
+        if (!acceptsOfflineRecord(freeze, p.clientCreatedAt)) {
+          results.errors.push({ id: p.id, error: offlineRejectMessage(freeze!) })
+          continue
+        }
+
         // Validate customer belongs to shop. Offline-created customers sync under a new
         // server id (device id survives as clientId), so accept either and canonicalize.
         const customer = await prisma.customer.findFirst({

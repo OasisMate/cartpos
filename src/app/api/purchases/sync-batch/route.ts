@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { createPurchase, CreatePurchaseInput } from '@/lib/domain/purchases'
+import {
+  getShopFreezeState,
+  acceptsOfflineRecord,
+  offlineRejectMessage,
+} from '@/lib/billing/shop-state'
 
 interface SyncPurchaseInput {
   id: string
+  /** Device clock when it was recorded; decides acceptance into a frozen shop. */
+  clientCreatedAt?: number | null
   supplierId?: string
   date?: number
   reference?: string
@@ -36,8 +43,16 @@ export async function POST(request: NextRequest) {
 
     const results = { synced: 0, skipped: 0, errors: [] as Array<{ id: string; error: string }> }
 
+    // Records queued before the shop was frozen still count; later ones do not.
+    const freeze = await getShopFreezeState(user.currentShopId)
+
     for (const p of purchases) {
       try {
+        if (!acceptsOfflineRecord(freeze, p.clientCreatedAt)) {
+          results.errors.push({ id: p.id, error: offlineRejectMessage(freeze!) })
+          continue
+        }
+
         const input: CreatePurchaseInput = {
           supplierId: p.supplierId || undefined,
           date: p.date ? new Date(p.date) : undefined,

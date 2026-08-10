@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db/prisma'
 import { normalizePhone } from '@/lib/validation'
+import {
+  getShopFreezeState,
+  acceptsOfflineRecord,
+  offlineRejectMessage,
+} from '@/lib/billing/shop-state'
 
 interface SyncCustomerInput {
   id: string
   name: string
   phone?: string | null
   notes?: string | null
+  /** Device clock when it was recorded; decides acceptance into a frozen shop. */
+  clientCreatedAt?: number | null
 }
 
 export async function POST(request: NextRequest) {
@@ -28,8 +35,15 @@ export async function POST(request: NextRequest) {
 
     const results = { synced: 0, skipped: 0, errors: [] as Array<{ id: string; error: string }> }
 
+    const freeze = await getShopFreezeState(user.currentShopId)
+
     for (const c of customers) {
       try {
+        if (!acceptsOfflineRecord(freeze, c.clientCreatedAt)) {
+          results.errors.push({ id: c.id, error: offlineRejectMessage(freeze!) })
+          continue
+        }
+
         // Reject a synced customer whose phone already belongs to a DIFFERENT
         // customer in this shop. Offline can't check uniqueness at entry time,
         // so we enforce it here and surface the clash in the sync report.
