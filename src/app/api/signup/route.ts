@@ -9,6 +9,7 @@ import { withRetry } from '@/lib/db/connection-retry'
 import { isDatabaseConnectionError } from '@/lib/db/db-utils'
 import { issueVerificationEmail } from '@/lib/domain/email-verification'
 import { presetShopSettingsData } from '@/lib/domain/business-presets'
+import { TRIAL_DAYS, buildTrialSubscription } from '@/lib/billing/trial'
 
 export async function POST(request: Request) {
   try {
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
       ntn,
       strn,
       orgPhone,
+      referralSource,
     } = body || {}
 
     // Validate required fields
@@ -125,14 +127,22 @@ export async function POST(request: Request) {
           addressLine2: addressLine2 || null,
           ntn: ntn || null,
           strn: strn || null,
-          // Gated self-serve signup: public signups start PENDING and get NO access
-          // until a platform admin approves them (vetting / smallest attack surface).
-          // The other onboarding path is admin-created accounts, which are ACTIVE on
-          // creation (already vetted by the admin who created them).
-          status: 'PENDING',
+          // Self-serve: the 14-day trial and the paywall replaced manual admin
+          // approval, so a verified signup is ACTIVE immediately. Email
+          // verification is still required, and SUSPENDED still exists for abuse.
+          status: 'ACTIVE',
           requestedBy: user.id,
+          referralSource: typeof referralSource === 'string' ? referralSource.slice(0, 120) : null,
         },
       })
+
+      // Start the trial. If the plan table is not seeded this returns null and
+      // signup continues without a subscription, which resolveBillingState
+      // treats as full access. Never fail a signup over billing.
+      const trial = await buildTrialSubscription(tx)
+      if (trial) {
+        await tx.subscription.create({ data: { organizationId: org.id, ...trial } })
+      }
 
       await tx.organizationUser.create({
         data: {
@@ -184,7 +194,7 @@ export async function POST(request: Request) {
       origin: new URL(request.url).origin,
     })
 
-    return NextResponse.json({ ok: true, verifyEmail: true, ...result })
+    return NextResponse.json({ ok: true, verifyEmail: true, trialDays: TRIAL_DAYS, ...result })
   } catch (e: any) {
     console.error('Signup error:', e)
     // Handle unique constraint violations

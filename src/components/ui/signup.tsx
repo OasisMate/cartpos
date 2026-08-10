@@ -27,6 +27,7 @@ export default function Signup() {
     // Organization fields
     organizationName: '',
     organizationType: '',
+    referralSource: '',
     legalName: '',
     city: '',
     addressLine1: '',
@@ -132,6 +133,7 @@ export default function Signup() {
           password: formData.password,
           organizationName: formData.organizationName,
           organizationType: formData.organizationType,
+          referralSource: formData.referralSource || undefined,
           legalName: formData.legalName || formData.organizationName,
           city: formData.city,
           addressLine1: formData.addressLine1 || undefined,
@@ -176,13 +178,13 @@ export default function Signup() {
         <div className="hidden flex-1 bg-gradient-to-br from-slate-900 via-blue-900 to-orange-600 md:flex items-center justify-center p-8 md:p-12">
           <div className="text-white max-w-lg text-center md:text-left">
             <h1 className="text-4xl md:text-6xl font-bold mb-6 md:mb-8 leading-tight">
-              Request submitted successfully
+              Your account is ready
             </h1>
             <p className="text-lg md:text-xl text-blue-100 mb-4">
-              Your organization request is pending approval
+              14 days free, no card needed
             </p>
             <p className="text-base md:text-lg text-blue-200">
-              A platform admin will review your request. You&apos;ll be able to log in once your organization is approved.
+              Check your email and click the verification link to log in. Your free trial includes everything: full POS, stock, udhaar, reports and more.
             </p>
           </div>
         </div>
@@ -192,17 +194,17 @@ export default function Signup() {
           <div className="w-full max-w-md">
             <div className="text-center mb-8">
               <Logo showText className="justify-center mb-4" href="/" />
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Request Submitted</h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Check your email</h2>
               <p className="text-gray-600">
-                Your organization registration is pending admin approval
+                We sent you a verification link. Click it to activate your account and start your 14-day free trial.
               </p>
             </div>
 
             <Link
-              href="/waiting-approval"
+              href="/login"
               className="block w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 text-center"
             >
-              View Status
+              Go to login
             </Link>
           </div>
         </div>
@@ -409,6 +411,29 @@ export default function Signup() {
                         ))}
                       </optgroup>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="referralSource" className="block text-sm font-medium text-gray-700 mb-1">
+                    How did you hear about us? (Optional)
+                  </label>
+                  <select
+                    id="referralSource"
+                    name="referralSource"
+                    value={formData.referralSource}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white"
+                    disabled={loading}
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="Friend or family">Friend or family</option>
+                    <option value="Another shopkeeper">Another shopkeeper</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="YouTube">YouTube</option>
+                    <option value="Google search">Google search</option>
+                    <option value="Sales visit or demo">Sales visit or demo</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
                 <div>

@@ -7,6 +7,7 @@ import {
   generateAccessRequestEmail,
 } from '@/lib/email'
 import { notifyPlatformAdmins } from '@/lib/domain/notifications'
+import { TRIAL_DAYS } from '@/lib/billing/trial'
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000
 
@@ -20,16 +21,23 @@ function baseUrl(originFallback?: string): string {
 }
 
 /**
- * After a signup verifies their email, alert platform admins (in-app + email)
- * that the PENDING organisation is now awaiting approval. Never throws.
+ * After a signup verifies their email, alert platform admins (in-app + email).
+ *
+ * Approval was dropped in favour of the trial + paywall, so this is now an FYI,
+ * not a task. It is deliberately kept: knowing who just started a trial, and
+ * where they came from, is the whole point of tracking signups.
+ *
+ * Never throws.
  */
 async function notifyAdminsOfAccessRequest(userId: string, origin?: string): Promise<void> {
   try {
+    // No status filter: new orgs are ACTIVE from the start now. Filtering on
+    // PENDING here would silently kill the alert.
     const org = await prisma.organization.findFirst({
-      where: { requestedBy: userId, status: 'PENDING' },
-      select: { id: true, name: true, city: true },
+      where: { requestedBy: userId },
+      select: { id: true, name: true, city: true, referralSource: true },
     })
-    if (!org) return // not a fresh signup request (e.g. admin-created / already handled)
+    if (!org) return // not a fresh signup (e.g. admin-created)
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -38,8 +46,8 @@ async function notifyAdminsOfAccessRequest(userId: string, origin?: string): Pro
 
     await notifyPlatformAdmins({
       type: 'ORG_ACCESS_REQUEST',
-      title: 'New access request',
-      body: `${org.name}${user?.name ? ` (${user.name})` : ''} verified their email and is awaiting approval.`,
+      title: 'New trial started',
+      body: `${org.name}${user?.name ? ` (${user.name})` : ''} verified their email and started a ${TRIAL_DAYS}-day trial.`,
       href: '/admin/organizations',
     })
 
@@ -52,12 +60,14 @@ async function notifyAdminsOfAccessRequest(userId: string, origin?: string): Pro
       admins.map((a) =>
         sendEmail({
           to: a.email,
-          subject: `New Cart POS access request: ${org.name}`,
+          subject: `New Cart POS trial: ${org.name}`,
           html: generateAccessRequestEmail({
             orgName: org.name,
             ownerName: user?.name,
             ownerEmail: user?.email,
             city: org.city,
+            referralSource: org.referralSource,
+            trialDays: TRIAL_DAYS,
             reviewLink,
           }),
         })

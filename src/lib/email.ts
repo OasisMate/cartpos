@@ -220,11 +220,20 @@ function detailRow(label: string, value: string): string {
 /**
  * Notify a platform admin that a verified signup is awaiting approval.
  */
+/**
+ * Tell platform admins a new business signed up and started its trial.
+ *
+ * Signup no longer waits for approval, so this is an FYI rather than a task.
+ * It still matters: it is how we know who is on the system and when their
+ * trial runs out.
+ */
 export function generateAccessRequestEmail(params: {
   orgName: string
   ownerName?: string | null
   ownerEmail?: string | null
   city?: string | null
+  referralSource?: string | null
+  trialDays?: number
   reviewLink: string
 }): string {
   const rows = [
@@ -232,18 +241,20 @@ export function generateAccessRequestEmail(params: {
     params.ownerName ? detailRow('Owner', params.ownerName) : '',
     params.ownerEmail ? detailRow('Email', params.ownerEmail) : '',
     params.city ? detailRow('City', params.city) : '',
+    params.referralSource ? detailRow('Heard about us via', params.referralSource) : '',
   ].join('')
+  const days = params.trialDays ?? 14
   const content = `
-    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">New access request</h1>
-    <p style="margin:0 0 4px;">A new business has signed up and verified their email. It is now waiting for your review and approval.</p>
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">New trial started</h1>
+    <p style="margin:0 0 4px;">A new business signed up, verified their email, and started a ${days}-day free trial.</p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:18px 0;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
       ${rows}
     </table>
-    ${ctaButton(params.reviewLink, 'Review Request')}
+    ${ctaButton(params.reviewLink, 'View Organisation')}
     <p style="margin:8px 0 0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
       You're receiving this because you're a Cart POS platform administrator.
     </p>`
-  return emailLayout(content, `New access request: ${params.orgName}`)
+  return emailLayout(content, `New trial started: ${params.orgName}`)
 }
 
 /**

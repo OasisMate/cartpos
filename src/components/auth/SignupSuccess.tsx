@@ -7,14 +7,17 @@ export function SignupSuccess() {
   return (
     <div className="w-full min-h-screen flex flex-col md:flex-row">
       <AuthHero
-        title="Request submitted successfully"
-        subtitle="Your organization request is pending approval"
-        description="A platform admin will review your request. You'll be able to log in once your organization is approved."
+        title="Your account is ready"
+        subtitle="14 days free, no card needed"
+        description="Check your email and click the verification link to log in. Your free trial gives you everything: full POS, stock, udhaar, reports and more."
       />
 
-      <AuthFormContainer title="Request Submitted" subtitle="Your organization registration is pending admin approval">
-        <Link href="/waiting-approval">
-          <SubmitButton>View Status</SubmitButton>
+      <AuthFormContainer
+        title="Check your email"
+        subtitle="We sent you a verification link. Click it to activate your account and start your 14-day free trial."
+      >
+        <Link href="/login">
+          <SubmitButton>Go to login</SubmitButton>
         </Link>
       </AuthFormContainer>
     </div>
