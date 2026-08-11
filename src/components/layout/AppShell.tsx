@@ -255,6 +255,120 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       (s: any) => s.shopId === user.currentShopId && s.shopRole === 'CASHIER'
     )
 
+    /**
+     * The store navigation, defined once.
+     *
+     * Both a store manager and an owner working inside a shop need exactly these
+     * links. Previously only the manager branch had them, so an owner who
+     * entered their own store saw organisation links and no way to reach POS,
+     * products or sales. `includeOwnerLinks` adds the two things only an owner
+     * can do, for when this nav is all they have.
+     */
+    const buildStoreLinks = (includeOwnerLinks: boolean): NavLink[] => [
+      {
+        label: t('dashboard'),
+        href: '/store',
+        icon: <LayoutDashboard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      // Sales workflow cluster
+      {
+        label: t('pos'),
+        href: '/store/pos',
+        icon: <ShoppingCart className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      {
+        label: t('sales'),
+        href: '/store/sales',
+        icon: <TrendingUp className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      // Quotations only show when enabled for this shop (business-type preset).
+      ...(user?.features?.quotations !== false
+        ? [{
+            label: 'Quotations',
+            href: '/store/quotations',
+            icon: <FileText className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          }]
+        : []),
+      {
+        label: t('customers'),
+        href: '/store/customers',
+        icon: <UserCircle className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      // Inventory cluster
+      {
+        label: t('products'),
+        href: '/store/products',
+        icon: <Package className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      {
+        label: t('stock_adjustments'),
+        href: '/store/stock-adjustments',
+        icon: <Repeat className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      // Expiry alerts only for shops that track batch/expiry (pharmacy, surgical).
+      ...(user?.features?.batchExpiry === true
+        ? [{
+            label: 'Expiry alerts',
+            href: '/store/expiry',
+            icon: <CalendarClock className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+          }]
+        : []),
+      {
+        label: t('purchases'),
+        href: '/store/purchases',
+        icon: <ShoppingBag className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      {
+        label: t('suppliers'),
+        href: '/store/suppliers',
+        icon: <Factory className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      {
+        label: t('reports'),
+        href: '/store/reports',
+        icon: <BarChart3 className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      {
+        label: 'Cash Drawers',
+        href: '/store/drawers',
+        icon: <Wallet className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      {
+        label: t('expenses'),
+        href: '/store/expenses',
+        icon: <Receipt className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      ...(includeOwnerLinks
+        ? [
+            {
+              label: t('users'),
+              href: '/org/users',
+              icon: <Users className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+            },
+            {
+              label: 'Billing',
+              href: '/billing',
+              icon: <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+            },
+          ]
+        : []),
+      {
+        label: t('settings'),
+        href: '/settings',
+        icon: <Settings className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+    ]
+
+    /**
+     * True when the user is working inside a shop, on any of the store route
+     * families. `enterStore` sends owners to /store while platform admins go to
+     * the /org/:id/stores/:id tree, which is why matching only the latter left
+     * owners with no store nav at all.
+     */
+    const inStoreContext =
+      Boolean(pathname) &&
+      (pathname!.startsWith('/store') || pathname === '/pos' || pathname!.startsWith('/cashier'))
+
     // CASHIER: Limited navigation
     if (isCashier && user?.role !== 'PLATFORM_ADMIN' && !isOrgAdmin && !isStoreManager) {
       groups.push({
@@ -429,6 +543,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       const viewingStore = !!storeIdFromPath && pathname?.includes(`/stores/${storeIdFromPath}`)
       const activeStoreId = storeIdFromPath
 
+      // An owner working inside their shop needs the store nav, not just the
+      // organisation links. Both groups render: the org group so they can get
+      // back out, and the store group so they can actually run the counter.
+      if (inStoreContext && user?.currentShopId) {
+        const shopName =
+          user.shops?.find((s: any) => s.shopId === user.currentShopId)?.shop?.name || 'Store'
+        groups.push({ links: orgLinks })
+        groups.push({
+          title: shopName,
+          links: buildStoreLinks(false),
+        })
+        return groups
+      }
+
       groups.push({ links: orgLinks })
 
       // Only show store submenu when actually viewing a store page
@@ -490,107 +618,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     // STORE MANAGER: Store-level navigation
     if (isStoreManager && user?.currentShopId) {
-      groups.push({
-        links: [
-          {
-            label: t('dashboard'),
-            href: '/store',
-            icon: <LayoutDashboard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          // Sales workflow cluster
-          {
-            label: t('pos'),
-            href: '/store/pos',
-            icon: <ShoppingCart className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          {
-            label: t('sales'),
-            href: '/store/sales',
-            icon: <TrendingUp className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          // Quotations only show when enabled for this shop (hardware/electric/wholesale preset).
-          ...(user?.features?.quotations !== false
-            ? [{
-                label: 'Quotations',
-                href: '/store/quotations',
-                icon: <FileText className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-              }]
-            : []),
-          {
-            label: t('customers'),
-            href: '/store/customers',
-            icon: <UserCircle className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          // Inventory cluster
-          {
-            label: t('products'),
-            href: '/store/products',
-            icon: <Package className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          {
-            label: t('stock_adjustments'),
-            href: '/store/stock-adjustments',
-            icon: <Repeat className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          // Expiry alerts only for shops that track batch/expiry (pharmacy).
-          ...(user?.features?.batchExpiry === true
-            ? [{
-                label: 'Expiry alerts',
-                href: '/store/expiry',
-                icon: <CalendarClock className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-              }]
-            : []),
-          // Purchasing / supplier cluster
-          {
-            label: t('purchases'),
-            href: '/store/purchases',
-            icon: <ShoppingBag className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          {
-            label: t('suppliers'),
-            href: '/store/suppliers',
-            icon: <Factory className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          // Analysis & settings
-          {
-            label: t('reports'),
-            href: '/store/reports',
-            icon: <BarChart3 className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          {
-            label: 'Cash Drawers',
-            href: '/store/drawers',
-            icon: <Wallet className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          {
-            label: t('expenses'),
-            href: '/store/expenses',
-            icon: <Receipt className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-          // An owner on a single-shop plan lands here instead of the org nav,
-          // so the two things only an owner can do have to come with them.
-          // Without these they could neither add staff nor pay us.
-          ...(isOrgAdmin
-            ? [
-                {
-                  label: t('users'),
-                  href: '/org/users',
-                  icon: <Users className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-                },
-                {
-                  label: 'Billing',
-                  href: '/billing',
-                  icon: <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-                },
-              ]
-            : []),
-          {
-            label: t('settings'),
-            href: '/settings',
-            icon: <Settings className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-          },
-        ],
-      })
+      // Same links an owner gets inside a shop. includeOwnerLinks adds Users
+      // and Billing, which matters on single-shop plans where this nav is all
+      // they have and there is no /org surface to reach them from.
+      groups.push({ links: buildStoreLinks(Boolean(isOrgAdmin)) })
 
       return groups
     }
