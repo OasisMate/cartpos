@@ -1091,9 +1091,16 @@ model PaymentClaim {
 model BillingSettings {
   id              String   @id @default("default")
   bankName        String?
+  /// The name Raast shows the payer before they confirm. Displaying it means
+  /// they can check it matches, which is the difference between sending and
+  /// hesitating.
   accountTitle    String?
   accountNumber   String?
   iban            String?
+  /// Raast ID (usually a mobile number). Pakistan's instant bank-to-bank rail:
+  /// free, instant, works from any bank app, and needs no account number
+  /// published. This is the primary way most shops will pay.
+  raastId         String?
   jazzcashNumber  String?
   easypaisaNumber String?
   whatsappNumber  String?

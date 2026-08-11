@@ -28,6 +28,7 @@ const FIELDS = [
   'accountTitle',
   'accountNumber',
   'iban',
+  'raastId',
   'jazzcashNumber',
   'easypaisaNumber',
   'whatsappNumber',

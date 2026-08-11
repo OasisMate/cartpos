@@ -350,14 +350,23 @@ export default function BillingPage() {
             <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
               <Landmark className="h-4 w-4" /> Send {rs(selected?.total ?? 0)} to
             </h3>
+            {settings.raastId && (
+              <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                Easiest way: open your bank app, choose Raast, and send to the Raast ID below.
+                It arrives instantly and costs nothing.
+              </p>
+            )}
             <dl className="mt-3 space-y-2 text-sm">
               {[
-                ['Bank', settings.bankName],
+                // Raast first: instant, free, and works from any bank app
+                // without us publishing an account number.
+                ['Raast ID', settings.raastId],
                 ['Account title', settings.accountTitle],
-                ['Account number', settings.accountNumber],
-                ['IBAN', settings.iban],
                 ['JazzCash', settings.jazzcashNumber],
                 ['Easypaisa', settings.easypaisaNumber],
+                ['Bank', settings.bankName],
+                ['Account number', settings.accountNumber],
+                ['IBAN', settings.iban],
               ]
                 .filter(([, v]) => v)
                 .map(([label, value]) => (
@@ -376,7 +385,7 @@ export default function BillingPage() {
                   </div>
                 ))}
             </dl>
-            {!settings.bankName && !settings.jazzcashNumber && !settings.easypaisaNumber && (
+            {!settings.raastId && !settings.bankName && !settings.jazzcashNumber && !settings.easypaisaNumber && (
               <p className="text-sm text-gray-500">
                 Payment details are not set up yet. Please contact us for how to pay.
               </p>

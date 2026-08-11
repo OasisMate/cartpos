@@ -233,14 +233,17 @@ export default function BillingSettingsPage() {
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {[
-            ['bankName', 'Bank name'],
-            ['accountTitle', 'Account title'],
-            ['accountNumber', 'Account number'],
-            ['iban', 'IBAN'],
+            // Raast and account title first: that pairing alone is enough for
+            // most shops to pay, without publishing an account number.
+            ['raastId', 'Raast ID (mobile number)'],
+            ['accountTitle', 'Account title (name Raast shows the payer)'],
             ['jazzcashNumber', 'JazzCash number'],
             ['easypaisaNumber', 'Easypaisa number'],
             ['whatsappNumber', 'Your WhatsApp number'],
             ['supportEmail', 'Support email'],
+            ['bankName', 'Bank name (optional)'],
+            ['accountNumber', 'Account number (optional)'],
+            ['iban', 'IBAN (optional)'],
           ].map(([key, label]) => (
             <Field key={key} label={label}>
               <input

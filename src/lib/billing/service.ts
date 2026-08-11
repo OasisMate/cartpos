@@ -26,6 +26,7 @@ export async function getBillingSettings() {
       accountTitle: null,
       accountNumber: null,
       iban: null,
+      raastId: null,
       jazzcashNumber: null,
       easypaisaNumber: null,
       whatsappNumber: null,
