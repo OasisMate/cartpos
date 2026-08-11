@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { previewDowngrade, applyDowngrade, reactivateAfterUpgrade } from '@/lib/billing/downgrade'
+import { previewDowngrade, applyDowngrade } from '@/lib/billing/downgrade'
 import { swapActiveShop } from '@/lib/billing/lifecycle'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
@@ -74,11 +74,10 @@ export async function POST(request: Request) {
       const planCode = String(body.planCode || '')
       const keepShopIds: string[] = Array.isArray(body.keepShopIds) ? body.keepShopIds.map(String) : []
 
+      // Pauses what no longer fits AND restores what the new plan now covers,
+      // in one transaction. Calling a separate reactivate step here used to
+      // un-pause the very seats this had just paused.
       const result = await applyDowngrade({ orgId, planCode, keepShopIds, setBy: user.id })
-
-      // Moving up releases anything a previous downgrade parked. Deliberately
-      // does not touch shops the owner closed themselves.
-      const restored = await reactivateAfterUpgrade(orgId, planCode)
 
       await logActivity({
         userId: user.id,
@@ -90,7 +89,8 @@ export async function POST(request: Request) {
           planCode,
           pausedShops: result.pausedShops,
           pausedSeats: result.pausedSeats,
-          restoredShops: restored.restoredShops,
+          restoredShops: result.restoredShops,
+          restoredSeats: result.restoredSeats,
           chosenBy: 'owner',
         },
       })
@@ -99,7 +99,8 @@ export async function POST(request: Request) {
         subscription: result.subscription,
         pausedShops: result.pausedShops,
         pausedSeats: result.pausedSeats,
-        restored,
+        restoredShops: result.restoredShops,
+        restoredSeats: result.restoredSeats,
       })
     }
 

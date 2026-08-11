@@ -101,10 +101,15 @@ export async function previewDowngrade(orgId: string, planCode: string): Promise
 }
 
 /**
- * Apply a downgrade once the owner has said which shops to keep.
+ * Apply a plan change in EITHER direction, in one transaction.
  *
- * Throws rather than guessing if the selection does not fit: silently keeping
- * the wrong branch is far worse than an error.
+ * Pausing and restoring have to happen together. When they were two calls, the
+ * caller ran the restore straight after the downgrade and it un-paused the very
+ * seats the downgrade had just paused. Doing both here, in order, against the
+ * new allowance, makes that impossible.
+ *
+ * Throws rather than guessing if the shop selection does not fit: silently
+ * keeping the wrong branch is far worse than an error.
  */
 export async function applyDowngrade(params: {
   orgId: string
@@ -129,6 +134,7 @@ export async function applyDowngrade(params: {
   const now = new Date()
 
   return prisma.$transaction(async (tx) => {
+    // ---- 1. Pause what no longer fits -------------------------------
     if (toPause.length > 0) {
       await tx.shop.updateMany({
         where: { id: { in: toPause } },
@@ -149,15 +155,83 @@ export async function applyDowngrade(params: {
       include: { plan: true },
     })
 
-    return { subscription, pausedShops: toPause.length, pausedSeats: impact.seatsToPause.length }
+    // ---- 2. Restore what the NEW plan now covers ---------------------
+    // Runs after the pause, and strictly within the new allowance, so on a
+    // downgrade there is no room left and nothing comes back.
+    const shopAllowance =
+      plan.maxShops === null ? Infinity : plan.maxShops + subscription.extraShops
+    const activeShops = await tx.shop.count({ where: { orgId: params.orgId, isActive: true } })
+    const shopRoom = shopAllowance === Infinity ? Number.MAX_SAFE_INTEGER : Math.max(0, shopAllowance - activeShops)
+
+    let restoredShops = 0
+    if (shopRoom > 0) {
+      // Only ever un-pauses PLAN_DOWNGRADE. A shop the owner closed themselves
+      // stays closed: paying more is not consent to reopen it.
+      const parked = await tx.shop.findMany({
+        where: { orgId: params.orgId, isActive: false, pausedReason: 'PLAN_DOWNGRADE' },
+        orderBy: { pausedAt: 'asc' },
+        select: { id: true },
+        take: shopRoom,
+      })
+      if (parked.length) {
+        await tx.shop.updateMany({
+          where: { id: { in: parked.map((s) => s.id) } },
+          data: { isActive: true, pausedAt: null, pausedReason: null, pausedBy: null },
+        })
+        restoredShops = parked.length
+      }
+    }
+
+    let restoredSeats = 0
+    if (plan.maxUsers === null) {
+      // Unlimited: everything comes back.
+      const res = await tx.userShop.updateMany({
+        where: { shop: { orgId: params.orgId }, isActive: false },
+        data: { isActive: true, pausedAt: null },
+      })
+      restoredSeats = res.count
+    } else {
+      const active = await tx.userShop.findMany({
+        where: { shop: { orgId: params.orgId }, isActive: true },
+        select: { userId: true },
+      })
+      const seatRoom = Math.max(0, plan.maxUsers - new Set(active.map((a) => a.userId)).size)
+      if (seatRoom > 0) {
+        const parked = await tx.userShop.findMany({
+          where: { shop: { orgId: params.orgId }, isActive: false },
+          orderBy: { pausedAt: 'asc' },
+          select: { userId: true },
+        })
+        const users = [...new Set(parked.map((p) => p.userId))].slice(0, seatRoom)
+        if (users.length) {
+          const res = await tx.userShop.updateMany({
+            where: { userId: { in: users }, shop: { orgId: params.orgId } },
+            data: { isActive: true, pausedAt: null },
+          })
+          restoredSeats = res.count
+        }
+      }
+    }
+
+    return {
+      subscription,
+      pausedShops: toPause.length,
+      pausedSeats: impact.seatsToPause.length,
+      restoredShops,
+      restoredSeats,
+    }
   })
 }
 
 /**
- * Undo a downgrade's pauses when the org moves back up.
+ * Restore what a bigger plan now covers, without changing the plan itself.
  *
- * Only touches PLAN_DOWNGRADE. A shop the owner deliberately closed stays
- * closed: upgrading is not consent to reopen it.
+ * Only needed when the allowance grows for a reason other than a plan change,
+ * for example an admin adding paid extra shops. A normal plan change should use
+ * applyDowngrade, which pauses and restores in one transaction.
+ *
+ * NEVER call this straight after applyDowngrade. Doing so was a real bug: it
+ * un-paused the seats the downgrade had just paused.
  */
 export async function reactivateAfterUpgrade(orgId: string, planCode: string) {
   const plan = await prisma.plan.findUniqueOrThrow({ where: { code: planCode } })
@@ -177,7 +251,6 @@ export async function reactivateAfterUpgrade(orgId: string, planCode: string) {
   const room = Math.max(0, allowance === Infinity ? paused.length : allowance - activeCount)
   const restore = paused.slice(0, room).map((s) => s.id)
 
-  const now = new Date()
   return prisma.$transaction(async (tx) => {
     if (restore.length > 0) {
       await tx.shop.updateMany({
@@ -185,11 +258,39 @@ export async function reactivateAfterUpgrade(orgId: string, planCode: string) {
         data: { isActive: true, pausedAt: null, pausedReason: null, pausedBy: null },
       })
     }
-    // Seats have no reason column; all paused ones belong to a downgrade.
-    const seats = await tx.userShop.updateMany({
-      where: { shop: { orgId }, isActive: false },
-      data: { isActive: true, pausedAt: null },
-    })
-    return { restoredShops: restore.length, restoredSeats: seats.count, at: now }
+
+    // Seats, respecting the cap. Restoring blindly here would let an org exceed
+    // the seats it pays for.
+    let restoredSeats = 0
+    if (plan.maxUsers === null) {
+      const res = await tx.userShop.updateMany({
+        where: { shop: { orgId }, isActive: false },
+        data: { isActive: true, pausedAt: null },
+      })
+      restoredSeats = res.count
+    } else {
+      const active = await tx.userShop.findMany({
+        where: { shop: { orgId }, isActive: true },
+        select: { userId: true },
+      })
+      const seatRoom = Math.max(0, plan.maxUsers - new Set(active.map((a) => a.userId)).size)
+      if (seatRoom > 0) {
+        const parked = await tx.userShop.findMany({
+          where: { shop: { orgId }, isActive: false },
+          orderBy: { pausedAt: 'asc' },
+          select: { userId: true },
+        })
+        const users = [...new Set(parked.map((p) => p.userId))].slice(0, seatRoom)
+        if (users.length) {
+          const res = await tx.userShop.updateMany({
+            where: { userId: { in: users }, shop: { orgId } },
+            data: { isActive: true, pausedAt: null },
+          })
+          restoredSeats = res.count
+        }
+      }
+    }
+
+    return { restoredShops: restore.length, restoredSeats }
   })
 }
