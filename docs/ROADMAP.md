@@ -57,7 +57,11 @@ What a hardware/sanitary shop needs that a kiryana doesn't.
 - [ ] `Number()` → `Decimal` consistency; oversell race (row-lock in tx).
 - ~~verify `assign-store` tenant check~~ ✅ already enforced (org-scoped checks present). ~~Admin org actions → ActivityLog~~ ✅ `logActivity` already wired.
 
-**Then:** CSV export/backup, route-tree consolidation (tech debt), FBR tax (evaluate), billing/trial (when commercializing).
+**Then:** CSV export/backup, route-tree consolidation (tech debt), FBR tax (evaluate).
+
+**Billing/trial:** BUILT 2026-08-11 on `feat/billing-paywall` (three tiers, 14-day trial, manual
+payment collection, read-only on expiry). Enforcement behind `BILLING_ENFORCED`, still off.
+Live browser test then merge. See local `docs/BILLING_PLAN.md`.
 
 ## Parking lot
 All explored-but-not-now ideas live in **`docs/BACKLOG.md`** with rationale + effort, grouped (POS completeness, returns fast-follows, hardware vertical, security gate, commercialization, tech debt, etc). We discuss + promote from there after M1-M3. Nothing is discarded.
