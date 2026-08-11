@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCurrency } from '@/lib/utils/money'
 import { SkeletonCards } from '@/components/ui/Skeleton'
+import { usePlan } from '@/lib/billing/usePlan'
+import { UpgradeCard } from '@/components/billing/UpgradeCard'
 
 interface RangeSummary {
   from: string
@@ -25,6 +27,11 @@ function formatRangeLabel(from: string, to: string) {
 
 export default function ReportsPage() {
   const { user } = useAuth()
+  // Gate by depth, not by damage. A plan without history gets a complete,
+  // honest "today" report, not the full report with its numbers blanked out.
+  const { has, isOrgAdmin } = usePlan()
+  const canSeeHistory = has('reportsHistory')
+  const canSeeProfit = has('reportsProfit')
   const today = new Date().toISOString().split('T')[0]
 
   const [preset, setPreset] = useState<Preset>('TODAY')
@@ -96,14 +103,19 @@ export default function ReportsPage() {
     <div className="p-6 space-y-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Reports</h1>
-          {summary && (
+          <h1 className="text-2xl font-bold mb-1">
+            {canSeeHistory ? 'Reports' : 'Your shop, today'}
+          </h1>
+          {summary && canSeeHistory && (
             <p className="text-sm text-gray-600">
               Period:{' '}
               <span className="font-medium">
                 {formatRangeLabel(summary.from, summary.to)}
               </span>
             </p>
+          )}
+          {!canSeeHistory && (
+            <p className="text-sm text-gray-600">Everything that happened in your shop today.</p>
           )}
           <div className="mt-1 flex flex-wrap gap-4">
             <a
@@ -121,7 +133,9 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
-          <div className="inline-flex rounded-md shadow-sm border bg-white overflow-hidden">
+          {/* Date range is a Team feature. Rather than showing five buttons with
+              four disabled, the picker simply is not part of this tier's page. */}
+          <div className={`inline-flex rounded-md shadow-sm border bg-white overflow-hidden ${canSeeHistory ? '' : 'hidden'}`}>
             {([
               ['TODAY', 'Today'],
               ['YESTERDAY', 'Yesterday'],
@@ -198,17 +212,28 @@ export default function ReportsPage() {
               {formatCurrency(summary.totalPaymentsReceived)}
             </div>
           </div>
-          <div className="bg-white border rounded-lg p-4 shadow-sm">
-            <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Cost of Goods</div>
-            <div className="text-2xl font-semibold">{formatCurrency(summary.costOfGoods)}</div>
-          </div>
-          <div className="bg-white border-2 border-emerald-200 rounded-lg p-4 shadow-sm">
-            <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Gross Profit</div>
-            <div className={`text-2xl font-semibold ${summary.grossProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-              {formatCurrency(summary.grossProfit)}
-            </div>
-            <div className="text-[11px] text-gray-400 mt-1">Sales − cost of goods sold</div>
-          </div>
+          {canSeeProfit ? (
+            <>
+              <div className="bg-white border rounded-lg p-4 shadow-sm">
+                <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Cost of Goods</div>
+                <div className="text-2xl font-semibold">{formatCurrency(summary.costOfGoods)}</div>
+              </div>
+              <div className="bg-white border-2 border-emerald-200 rounded-lg p-4 shadow-sm">
+                <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Gross Profit</div>
+                <div className={`text-2xl font-semibold ${summary.grossProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {formatCurrency(summary.grossProfit)}
+                </div>
+                <div className="text-[11px] text-gray-400 mt-1">Sales − cost of goods sold</div>
+              </div>
+            </>
+          ) : (
+            <UpgradeCard
+              title="Know what you actually earned"
+              description="Cost of goods and gross profit, by day, week or month."
+              tier="Team"
+              canUpgrade={isOrgAdmin}
+            />
+          )}
         </div>
       ) : (
         <div className="text-gray-600 text-sm">No data for this period.</div>

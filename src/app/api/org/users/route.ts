@@ -5,6 +5,7 @@ import { getCurrentUser, hashPassword } from '@/lib/auth'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 import { canManageOrgUsers, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
+import { assertSeatAvailable } from '@/lib/billing/guards'
 import { sendEmail, generateStaffWelcomeEmail } from '@/lib/email'
 import { passwordPolicyError } from '@/lib/validation/password'
 
@@ -109,6 +110,13 @@ export async function POST(request: Request) {
   if (pwError) {
     return NextResponse.json({ error: pwError }, { status: 400 })
   }
+
+  // Seat cap, checked HERE and only here: at invite time.
+  // Never at login. Hitting the cap must stop the next invite and nothing else,
+  // so an existing user is never logged out or blocked mid-shift by billing.
+  const wantsCashier = assignments.some((a) => a.shopRole === 'CASHIER')
+  const seatBlocked = await assertSeatAvailable(user, orgId, wantsCashier ? 'CASHIER' : 'STORE_MANAGER')
+  if (seatBlocked) return seatBlocked
 
   // VALIDATION: If user is being assigned as STORE_MANAGER or CASHIER, they should NOT get org role
   // Store managers and cashiers should only have shop-level access, not org-level access

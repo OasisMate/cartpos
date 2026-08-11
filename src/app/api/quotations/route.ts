@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { requirePaidWrite } from '@/lib/billing/guards'
 import { DemoBlockedResponse } from '@/lib/demo'
 import { createQuotation, listQuotations } from '@/lib/domain/quotations'
 
@@ -24,6 +25,10 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    // Read-only lockout: subscription expired, or this shop is frozen.
+    // Fails open when billing is off or could not be resolved.
+    const blocked = requirePaidWrite(user)
+    if (blocked) return blocked
     if (!user.currentShopId) return NextResponse.json({ error: 'No shop selected' }, { status: 400 })
     if (user.features?.quotations === false) {
       return NextResponse.json({ error: 'Quotations are not enabled for this shop' }, { status: 403 })

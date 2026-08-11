@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { requirePaidWrite } from '@/lib/billing/guards'
 import { getOpenShiftId } from '@/lib/domain/shifts'
 
 // GET: recorded (synced) expenses for the current shop, most recent first.
@@ -50,6 +51,10 @@ export async function POST(req: NextRequest) {
         if (!user?.currentShopId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
+        // Read-only lockout: subscription expired, or this shop is frozen.
+        // Fails open when billing is off or could not be resolved.
+        const blocked = requirePaidWrite(user)
+        if (blocked) return blocked
 
         const body = await req.json()
         const { category, amount, description, date, createdAt } = body

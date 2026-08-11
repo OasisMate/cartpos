@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { requirePaidWrite } from '@/lib/billing/guards'
 import {
   createStockAdjustment,
   listStockAdjustments,
@@ -67,6 +68,10 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return UnauthorizedResponse()
     }
+    // Read-only lockout: subscription expired, or this shop is frozen.
+    // Fails open when billing is off or could not be resolved.
+    const blocked = requirePaidWrite(user)
+    if (blocked) return blocked
 
     if (!user.currentShopId) {
       return NextResponse.json(

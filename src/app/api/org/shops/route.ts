@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { presetShopSettingsData } from '@/lib/domain/business-presets'
+import { assertShopAvailable } from '@/lib/billing/guards'
 
 function ensureOrgAdmin(user: any) {
   const isOrgAdmin = user?.organizations?.some(
@@ -55,6 +56,11 @@ export async function POST(request: Request) {
   if (!user.currentOrgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
   }
+
+  // Shop cap. Counts only ACTIVE shops, so a shop paused by a downgrade does
+  // not permanently consume the allowance.
+  const shopBlocked = await assertShopAvailable(user, user.currentOrgId)
+  if (shopBlocked) return shopBlocked
 
   // Seed the new shop's feature flags from the org's business type.
   const org = await prisma.organization.findUnique({
