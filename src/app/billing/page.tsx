@@ -88,6 +88,11 @@ export default function BillingPage() {
   const [submitted, setSubmitted] = useState(false)
   const [copied, setCopied] = useState('')
 
+  // Plan change: preview first, then they choose what stays active.
+  const [impact, setImpact] = useState<any>(null)
+  const [keepShops, setKeepShops] = useState<string[]>([])
+  const [pickerError, setPickerError] = useState('')
+
   useEffect(() => {
     load()
   }, [])
@@ -132,6 +137,49 @@ export default function BillingPage() {
       await refreshUser()
     } catch (e: any) {
       setError(e.message || 'Could not submit')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  /**
+   * Show what choosing this plan would pause BEFORE anything happens.
+   * They pick which shops survive; we never pick for them.
+   */
+  async function openPlanPicker(code: string) {
+    setError('')
+    setPickerError('')
+    try {
+      const res = await fetch(`/api/billing/plan?planCode=${code}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Could not check that plan')
+      const im = json.impact
+      setImpact(im)
+      // Default to the busiest shops, which is almost always what they mean.
+      const allowance = im.shopAllowance ?? im.activeShops.length
+      setKeepShops(im.activeShops.slice(0, allowance).map((s: any) => s.id))
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
+  async function confirmPlan() {
+    if (!impact) return
+    setSubmitting(true)
+    setPickerError('')
+    try {
+      const res = await fetch('/api/billing/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'choosePlan', planCode: impact.planCode, keepShopIds: keepShops }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Could not change plan')
+      setImpact(null)
+      await load()
+      await refreshUser()
+    } catch (e: any) {
+      setPickerError(e.message)
     } finally {
       setSubmitting(false)
     }
@@ -398,18 +446,22 @@ export default function BillingPage() {
                   <li>{p.maxShops === null ? 'Unlimited shops' : p.maxShops === 1 ? '1 shop' : `${p.maxShops} shops`}</li>
                   {p.extraShopPrice ? <li>Extra shop {rs(p.extraShopPrice)}/month</li> : null}
                 </ul>
-                {current && (
+                {current ? (
                   <p className="mt-4 rounded-lg bg-gray-100 px-3 py-2 text-center text-sm font-semibold text-gray-700">
                     Your plan
                   </p>
+                ) : (
+                  <button
+                    onClick={() => openPlanPicker(p.code)}
+                    className="mt-4 w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                  >
+                    Choose {p.name}
+                  </button>
                 )}
               </div>
             )
           })}
         </div>
-        <p className="mt-3 text-xs text-gray-500">
-          To change plan, send us a message. We will switch it for you and adjust your next payment.
-        </p>
       </section>
 
       {/* ---- History ---- */}
@@ -439,6 +491,114 @@ export default function BillingPage() {
             </table>
           </div>
         </section>
+      )}
+
+      {/* ---- Plan change: they choose what stays ---- */}
+      {impact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Move to {impact.planName}</h3>
+
+            {!impact.mustChooseShops && impact.seatsToPause.length === 0 && !impact.losesOrgLevel ? (
+              <p className="mt-2 text-sm text-gray-600">
+                Everything you use fits on {impact.planName}. Nothing will change except the price.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">
+                {impact.planName} is smaller than what you use now. Nothing is deleted: anything paused comes
+                straight back if you move up again.
+              </p>
+            )}
+
+            {impact.mustChooseShops && (
+              <div className="mt-4">
+                <p className="mb-2 text-sm font-medium text-gray-900">
+                  {impact.planName} covers {impact.shopAllowance} shop
+                  {impact.shopAllowance === 1 ? '' : 's'}. Choose which stay open.
+                </p>
+                <div className="space-y-2">
+                  {impact.activeShops.map((s: any) => {
+                    const checked = keepShops.includes(s.id)
+                    const full = keepShops.length >= (impact.shopAllowance ?? 99)
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 ${
+                          checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                        } ${!checked && full ? 'opacity-50' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!checked && full}
+                          onChange={(e) =>
+                            setKeepShops((prev) =>
+                              e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)
+                            )
+                          }
+                          className="h-4 w-4"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium text-gray-900">{s.name}</span>
+                          <span className="block text-xs text-gray-500">
+                            {s.city || 'No city'} · {s.invoices} sales
+                          </span>
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Shops you do not choose become read-only. Their sales, stock and customers stay exactly as they
+                  are.
+                </p>
+              </div>
+            )}
+
+            {impact.seatsToPause.length > 0 && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3">
+                <p className="text-sm font-medium text-amber-900">
+                  {impact.seatsToPause.length} staff account
+                  {impact.seatsToPause.length === 1 ? '' : 's'} will be paused
+                </p>
+                <ul className="mt-1 text-xs text-amber-800">
+                  {impact.seatsToPause.map((s: any) => (
+                    <li key={s.userId}>
+                      {s.name} ({s.email})
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1 text-xs text-amber-700">Your own account is never affected.</p>
+              </div>
+            )}
+
+            {impact.losesOrgLevel && (
+              <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                The organisation dashboard and activity log will be hidden on this plan. Your data stays.
+              </p>
+            )}
+
+            {pickerError && (
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{pickerError}</p>
+            )}
+
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setImpact(null)}
+                className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPlan}
+                disabled={submitting || (impact.mustChooseShops && keepShops.length === 0)}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {submitting ? 'Saving...' : `Move to ${impact.planName}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ---- I have paid ---- */}
