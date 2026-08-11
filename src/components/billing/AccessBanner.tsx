@@ -43,14 +43,24 @@ export function AccessBanner() {
   if (!billing || !billing.enforced || billing.bypass) return null
 
   // 2. Subscription has run out.
+  //
+  // The instruction has to match who is reading it. Staff cannot buy anything,
+  // so telling a cashier to "choose a plan" sends them hunting for a screen they
+  // will never find, and they conclude the app is broken. Note this does NOT use
+  // billing.blockedReason: that string is written for the owner, and repeating
+  // it after the title duplicated the sentence.
   if (!billing.canWrite) {
     return (
       <Banner
         tone="red"
         icon={<Lock className="h-4 w-4" />}
         title={billing.inTrial ? 'Your free trial has ended' : 'Your subscription has expired'}
-        message={`${billing.blockedReason} Your sales, stock and customer records are all safe and come straight back.`}
-        action={isOrgAdmin ? { href: '/billing', label: 'Choose a plan' } : undefined}
+        message={
+          isOrgAdmin
+            ? `${billing.inTrial ? 'Choose a plan' : 'Send your payment'} to start selling again. Your sales, stock and customer records are all safe and come straight back.`
+            : 'You can still look up past sales and customers, but new sales cannot be recorded. Please ask the shop owner to renew.'
+        }
+        action={isOrgAdmin ? { href: '/billing', label: billing.inTrial ? 'Choose a plan' : 'Pay now' } : undefined}
       />
     )
   }
@@ -74,11 +84,15 @@ export function AccessBanner() {
             : `Your plan renews in ${days} ${days === 1 ? 'day' : 'days'}`
       }
       message={
-        overdue
-          ? 'You can keep selling for a few more days. After that the account becomes read-only until payment is received.'
-          : billing.inTrial
-            ? 'Pick a plan to keep selling without interruption.'
-            : 'Send your payment to avoid any interruption.'
+        !isOrgAdmin
+          ? overdue
+            ? 'You can keep selling for a few more days. Please let the shop owner know.'
+            : 'Nothing changes for you yet. Please let the shop owner know.'
+          : overdue
+            ? 'You can keep selling for a few more days. After that the account becomes read-only until payment is received.'
+            : billing.inTrial
+              ? 'Pick a plan to keep selling without interruption.'
+              : 'Send your payment to avoid any interruption.'
       }
       action={isOrgAdmin ? { href: '/billing', label: overdue ? 'Pay now' : 'View plans' } : undefined}
     />
