@@ -258,7 +258,7 @@ async function main() {
   console.log(`  users:    ${Object.values(QA_USERS).join(', ')}`)
   console.log(`  password: ${QA_PASSWORD}`)
   console.log(`  plan:     BUSINESS, trialing, 14 days`)
-  console.log(`\nSet its state with:  npx tsx scripts/qa-billing-state.ts <state>`)
+  console.log(`\nSet its state with:  npx tsx scripts/billing-qa-state.ts <state>`)
   console.log(`Tear it down with:   npx tsx scripts/delete-qa-billing-org.ts`)
 }
 

@@ -104,9 +104,14 @@ async function main() {
   }, { timeout: 120_000, maxWait: 20_000 })
 
   const leftoverOrg = await prisma.organization.count({ where: { name: QA_ORG_NAME } })
-  const leftoverUsers = await prisma.user.count({ where: { email: { endsWith: '@cartpos.test' } } })
-  console.log(`\ndeleted. leftover orgs: ${leftoverOrg}, leftover test users: ${leftoverUsers}`)
+  // Scoped to THIS org's users. Counting every @cartpos.test address raised a
+  // false alarm because the QA platform admin is deliberately separate and is
+  // removed by scripts/billing-qa-admin.ts delete.
+  const leftoverUsers = await prisma.user.count({ where: { email: { in: expectedEmails } } })
+  console.log(`\ndeleted. leftover orgs: ${leftoverOrg}, leftover org users: ${leftoverUsers}`)
   console.log(leftoverOrg === 0 && leftoverUsers === 0 ? 'CLEAN' : 'WARNING: leftovers remain')
+  console.log('Note: the QA platform admin is separate. Remove it with:')
+  console.log('  npx tsx scripts/billing-qa-admin.ts delete')
 }
 
 main()

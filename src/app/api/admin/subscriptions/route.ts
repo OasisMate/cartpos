@@ -23,10 +23,30 @@ export async function GET(request: Request) {
     const orgs = await prisma.organization.findMany({
       include: {
         subscription: { include: { plan: true } },
-        _count: { select: { shops: true, users: true } },
+        _count: { select: { shops: true } },
+        users: { select: { userId: true } },
       },
       orderBy: { createdAt: 'asc' },
     })
+
+    // Head count has to span both membership tables. Organization.users holds
+    // only ORG_ADMIN rows, so counting it alone reported "1 user" for a shop
+    // with an owner and three staff, on the very page where seat caps matter.
+    const seatRows = await prisma.userShop.findMany({
+      where: { isActive: true },
+      select: { userId: true, shop: { select: { orgId: true } } },
+    })
+    const peoplePerOrg = new Map<string, Set<string>>()
+    for (const seat of seatRows) {
+      const set = peoplePerOrg.get(seat.shop.orgId) ?? new Set<string>()
+      set.add(seat.userId)
+      peoplePerOrg.set(seat.shop.orgId, set)
+    }
+    for (const org of orgs) {
+      const set = peoplePerOrg.get(org.id) ?? new Set<string>()
+      org.users.forEach((u) => set.add(u.userId))
+      peoplePerOrg.set(org.id, set)
+    }
 
     const pendingClaims = await prisma.paymentClaim.groupBy({
       by: ['organizationId'],
@@ -46,7 +66,7 @@ export async function GET(request: Request) {
         orgStatus: org.status,
         referralSource: org.referralSource,
         shops: org._count.shops,
-        users: org._count.users,
+        users: peoplePerOrg.get(org.id)?.size ?? 0,
         pendingClaims: claimCounts.get(org.id) ?? 0,
         planCode: sub?.plan?.code ?? null,
         planName: sub?.plan?.name ?? null,

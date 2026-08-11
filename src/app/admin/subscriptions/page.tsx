@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Loader2, Search, Settings, Wallet } from 'lucide-react'
+import { Loader2, Search, Settings, Tag, Wallet } from 'lucide-react'
 
 /**
  * Platform admin: the daily revenue view.
@@ -285,9 +285,11 @@ export default function AdminSubscriptionsPage() {
                           setCustomPrice(r.agreedMonthlyPrice === null ? '' : String(r.agreedMonthlyPrice))
                           setPriceNote(r.priceNote ?? '')
                         }}
-                        className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                        title="Change plan or price"
+                        aria-label="Change plan or price"
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                       >
-                        Plan
+                        <Tag className="h-4 w-4" />
                       </button>
                     </div>
                   </td>

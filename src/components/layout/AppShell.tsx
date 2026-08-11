@@ -376,44 +376,39 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       return groups
     }
 
-    // ORG ADMIN: Organization-level navigation
-    if (isOrgAdmin && user?.currentOrgId) {
-      // Solo and Team run a single shop, so the whole organisation layer is
-      // noise for them. The owner stays ORG_ADMIN in the database; only this
-      // surface is hidden, which is why a downgrade changes no permissions.
-      const showOrgLevel = user?.billing?.allowOrgLevel !== false
+    // ORG ADMIN: Organization-level navigation.
+    //
+    // Only for plans that include the organisation layer. On Solo and Team the
+    // owner runs a single shop, so they get the STORE navigation instead by
+    // falling through to the store-manager branch below, exactly as intended:
+    // "treat that user as a shop manager, no org level access".
+    //
+    // They remain ORG_ADMIN in the database. Hiding this surface changes no
+    // permissions, which is why a downgrade is reversible.
+    const showOrgLevel = user?.billing?.allowOrgLevel !== false
 
+    if (isOrgAdmin && user?.currentOrgId && showOrgLevel) {
       const orgLinks: NavLink[] = [
-        ...(showOrgLevel
-          ? [
-              {
-                label: t('dashboard'),
-                href: '/org',
-                icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
-              },
-              {
-                label: t('stores'),
-                href: '/org/shops',
-                icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-              },
-            ]
-          : []),
         {
-          // Kept on every plan: even a Solo owner needs to add or remove their
-          // own staff, and the seat cap is enforced on the invite itself.
+          label: t('dashboard'),
+          href: '/org',
+          icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-gray-700" />,
+        },
+        {
+          label: t('stores'),
+          href: '/org/shops',
+          icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+        },
+        {
           label: t('users'),
           href: '/org/users',
           icon: <Users className="h-4 w-4 flex-shrink-0 text-gray-700" />,
         },
-        ...(showOrgLevel
-          ? [
-              {
-                label: t('activity'),
-                href: '/org/activity',
-                icon: <History className="h-4 w-4 flex-shrink-0 text-gray-700" />,
-              },
-            ]
-          : []),
+        {
+          label: t('activity'),
+          href: '/org/activity',
+          icon: <History className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+        },
         {
           // Always present, whatever the plan or subscription state. A Solo
           // owner sees no other /org link, and an expired org is read-only, so
@@ -572,6 +567,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             href: '/store/expenses',
             icon: <Receipt className="h-4 w-4 flex-shrink-0 text-gray-700" />,
           },
+          // An owner on a single-shop plan lands here instead of the org nav,
+          // so the two things only an owner can do have to come with them.
+          // Without these they could neither add staff nor pay us.
+          ...(isOrgAdmin
+            ? [
+                {
+                  label: t('users'),
+                  href: '/org/users',
+                  icon: <Users className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+                },
+                {
+                  label: 'Billing',
+                  href: '/billing',
+                  icon: <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+                },
+              ]
+            : []),
           {
             label: t('settings'),
             href: '/settings',
