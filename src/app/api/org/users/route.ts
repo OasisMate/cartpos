@@ -5,15 +5,16 @@ import { getCurrentUser, hashPassword } from '@/lib/auth'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
 import { canManageOrgUsers, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
+import { resolveOrgId } from '@/lib/org-scope'
 import { assertSeatAvailable } from '@/lib/billing/guards'
 import { sendEmail, generateStaffWelcomeEmail } from '@/lib/email'
 import { passwordPolicyError } from '@/lib/validation/password'
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return UnauthorizedResponse()
-  
-  const orgId = user.currentOrgId
+
+  const orgId = resolveOrgId(user, request)
   if (!orgId) return NextResponse.json({ users: [] })
 
   // Check permission
@@ -82,7 +83,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const orgId = user.currentOrgId
+  const orgId = resolveOrgId(user, request)
   if (!orgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
   }
@@ -130,6 +131,16 @@ export async function POST(request: Request) {
       },
       { status: 400 }
     )
+  }
+
+  // Every store in the payload must belong to the org we resolved, so a stale
+  // cookie or a hand-edited request can never park staff in someone else's shop.
+  if (assignments.length > 0) {
+    const shopIds = Array.from(new Set(assignments.map((a) => a.shopId)))
+    const inOrg = await prisma.shop.count({ where: { id: { in: shopIds }, orgId } })
+    if (inOrg !== shopIds.length) {
+      return NextResponse.json({ error: 'Store does not belong to this organization' }, { status: 400 })
+    }
   }
 
   // Validate phone if provided
@@ -189,7 +200,7 @@ export async function POST(request: Request) {
       await tx.organizationUser.create({
         data: {
           userId: newUser.id,
-          orgId: user.currentOrgId!,
+          orgId,
           orgRole: orgRole,
         },
       })

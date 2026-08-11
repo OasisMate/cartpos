@@ -429,9 +429,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         },
       ]
       // Users + Settings go in a bottom group so they never split the store section.
+      // Labelled "All users" because inside an org context the org group has its
+      // own Users link, and two identical labels read as the same screen.
       const bottomLinks: NavLink[] = [
         {
-          label: t('users'),
+          label: 'All users',
           href: '/admin/users',
           icon: <Users className="h-4 w-4 flex-shrink-0 text-gray-700" />,
         },

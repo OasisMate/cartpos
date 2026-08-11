@@ -5,17 +5,18 @@ import { DemoBlockedResponse } from '@/lib/demo'
 import { normalizePhone, validatePhone, normalizeCNIC, validateCNIC } from '@/lib/validation'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { canManageOrgUsers, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
+import { resolveOrgId } from '@/lib/org-scope'
 
 // GET: Get user details
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   const user = await getCurrentUser()
   if (!user) return UnauthorizedResponse()
 
   const userId = params.id
-  const orgId = user.currentOrgId
+  const orgId = resolveOrgId(user, request)
 
   if (!orgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
@@ -149,7 +150,7 @@ export async function PUT(
   if (!user) return UnauthorizedResponse()
 
   const userId = params.id
-  const orgId = user.currentOrgId
+  const orgId = resolveOrgId(user, request)
 
   if (!orgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
@@ -158,7 +159,7 @@ export async function PUT(
   // Check permission using the permissions utility
   // Also verify directly from database as fallback
   let hasPermission = canManageOrgUsers(user, orgId)
-  
+
   if (!hasPermission) {
     // Fallback: Check directly from database
     const [orgUserCheck, orgCheck] = await Promise.all([
@@ -174,11 +175,11 @@ export async function PUT(
         select: { requestedBy: true },
       }),
     ])
-    
+
     // User is org admin OR user created the organization OR platform admin
     hasPermission = !!orgUserCheck || orgCheck?.requestedBy === user.id || user.role === 'PLATFORM_ADMIN'
   }
-  
+
   if (!hasPermission) {
     return ForbiddenResponse('Only Org Admins can update users')
   }
@@ -370,7 +371,7 @@ export async function PUT(
 
 // DELETE: Remove user from organization
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   const user = await getCurrentUser()
@@ -379,7 +380,7 @@ export async function DELETE(
   if (user.isDemoOrg) return DemoBlockedResponse()
 
   const userId = params.id
-  const orgId = user.currentOrgId
+  const orgId = resolveOrgId(user, request)
 
   if (!orgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })

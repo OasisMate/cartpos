@@ -87,9 +87,9 @@ export default function UsersPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-orange-600 bg-clip-text text-transparent">
-            Users Management
+            All users
           </h1>
-          <p className="text-gray-600">Manage user accounts and permissions</p>
+          <p className="text-gray-600">Every account on the platform, across all organizations</p>
         </div>
       </div>
 

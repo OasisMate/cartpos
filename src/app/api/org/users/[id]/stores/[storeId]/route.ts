@@ -3,10 +3,11 @@ import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { DemoBlockedResponse } from '@/lib/demo'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { resolveOrgId } from '@/lib/org-scope'
 
-function ensureOrgAdmin(user: any) {
+function ensureOrgAdmin(user: any, orgId: string | null) {
   const isOrgAdmin = user?.organizations?.some(
-    (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
+    (o: any) => o.orgId === orgId && o.orgRole === 'ORG_ADMIN'
   )
   if (!isOrgAdmin && user?.role !== 'PLATFORM_ADMIN') {
     throw new Error('FORBIDDEN')
@@ -15,14 +16,16 @@ function ensureOrgAdmin(user: any) {
 
 // DELETE: Remove user from store
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string; storeId: string } }
 ) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  
+
+  const orgId = resolveOrgId(user, request)
+
   try {
-    ensureOrgAdmin(user)
+    ensureOrgAdmin(user, orgId)
   } catch {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
@@ -31,7 +34,6 @@ export async function DELETE(
 
   const userId = params.id
   const storeId = params.storeId
-  const orgId = user.currentOrgId
 
   if (!orgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })

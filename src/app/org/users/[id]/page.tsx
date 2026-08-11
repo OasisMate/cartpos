@@ -37,6 +37,11 @@ export default function UserDetailPage() {
   const params = useParams()
   const { user } = useAuth()
   const userId = ((params as any).id as string) || ((params as any).userId as string)
+  // Present on the platform-admin route /org/[orgId]/users/[userId]. Pin every
+  // call to it so a stale currentOrgId cookie can't point us at another org.
+  const orgId = ((params as any).orgId as string) || ''
+  const scope = orgId ? `?orgId=${encodeURIComponent(orgId)}` : ''
+  const backHref = orgId ? `/org/${orgId}/users` : '/org/users'
 
   const [userData, setUserData] = useState<UserData | null>(null)
   const [shops, setShops] = useState<Shop[]>([])
@@ -64,7 +69,7 @@ export default function UserDetailPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/org/users/${userId}`)
+      const res = await fetch(`/api/org/users/${userId}${scope}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load user')
       
@@ -81,11 +86,11 @@ export default function UserDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [userId])
+  }, [userId, scope])
 
   const loadShops = useCallback(async () => {
     try {
-      const res = await fetch('/api/org/shops')
+      const res = await fetch(`/api/org/shops${scope}`)
       const data = await res.json()
       if (res.ok) {
         setShops(data.shops || [])
@@ -93,7 +98,7 @@ export default function UserDetailPage() {
     } catch (e) {
       console.error('Failed to load shops:', e)
     }
-  }, [])
+  }, [scope])
 
   useEffect(() => {
     if (user && userId) {
@@ -117,7 +122,7 @@ export default function UserDetailPage() {
         orgRole: formData.orgRole || null,
       }
 
-      const res = await fetch(`/api/org/users/${userId}`, {
+      const res = await fetch(`/api/org/users/${userId}${scope}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -146,7 +151,7 @@ export default function UserDetailPage() {
     setSaving(true)
     setError('')
     try {
-      const res = await fetch(`/api/org/users/${userId}/assign-store`, {
+      const res = await fetch(`/api/org/users/${userId}/assign-store${scope}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(assignData),
@@ -175,7 +180,7 @@ export default function UserDetailPage() {
     setSaving(true)
     setError('')
     try {
-      const res = await fetch(`/api/org/users/${userId}/stores/${shopId}`, {
+      const res = await fetch(`/api/org/users/${userId}/stores/${shopId}${scope}`, {
         method: 'DELETE',
       })
 
@@ -228,7 +233,7 @@ export default function UserDetailPage() {
     <div className="max-w-4xl mx-auto py-8">
       <div className="mb-6">
         <Link
-          href="/org/users"
+          href={backHref}
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="h-4 w-4" />

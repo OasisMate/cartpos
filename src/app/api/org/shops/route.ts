@@ -4,26 +4,31 @@ import { getCurrentUser } from '@/lib/auth'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { presetShopSettingsData } from '@/lib/domain/business-presets'
 import { assertShopAvailable } from '@/lib/billing/guards'
+import { resolveOrgId } from '@/lib/org-scope'
 
-function ensureOrgAdmin(user: any) {
+function ensureOrgAdmin(user: any, orgId?: string | null) {
+  const target = orgId === undefined ? user?.currentOrgId : orgId
   const isOrgAdmin = user?.organizations?.some(
-    (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
+    (o: any) => o.orgId === target && o.orgRole === 'ORG_ADMIN'
   )
   if (!isOrgAdmin && user?.role !== 'PLATFORM_ADMIN') {
     throw new Error('FORBIDDEN')
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Org-scoped pages pass ?orgId=; everyone else keeps the cookie's org.
+  const orgId = resolveOrgId(user, request)
+
   try {
-    ensureOrgAdmin(user)
+    ensureOrgAdmin(user, orgId)
   } catch {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const orgId = user.currentOrgId
   if (!orgId) return NextResponse.json({ shops: [] })
 
   const shops = await prisma.shop.findMany({

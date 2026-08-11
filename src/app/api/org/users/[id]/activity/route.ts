@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { resolveOrgId } from '@/lib/org-scope'
 
-function ensureOrgAdmin(user: any) {
+function ensureOrgAdmin(user: any, orgId: string | null) {
   const isOrgAdmin = user?.organizations?.some(
-    (o: any) => o.orgId === user.currentOrgId && o.orgRole === 'ORG_ADMIN'
+    (o: any) => o.orgId === orgId && o.orgRole === 'ORG_ADMIN'
   )
   if (!isOrgAdmin && user?.role !== 'PLATFORM_ADMIN') {
     throw new Error('FORBIDDEN')
@@ -19,14 +20,15 @@ export async function GET(
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   
+  const orgId = resolveOrgId(user, request)
+
   try {
-    ensureOrgAdmin(user)
+    ensureOrgAdmin(user, orgId)
   } catch {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const userId = params.id
-  const orgId = user.currentOrgId
 
   if (!orgId) {
     return NextResponse.json({ error: 'No organization selected' }, { status: 400 })
