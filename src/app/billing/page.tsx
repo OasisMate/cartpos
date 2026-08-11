@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { waUrl } from '@/lib/utils/whatsapp'
+import { ModalShell } from '@/components/ui/ModalShell'
 
 /**
  * The shop's billing page.
@@ -508,8 +509,7 @@ export default function BillingPage() {
 
       {/* ---- Plan change: they choose what stays ---- */}
       {impact && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+        <ModalShell onClose={() => setImpact(null)} className="w-full max-w-lg">
             <h3 className="text-lg font-semibold text-gray-900">Move to {impact.planName}</h3>
 
             {!impact.mustChooseShops && impact.seatsToPause.length === 0 && !impact.losesOrgLevel ? (
@@ -610,17 +610,13 @@ export default function BillingPage() {
                 {submitting ? 'Saving...' : `Move to ${impact.planName}`}
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* ---- I have paid ---- */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-          <form
-            onSubmit={submitClaim}
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
-          >
+        <ModalShell onClose={() => setShowForm(false)}>
+          <form onSubmit={submitClaim}>
             <h3 className="text-lg font-semibold text-gray-900">Tell us about your payment</h3>
             <p className="mt-1 text-sm text-gray-600">
               We will check it and update your plan. You can also send the screenshot on WhatsApp.
@@ -704,7 +700,7 @@ export default function BillingPage() {
               </button>
             </div>
           </form>
-        </div>
+        </ModalShell>
       )}
     </div>
   )

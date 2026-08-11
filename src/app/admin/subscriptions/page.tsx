@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Search, Settings, Tag, Wallet } from 'lucide-react'
+import { ModalShell } from '@/components/ui/ModalShell'
 
 /**
  * Platform admin: the daily revenue view.
@@ -384,12 +385,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">{title}</h3>
-        {children}
-      </div>
-    </div>
+    <ModalShell onClose={onClose}>
+      <h3 className="mb-4 text-lg font-semibold text-gray-900">{title}</h3>
+      {children}
+    </ModalShell>
   )
 }
 

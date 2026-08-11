@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Check, Image as ImageIcon, Loader2, X } from 'lucide-react'
+import { ModalShell } from '@/components/ui/ModalShell'
 
 /**
  * Platform admin: the payment verification queue.
@@ -197,17 +198,15 @@ export default function PaymentClaimsPage() {
       )}
 
       {receipt && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setReceipt(null)}
-        >
-          <img src={receipt.src} alt="Payment receipt" className="max-h-[90vh] max-w-full rounded-lg" />
-        </div>
+        // A receipt is just an image, so the panel is transparent and the image
+        // fills it: no white card around a screenshot.
+        <ModalShell onClose={() => setReceipt(null)} bare className="max-w-3xl">
+          <img src={receipt.src} alt="Payment receipt" className="max-h-[85vh] max-w-full rounded-lg" />
+        </ModalShell>
       )}
 
       {rejecting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+        <ModalShell onClose={() => setRejecting(null)}>
             <h3 className="text-lg font-semibold text-gray-900">Reject this payment?</h3>
             <p className="mt-1 text-sm text-gray-600">
               {rejecting.organization.name} will see this reason on their billing page, so make it something they can
@@ -235,8 +234,7 @@ export default function PaymentClaimsPage() {
                 Reject
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   )

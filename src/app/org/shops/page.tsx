@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Power, PowerOff, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { ModalShell } from '@/components/ui/ModalShell'
 
 interface Shop {
   id: string
@@ -321,8 +322,7 @@ export default function OrgShopsPage() {
       {/* Refused because cash is still counted in an open drawer. Naming the
           cashier and the amount makes it actionable instead of just blocked. */}
       {blockedShifts && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+        <ModalShell onClose={() => setBlockedShifts(null)}>
             <div className="mb-3 flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
               <div>
@@ -355,13 +355,11 @@ export default function OrgShopsPage() {
             >
               Got it
             </button>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
       {confirmShop && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+        <ModalShell onClose={() => setConfirmShop(null)}>
             <h3 className="text-lg font-semibold text-gray-900">Close {confirmShop.name}?</h3>
             <ul className="my-4 space-y-2 text-sm text-gray-600">
               <li>Managers and cashiers can still log in and read past records.</li>
@@ -383,8 +381,7 @@ export default function OrgShopsPage() {
                 {togglingId === confirmShop.id ? 'Closing...' : 'Close shop'}
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   )
