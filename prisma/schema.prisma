@@ -992,6 +992,10 @@ model Plan {
   isPopular      Boolean  @default(false) // renders the "Most Popular" badge
   isActive       Boolean  @default(true)  // false = retired, existing subs keep it
   sortOrder      Int      @default(0)
+  // Who last edited this plan. ActivityLog cannot hold it: orgId is a required
+  // FK there and a plan belongs to no organization. Same approach as
+  // BillingSettings.updatedBy.
+  updatedBy      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

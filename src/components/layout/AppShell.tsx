@@ -31,6 +31,7 @@ import {
   CalendarClock,
   Wallet,
   TriangleAlert,
+  ReceiptText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
@@ -293,6 +294,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           icon: <Store className="h-4 w-4 flex-shrink-0 text-gray-700" />,
         },
         {
+          label: 'Subscriptions',
+          href: '/admin/subscriptions',
+          icon: <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+        },
+        {
+          label: 'Payments',
+          href: '/admin/payment-claims',
+          icon: <ReceiptText className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+        },
+        {
           label: 'Broadcast',
           href: '/admin/broadcast',
           icon: <Megaphone className="h-4 w-4 flex-shrink-0 text-gray-700" />,
@@ -387,6 +398,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           label: t('activity'),
           href: '/org/activity',
           icon: <History className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+        },
+        {
+          // Always present, whatever the plan or subscription state. A Solo
+          // owner sees no other /org link, and an expired org is read-only, so
+          // hiding this would leave them no way to pay.
+          label: 'Billing',
+          href: '/billing',
+          icon: <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-700" />,
         },
         {
           label: t('settings'),
