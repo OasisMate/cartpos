@@ -44,7 +44,7 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 const CYCLES = ['MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY']
-const METHODS = ['BANK_TRANSFER', 'JAZZCASH', 'EASYPAISA', 'CASH', 'OTHER']
+const METHODS = ['RAAST', 'BANK_TRANSFER', 'JAZZCASH', 'EASYPAISA', 'CASH', 'OTHER']
 
 function rs(n: number | null) {
   if (n === null) return '-'
@@ -62,7 +62,7 @@ export default function AdminSubscriptionsPage() {
   // Record payment modal
   const [payOrg, setPayOrg] = useState<Row | null>(null)
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState('BANK_TRANSFER')
+  const [method, setMethod] = useState('RAAST')
   const [cycle, setCycle] = useState('MONTHLY')
   const [reference, setReference] = useState('')
   const [saving, setSaving] = useState(false)

@@ -16,7 +16,7 @@ import type { BillingCycle, BillingPaymentMethod } from '@prisma/client'
  * Never gated: an expired org must always be able to tell us they have paid.
  */
 
-const METHODS: BillingPaymentMethod[] = ['BANK_TRANSFER', 'JAZZCASH', 'EASYPAISA', 'CASH', 'OTHER']
+const METHODS: BillingPaymentMethod[] = ['RAAST', 'BANK_TRANSFER', 'JAZZCASH', 'EASYPAISA', 'CASH', 'OTHER']
 const CYCLES: BillingCycle[] = ['MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY']
 
 /** Same ceiling as the shop logo upload. A phone screenshot is well under this. */

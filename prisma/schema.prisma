@@ -1127,8 +1127,14 @@ enum BillingCycle {
 
 /// How a shop paid US for their subscription. Distinct from `PaymentMethod`,
 /// which is how a customer paid the shop (CASH / CARD / OTHER).
+///
+/// RAAST is listed separately from BANK_TRANSFER even though it settles through
+/// a bank: it is the method we actively recommend, so a shop that used it must
+/// be able to say so rather than guessing between "Bank transfer" and "Other".
+/// It also lets us see how many people take the instant route.
 enum BillingPaymentMethod {
   BANK_TRANSFER
+  RAAST
   JAZZCASH
   EASYPAISA
   CASH

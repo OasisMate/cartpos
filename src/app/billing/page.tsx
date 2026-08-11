@@ -58,7 +58,10 @@ interface Payment {
   receivedAt: string
 }
 
+// Raast first: it is the method the page recommends, so it should be the
+// default answer rather than something they hunt for below "Bank transfer".
 const METHOD_LABELS: Record<string, string> = {
+  RAAST: 'Raast (from my bank app)',
   BANK_TRANSFER: 'Bank transfer',
   JAZZCASH: 'JazzCash',
   EASYPAISA: 'Easypaisa',
@@ -80,7 +83,8 @@ export default function BillingPage() {
   // "I have paid" form
   const [showForm, setShowForm] = useState(false)
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState('BANK_TRANSFER')
+  // Defaults to the method the page tells them to use.
+  const [method, setMethod] = useState('RAAST')
   const [reference, setReference] = useState('')
   const [paidOn, setPaidOn] = useState(() => new Date().toISOString().slice(0, 10))
   const [receipt, setReceipt] = useState<File | null>(null)

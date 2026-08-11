@@ -5,7 +5,7 @@ import { changePlan, recordPayment } from '@/lib/billing/service'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import type { BillingCycle, BillingPaymentMethod } from '@prisma/client'
 
-const METHODS: BillingPaymentMethod[] = ['BANK_TRANSFER', 'JAZZCASH', 'EASYPAISA', 'CASH', 'OTHER']
+const METHODS: BillingPaymentMethod[] = ['RAAST', 'BANK_TRANSFER', 'JAZZCASH', 'EASYPAISA', 'CASH', 'OTHER']
 const CYCLES: BillingCycle[] = ['MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY']
 
 async function requireAdmin() {
