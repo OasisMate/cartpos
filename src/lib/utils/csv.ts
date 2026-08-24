@@ -57,3 +57,19 @@ export function parseCSV(text: string): Record<string, string>[] {
     return obj
   })
 }
+
+/**
+ * Serialize rows to CSV using an explicit column order. Values are quoted only
+ * when they need it (comma, quote, newline or padding whitespace), which keeps
+ * generated catalogue files readable and diffable in git.
+ */
+export function toCSV(headers: string[], rows: Record<string, unknown>[]): string {
+  const cell = (v: unknown): string => {
+    if (v === undefined || v === null) return ''
+    const s = String(v)
+    return /[",\r\n]/.test(s) || s !== s.trim() ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const lines = [headers.join(',')]
+  for (const row of rows) lines.push(headers.map((h) => cell(row[h])).join(','))
+  return lines.join('\n') + '\n'
+}

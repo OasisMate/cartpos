@@ -10,7 +10,7 @@ import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatNumber, formatCurrency } from '@/lib/utils/money'
-import { Pencil, Trash2, Package, Loader2, Plus, ArrowUpDown, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react'
+import { Pencil, Trash2, Package, Loader2, Plus, ArrowUpDown, ArrowUp, ArrowDown, Archive, ArchiveRestore, PackagePlus } from 'lucide-react'
 import IconButton from '@/components/ui/IconButton'
 import ImportProductsModal from '@/components/products/ImportProductsModal'
 
@@ -63,6 +63,12 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  // Starter catalog offered while the shop is still empty. Most new shops ran
+  // from memory and have nothing to import, so this is their way in.
+  const [starterCatalog, setStarterCatalog] = useState<
+    { slug: string; label: string; count: number } | null
+  >(null)
+  const [seeding, setSeeding] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   // Monotonic id so a slow/older /api/products response can't overwrite a newer one.
@@ -304,6 +310,46 @@ export default function ProductsPage() {
       fetchProducts()
     }
   }, [user?.currentShopId, fetchProducts])
+
+  // Ask once per shop whether a starter catalog applies. The route reports
+  // available:false as soon as the shop has any products, so this quietly stops
+  // offering itself after the first load.
+  useEffect(() => {
+    if (!user?.currentShopId) return
+    let cancelled = false
+    fetch('/api/products/seed-catalog')
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setStarterCatalog(d?.available ? d : null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [user?.currentShopId])
+
+  async function handleSeedCatalog() {
+    setSeeding(true)
+    try {
+      const res = await fetch('/api/products/seed-catalog', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Failed to load starter catalog')
+      show({
+        message: `Added ${data.created} products. Set your own prices where they differ.`,
+        variant: 'success',
+      })
+      setStarterCatalog(null)
+      fetchProducts()
+    } catch (e: any) {
+      show({
+        title: 'Error',
+        message: e?.message || 'Failed to load starter catalog',
+        variant: 'destructive',
+      })
+    } finally {
+      setSeeding(false)
+    }
+  }
 
   function openCreateForm() {
     setEditingProduct(null)
@@ -1097,7 +1143,17 @@ export default function ProductsPage() {
           description={
             searchTerm
               ? 'Try a different search term.'
-              : 'Create your first product to get started.'
+              : starterCatalog
+                ? `Start with ${starterCatalog.count} common ${starterCatalog.label.toLowerCase()} items, then edit prices and remove what you do not carry.`
+                : 'Create your first product to get started.'
+          }
+          action={
+            !searchTerm && starterCatalog ? (
+              <Button onClick={handleSeedCatalog} disabled={seeding} className="flex items-center gap-2 mx-auto">
+                <PackagePlus className="w-4 h-4" />
+                <span>{seeding ? 'Adding products...' : 'Load starter catalog'}</span>
+              </Button>
+            ) : undefined
           }
         />
       ) : (

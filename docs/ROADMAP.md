@@ -40,6 +40,8 @@ What a hardware/sanitary shop needs that a kiryana doesn't.
 - [x] **Sell by unit** (already worked: free-text unit + decimal qty) + **trade/retail pricing** — BUILT 2026-06-11 (pending live-test). Optional `Product.tradePrice`; POS Retail/Trade toggle applies trade rate (falls back to retail). Carton pricing unchanged.
 - [x] **Large-catalog handling** — BUILT 2026-06-11 (pending live-test). Fast search already existed (debounced server-side paginated list + POS indexed search). New: **bulk CSV import** (`product-import.ts`, `/api/products/import`, `ImportProductsModal`) with template, preview, dedup by barcode, batched createMany (catalog only, no stock). Demo-locked.
 
+- [x] **Starter catalogs (new-shop onboarding)** — BUILT 2026-08-24 (`feat/starter-catalogs`, pending live-test). Most new signups ran from memory and have no file to import, so CSV import alone doesn't onboard them. Curated per-vertical CSVs in `data/starter-catalogs/`, generated from a real shop by `scripts/export-catalog.ts` (drops cost/trade/carton pricing + stock, keeps retail as an MRP default). Loaded self-serve from the products empty state (`/api/products/seed-catalog`, empty shops only) or by hand via `scripts/seed-catalog.ts`. Seeding runs through the existing `importProducts()`. **No catalog files shipped yet** - the feature is inert until one is exported.
+
 **M2 done when:** Mughal can ring up a hardware counter sale with correct unit + trade pricing, and their catalog was imported, not hand-typed. ← DONE + live-tested 2026-06-11.
 
 ## Milestone 3 — Mughal B2B layer
