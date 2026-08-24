@@ -114,6 +114,7 @@ export default function ProductsPage() {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [archivingId, setArchivingId] = useState<string | null>(null)
+  const [togglingTrackId, setTogglingTrackId] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
@@ -308,6 +309,42 @@ export default function ProductsPage() {
       fetchProducts()
     }
   }, [user?.currentShopId, fetchProducts])
+
+  /**
+   * Flip stock tracking straight from the row.
+   *
+   * Updated optimistically: a shop switching this on for a dozen products after
+   * onboarding should not wait for a round trip each time. Reverted on failure
+   * so the row never lies about what the server actually holds.
+   */
+  async function toggleTrackStock(product: Product) {
+    const next = !product.trackStock
+    setTogglingTrackId(product.id)
+    setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, trackStock: next } : p)))
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackStock: next }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Failed to update stock tracking')
+      // Turning tracking on reveals a stock figure the list has never fetched,
+      // so pull fresh rows rather than showing a blank where a number belongs.
+      if (next) fetchProducts()
+    } catch (e: any) {
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...p, trackStock: !next } : p))
+      )
+      show({
+        title: 'Error',
+        message: e?.message || 'Failed to update stock tracking',
+        variant: 'destructive',
+      })
+    } finally {
+      setTogglingTrackId(null)
+    }
+  }
 
   function openCreateForm() {
     setEditingProduct(null)
@@ -1260,11 +1297,24 @@ export default function ProductsPage() {
                           )}
                         </TD>
                         <TD className="text-center">
-                          {product.trackStock ? (
-                            <span className="text-green-600">Yes</span>
-                          ) : (
-                            <span className="text-[hsl(var(--muted-foreground))]">No</span>
-                          )}
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={product.trackStock}
+                            aria-label={`${product.trackStock ? 'Stop' : 'Start'} tracking stock for ${product.name}`}
+                            title={product.trackStock ? 'Tracking stock. Click to stop.' : 'Not tracking stock. Click to start.'}
+                            disabled={togglingTrackId === product.id}
+                            onClick={() => toggleTrackStock(product)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                              product.trackStock ? 'bg-green-600' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                product.trackStock ? 'translate-x-4' : 'translate-x-0.5'
+                              }`}
+                            />
+                          </button>
                         </TD>
                         <TD className="text-right">{product.reorderLevel || '-'}</TD>
                         <TD className="text-center">

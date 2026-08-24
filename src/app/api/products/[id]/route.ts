@@ -170,8 +170,35 @@ export async function PATCH(
     if (user.isDemoOrg) return DemoBlockedResponse()
 
     const body = await request.json()
+
+    // Stock tracking is toggled straight from the products table. A shop that
+    // just onboarded a couple of thousand catalog items turns it on for the
+    // handful it actually counts, and opening the full edit form for one
+    // checkbox is a chore. Kept out of PUT because PUT rebuilds every field
+    // from the body, so a one-key request there risks clearing something.
+    if (typeof body.trackStock === 'boolean') {
+      const product = await updateProduct(params.id, { trackStock: body.trackStock }, user.id)
+      if (user.currentOrgId) {
+        await logActivity({
+          userId: user.id,
+          orgId: user.currentOrgId,
+          shopId: user.currentShopId || null,
+          action: ActivityActions.UPDATE_PRODUCT,
+          entityType: EntityTypes.PRODUCT,
+          entityId: product.id,
+          details: { name: product.name, trackStock: body.trackStock },
+          ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+          userAgent: request.headers.get('user-agent') || null,
+        })
+      }
+      return NextResponse.json({ success: true, trackStock: product.trackStock })
+    }
+
     if (body.archived !== true && body.archived !== false) {
-      return NextResponse.json({ error: 'Provide { archived: boolean }' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Provide { archived: boolean } or { trackStock: boolean }' },
+        { status: 400 }
+      )
     }
 
     const result = body.archived
