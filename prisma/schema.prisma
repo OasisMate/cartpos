@@ -22,40 +22,40 @@ generator client {
 // Organization: Top-level entity that owns multiple stores
 // Managed by Platform Admins and Org Admins
 model Organization {
-  id               String          @id @default(cuid())
-  name             String
-  legalName        String?
-  type             OrganizationType
-  phone            String?
-  city             String?
-  addressLine1     String?
-  addressLine2     String?
-  ntn              String?
-  strn             String?
-  status           OrgStatus       @default(PENDING)
+  id                  String           @id @default(cuid())
+  name                String
+  legalName           String?
+  type                OrganizationType
+  phone               String?
+  city                String?
+  addressLine1        String?
+  addressLine2        String?
+  ntn                 String?
+  strn                String?
+  status              OrgStatus        @default(PENDING)
   // Demo/test fixture org. When true, destructive API actions are blocked org-wide
   // (see lib/demo.ts + route guards); reset via scripts/reset-demo-org.ts.
-  isDemo           Boolean         @default(false)
-  requestedBy      String?
-  approvedBy       String?
-  approvedAt       DateTime?
-  rejectionReason  String?
-  suspensionReason String?
+  isDemo              Boolean          @default(false)
+  requestedBy         String?
+  approvedBy          String?
+  approvedAt          DateTime?
+  rejectionReason     String?
+  suspensionReason    String?
   // Safe deletion: admins schedule a purge; it can only run after a buffer
   // (and is reversible until then). Never set for ACTIVE orgs.
   deletionScheduledAt DateTime?
   deletionScheduledBy String?
   // Free-text "How did you hear about us?" captured at signup. Tells us which
   // channel actually produces paying shops.
-  referralSource   String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  referralSource      String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
-  shops       Shop[]
-  users       OrganizationUser[]
-  activityLogs ActivityLog[]
-  subscription Subscription?
-  paymentClaims PaymentClaim[]
+  shops                Shop[]
+  users                OrganizationUser[]
+  activityLogs         ActivityLog[]
+  subscription         Subscription?
+  paymentClaims        PaymentClaim[]
   subscriptionPayments SubscriptionPayment[]
 
   @@index([name])
@@ -101,76 +101,76 @@ enum OrganizationType {
 }
 
 model Shop {
-  id          String        @id @default(cuid())
-  orgId       String
-  name        String
-  city        String?
-  phone       String?
-  addressLine1 String?
-  addressLine2 String?
+  id             String           @id @default(cuid())
+  orgId          String
+  name           String
+  city           String?
+  phone          String?
+  addressLine1   String?
+  addressLine2   String?
   // Frozen shop: reads still work, every write is refused (402). Two causes,
   // told apart by pausedReason: the owner closed it, or a plan downgrade paused
   // it. Never deletes anything; flipping isActive back restores the shop as-is.
-  isActive     Boolean      @default(true)
-  pausedAt     DateTime?
-  pausedReason PauseReason?
-  pausedBy     String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  organization Organization  @relation(fields: [orgId], references: [id])
-  owners      UserShop[]
-  settings    ShopSettings?
-  products    Product[]
-  suppliers   Supplier[]
-  customers   Customer[]
-  invoices    Invoice[]
-  purchases   Purchase[]
-  stockLedger StockLedger[]
-  payments    Payment[]
+  isActive       Boolean          @default(true)
+  pausedAt       DateTime?
+  pausedReason   PauseReason?
+  pausedBy       String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [orgId], references: [id])
+  owners         UserShop[]
+  settings       ShopSettings?
+  products       Product[]
+  suppliers      Supplier[]
+  customers      Customer[]
+  invoices       Invoice[]
+  purchases      Purchase[]
+  stockLedger    StockLedger[]
+  payments       Payment[]
   customerLedger CustomerLedger[]
   supplierLedger SupplierLedger[]
-  expenses    Expense[]
-  activityLogs ActivityLog[]
-  saleReturns SaleReturn[]
-  quotations  Quotation[]
-  stockLots   StockLot[]
-  shifts      Shift[]
-  cashMovements CashMovement[]
+  expenses       Expense[]
+  activityLogs   ActivityLog[]
+  saleReturns    SaleReturn[]
+  quotations     Quotation[]
+  stockLots      StockLot[]
+  shifts         Shift[]
+  cashMovements  CashMovement[]
 
   @@index([orgId, name])
 }
 
 model User {
-  id        String      @id @default(cuid())
-  name      String
-  email     String      @unique
-  phone     String?     @unique
-  cnic      String?     @unique
-  isWhatsApp Boolean   @default(false)
-  profileImageUrl String? // profile photo stored as a base64 data URL (PNG/JPEG)
-  password  String      // hashed password
-  role      UserRole    @default(NORMAL)
-  emailVerified Boolean  @default(false) // email ownership confirmed via verification link
-  twoFactorEnabled Boolean @default(false) // opt-in email 2FA on login
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  shops            UserShop[]
-  organizations    OrganizationUser[]
-  createdInvoices  Invoice[]   @relation("InvoiceCreatedBy")
-  createdPurchases Purchase[]  @relation("PurchaseCreatedBy")
-  supplierLedgerEntries SupplierLedger[] @relation("SupplierLedgerCreatedBy")
-  notifications    Notification[]
-  passwordResets   PasswordResetToken[]
-  emailVerifications EmailVerificationToken[]
-  loginCodes       LoginCode[]
-  expenses         Expense[]
-  activityLogs     ActivityLog[]
-  createdReturns   SaleReturn[]  @relation("SaleReturnCreatedBy")
-  createdQuotations Quotation[]  @relation("QuotationCreatedBy")
-  receivedPayments Payment[]     @relation("PaymentReceivedBy")
-  openedShifts     Shift[]       @relation("ShiftOpenedBy")
-  closedShifts     Shift[]       @relation("ShiftClosedBy")
-  cashMovements    CashMovement[]
+  id                    String                   @id @default(cuid())
+  name                  String
+  email                 String                   @unique
+  phone                 String?                  @unique
+  cnic                  String?                  @unique
+  isWhatsApp            Boolean                  @default(false)
+  profileImageUrl       String? // profile photo stored as a base64 data URL (PNG/JPEG)
+  password              String // hashed password
+  role                  UserRole                 @default(NORMAL)
+  emailVerified         Boolean                  @default(false) // email ownership confirmed via verification link
+  twoFactorEnabled      Boolean                  @default(false) // opt-in email 2FA on login
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  shops                 UserShop[]
+  organizations         OrganizationUser[]
+  createdInvoices       Invoice[]                @relation("InvoiceCreatedBy")
+  createdPurchases      Purchase[]               @relation("PurchaseCreatedBy")
+  supplierLedgerEntries SupplierLedger[]         @relation("SupplierLedgerCreatedBy")
+  notifications         Notification[]
+  passwordResets        PasswordResetToken[]
+  emailVerifications    EmailVerificationToken[]
+  loginCodes            LoginCode[]
+  expenses              Expense[]
+  activityLogs          ActivityLog[]
+  createdReturns        SaleReturn[]             @relation("SaleReturnCreatedBy")
+  createdQuotations     Quotation[]              @relation("QuotationCreatedBy")
+  receivedPayments      Payment[]                @relation("PaymentReceivedBy")
+  openedShifts          Shift[]                  @relation("ShiftOpenedBy")
+  closedShifts          Shift[]                  @relation("ShiftClosedBy")
+  cashMovements         CashMovement[]
 
   @@index([phone])
   @@index([cnic])
@@ -181,7 +181,7 @@ model PasswordResetToken {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique
-  code      String?  // 6-digit code; alternative to the reset link
+  code      String? // 6-digit code; alternative to the reset link
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -210,7 +210,7 @@ model EmailVerificationToken {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique
-  code      String?  // 6-digit code; alternative to clicking the link
+  code      String? // 6-digit code; alternative to clicking the link
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -240,15 +240,15 @@ model UserShop {
 
 // User role at platform level
 enum UserRole {
-  PLATFORM_ADMIN  // Full system access, manages all organizations
-  NORMAL          // Regular user (role defined at org/shop level)
+  PLATFORM_ADMIN // Full system access, manages all organizations
+  NORMAL // Regular user (role defined at org/shop level)
 }
 
 // User role at store level
 // STORE_MANAGER: Full store operations (POS, inventory, reports, purchases)
 // CASHIER: Limited to POS and personal dashboard
 enum ShopRole {
-  STORE_MANAGER  // Renamed from SHOP_OWNER (v1.1.0)
+  STORE_MANAGER // Renamed from SHOP_OWNER (v1.1.0)
   CASHIER
 }
 
@@ -272,62 +272,62 @@ enum OrgRole {
 }
 
 model ShopSettings {
-  id                              String        @id @default(cuid())
-  shopId                          String        @unique
-  requireCostPriceForStockItems   Boolean       @default(false)
-  requireBarcodeForProducts       Boolean       @default(false)
-  allowCustomUnits                Boolean       @default(true)
-  allowNegativeStock              Boolean       @default(true)  // Allow sales even if stock is insufficient
-  languageMode                    LanguageMode  @default(EN_BILINGUAL)
-  printerName                     String?       // Preferred printer name (for reference, actual selection handled by browser)
-  autoPrint                       Boolean       @default(false)  // Auto-print receipts after sale completion
-  logoUrl                         String?       // Store logo image URL (PNG format)
-  receiptHeaderDisplay            ReceiptHeaderDisplay @default(NAME_ONLY)  // What to show on receipt header
-  cardFeePercent                  Decimal?      @db.Decimal(5, 2) // Percentage card fee applied on card payments (0 = no fee)
-  allowCardFeeOverride            Boolean       @default(false)   // Allow per-sale override of card fee percent
+  id                            String               @id @default(cuid())
+  shopId                        String               @unique
+  requireCostPriceForStockItems Boolean              @default(false)
+  requireBarcodeForProducts     Boolean              @default(false)
+  allowCustomUnits              Boolean              @default(true)
+  allowNegativeStock            Boolean              @default(true) // Allow sales even if stock is insufficient
+  languageMode                  LanguageMode         @default(EN_BILINGUAL)
+  printerName                   String? // Preferred printer name (for reference, actual selection handled by browser)
+  autoPrint                     Boolean              @default(false) // Auto-print receipts after sale completion
+  logoUrl                       String? // Store logo image URL (PNG format)
+  receiptHeaderDisplay          ReceiptHeaderDisplay @default(NAME_ONLY) // What to show on receipt header
+  cardFeePercent                Decimal?             @db.Decimal(5, 2) // Percentage card fee applied on card payments (0 = no fee)
+  allowCardFeeOverride          Boolean              @default(false) // Allow per-sale override of card fee percent
   // Business-type feature flags. Seeded from Organization.type at signup (see lib/domain/business-presets.ts),
   // editable later in store Settings. Defaults preserve pre-feature behaviour for existing shops.
-  enableQuotations                Boolean       @default(true)    // Show quotations module (hardware/electric); existing shops keep it on
-  enableServiceCharge             Boolean       @default(false)   // Restaurant/hotel service charge at checkout
-  serviceChargePercent            Decimal?      @db.Decimal(5, 2) // Default service charge percent (when enabled)
-  allowServiceChargeOverride      Boolean       @default(true)    // Allow per-sale override of service charge
-  enableDeliveryCharge            Boolean       @default(false)   // Restaurant: add a delivery fee on the bill
-  deliveryChargeMode              DeliveryChargeMode @default(FIXED) // Store manager picks fixed amount or % of bill
-  deliveryChargeDefault           Decimal?      @db.Decimal(10, 2) // Default delivery fee when mode=FIXED (editable per order)
-  deliveryChargePercent           Decimal?      @db.Decimal(5, 2)  // Delivery fee percent when mode=PERCENT
+  enableQuotations              Boolean              @default(true) // Show quotations module (hardware/electric); existing shops keep it on
+  enableServiceCharge           Boolean              @default(false) // Restaurant/hotel service charge at checkout
+  serviceChargePercent          Decimal?             @db.Decimal(5, 2) // Default service charge percent (when enabled)
+  allowServiceChargeOverride    Boolean              @default(true) // Allow per-sale override of service charge
+  enableDeliveryCharge          Boolean              @default(false) // Restaurant: add a delivery fee on the bill
+  deliveryChargeMode            DeliveryChargeMode   @default(FIXED) // Store manager picks fixed amount or % of bill
+  deliveryChargeDefault         Decimal?             @db.Decimal(10, 2) // Default delivery fee when mode=FIXED (editable per order)
+  deliveryChargePercent         Decimal?             @db.Decimal(5, 2) // Delivery fee percent when mode=PERCENT
   // When a delivery charge is applied, drop the service charge to 0 by default.
   // Store managers who want both can turn this off (versatile, not a hard rule).
-  removeServiceChargeOnDelivery   Boolean       @default(true)
-  enableUnitSplitting             Boolean       @default(false)   // Pharmacy: sell whole box or loose unit (reuses cartonSize math)
+  removeServiceChargeOnDelivery Boolean              @default(true)
+  enableUnitSplitting           Boolean              @default(false) // Pharmacy: sell whole box or loose unit (reuses cartonSize math)
   // Show the Retail/Trade pricing toggle at POS. Default true preserves existing shops;
   // seeded by preset for new shops (on for hardware/electric/wholesale-type trades).
-  enableTradePricing              Boolean       @default(true)
+  enableTradePricing            Boolean              @default(true)
   // Hybrid config bucket: rare / vertical-specific toggles & params that don't warrant a column.
   // Common, frequently-queried flags stay as typed columns above; everything else lives here so
   // adding a vertical never means a migration. Shape is owned by lib/domain/business-presets.ts.
-  featureConfig                   Json?
-  timezone                        String        @default("Asia/Karachi") // IANA tz used to compute the shop's "today" for dashboards/reports
+  featureConfig                 Json?
+  timezone                      String               @default("Asia/Karachi") // IANA tz used to compute the shop's "today" for dashboards/reports
   // Cash-drawer discipline: when true, a cashier must open a drawer (shift) before selling.
   // Default false preserves existing behaviour — drawers are tracked only when one is open.
-  requireOpenDrawer               Boolean       @default(false)
-  shop                            Shop          @relation(fields: [shopId], references: [id])
+  requireOpenDrawer             Boolean              @default(false)
+  shop                          Shop                 @relation(fields: [shopId], references: [id])
 }
 
 enum DeliveryChargeMode {
-  FIXED    // flat rupee amount per delivery order
-  PERCENT  // percent of the bill
+  FIXED // flat rupee amount per delivery order
+  PERCENT // percent of the bill
 }
 
 enum LanguageMode {
   EN_ONLY
-  EN_BILINGUAL    // v1
-  URDU_EN         // future
+  EN_BILINGUAL // v1
+  URDU_EN // future
 }
 
 enum ReceiptHeaderDisplay {
-  NAME_ONLY       // Show only store name
-  LOGO_ONLY       // Show only logo
-  BOTH            // Show both name and logo
+  NAME_ONLY // Show only store name
+  LOGO_ONLY // Show only logo
+  BOTH // Show both name and logo
 }
 
 // -----------------------------------------------------
@@ -335,35 +335,35 @@ enum ReceiptHeaderDisplay {
 // -----------------------------------------------------
 
 model Product {
-  id           String         @id @default(cuid())
-  shopId       String
-  name         String
-  sku          String?
-  barcode      String?
-  unit         String
-  price        Decimal        @db.Decimal(10, 2)
-  tradePrice   Decimal?       @db.Decimal(10, 2)  // Optional wholesale/trade per-unit rate (contractors)
-  cartonPrice  Decimal?       @db.Decimal(10, 2)  // Price for full carton
-  costPrice    Decimal?       @db.Decimal(10, 2)
-  category     String?
-  trackStock   Boolean        @default(false)
-  reorderLevel Int?
-  cartonSize   Int?           // Number of pieces in a carton
-  cartonBarcode String?
-  archivedAt   DateTime?      // Non-null = hidden from POS/lists/dashboard; history preserved
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  shop         Shop           @relation(fields: [shopId], references: [id])
-  invoiceLines InvoiceLine[]
-  purchaseLines PurchaseLine[]
-  stockLedger  StockLedger[]
+  id              String           @id @default(cuid())
+  shopId          String
+  name            String
+  sku             String?
+  barcode         String?
+  unit            String
+  price           Decimal          @db.Decimal(10, 2)
+  tradePrice      Decimal?         @db.Decimal(10, 2) // Optional wholesale/trade per-unit rate (contractors)
+  cartonPrice     Decimal?         @db.Decimal(10, 2) // Price for full carton
+  costPrice       Decimal?         @db.Decimal(10, 2)
+  category        String?
+  trackStock      Boolean          @default(false)
+  reorderLevel    Int?
+  cartonSize      Int? // Number of pieces in a carton
+  cartonBarcode   String?
+  archivedAt      DateTime? // Non-null = hidden from POS/lists/dashboard; history preserved
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  shop            Shop             @relation(fields: [shopId], references: [id])
+  invoiceLines    InvoiceLine[]
+  purchaseLines   PurchaseLine[]
+  stockLedger     StockLedger[]
   saleReturnLines SaleReturnLine[]
-  quotationLines QuotationLine[]
-  stockLots    StockLot[]
+  quotationLines  QuotationLine[]
+  stockLots       StockLot[]
   packagingLevels PackagingLevel[]
 
-  @@index([shopId, name])
   @@unique([shopId, barcode], map: "unique_barcode_per_shop")
+  @@index([shopId, name])
   @@index([shopId, barcode])
 }
 
@@ -377,20 +377,20 @@ model Product {
 // Electronics/mobile: serial/IMEI (quantity 1 each). Perishables: expiry/FEFO.
 // Same table, different fields populated per vertical.
 model StockLot {
-  id          String    @id @default(cuid())
-  shopId      String
-  productId   String
-  lotNo       String?   // batch / lot number (pharmacy, food)
-  serial      String?   // serial number / IMEI (electronics) — one unit per row when used
-  expiry      DateTime? // expiry date (FEFO ordering)
-  quantity    Decimal   @default(0) @db.Decimal(12, 3) // remaining qty in base units
-  costPrice   Decimal?  @db.Decimal(12, 2)             // optional per-lot cost
-  note        String?
-  receivedAt  DateTime  @default(now())
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  shop        Shop      @relation(fields: [shopId], references: [id])
-  product     Product   @relation(fields: [productId], references: [id])
+  id         String    @id @default(cuid())
+  shopId     String
+  productId  String
+  lotNo      String? // batch / lot number (pharmacy, food)
+  serial     String? // serial number / IMEI (electronics) — one unit per row when used
+  expiry     DateTime? // expiry date (FEFO ordering)
+  quantity   Decimal   @default(0) @db.Decimal(12, 3) // remaining qty in base units
+  costPrice  Decimal?  @db.Decimal(12, 2) // optional per-lot cost
+  note       String?
+  receivedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  shop       Shop      @relation(fields: [shopId], references: [id])
+  product    Product   @relation(fields: [productId], references: [id])
 
   @@index([shopId, productId])
   @@index([productId, expiry])
@@ -403,11 +403,11 @@ model StockLot {
 model PackagingLevel {
   id           String   @id @default(cuid())
   productId    String
-  name         String   // e.g. "Carton", "Box", "Strip", "Tablet", "Bundle"
+  name         String // e.g. "Carton", "Box", "Strip", "Tablet", "Bundle"
   factorToBase Decimal  @db.Decimal(12, 4) // base units this level equals (base = 1)
   price        Decimal? @db.Decimal(12, 2) // optional price at this level (else derived from base)
-  barcode      String?  // optional scan barcode for this level
-  level        Int      // 0 = base unit; higher = larger pack
+  barcode      String? // optional scan barcode for this level
+  level        Int // 0 = base unit; higher = larger pack
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   product      Product  @relation(fields: [productId], references: [id])
@@ -417,18 +417,18 @@ model PackagingLevel {
 }
 
 model StockLedger {
-  id          String         @id @default(cuid())
-  shopId      String
-  productId   String
-  changeQty   Decimal        @db.Decimal(10, 3) // quantity can be fractional
-  type        StockMoveType
-  refType     String?        // e.g. "purchase_line", "invoice_line", "adjustment"
-  refId       String?
+  id        String        @id @default(cuid())
+  shopId    String
+  productId String
+  changeQty Decimal       @db.Decimal(10, 3) // quantity can be fractional
+  type      StockMoveType
+  refType   String? // e.g. "purchase_line", "invoice_line", "adjustment"
+  refId     String?
   /// Offline client id - dedupes stock adjustments created offline so re-sync can't duplicate them.
-  clientId    String?
-  createdAt   DateTime       @default(now())
-  shop        Shop           @relation(fields: [shopId], references: [id])
-  product     Product        @relation(fields: [productId], references: [id])
+  clientId  String?
+  createdAt DateTime      @default(now())
+  shop      Shop          @relation(fields: [shopId], references: [id])
+  product   Product       @relation(fields: [productId], references: [id])
 
   @@unique([shopId, clientId])
   @@index([shopId, productId])
@@ -451,14 +451,14 @@ enum StockMoveType {
 // -----------------------------------------------------
 
 model Supplier {
-  id        String     @id @default(cuid())
+  id        String           @id @default(cuid())
   shopId    String
   name      String
   phone     String?
   address   String?
   notes     String?
-  createdAt DateTime   @default(now())
-  shop      Shop       @relation(fields: [shopId], references: [id])
+  createdAt DateTime         @default(now())
+  shop      Shop             @relation(fields: [shopId], references: [id])
   purchases Purchase[]
   ledger    SupplierLedger[]
 
@@ -477,10 +477,10 @@ model SupplierLedger {
   type            SupplierEntryType
   direction       LedgerDirection
   amount          Decimal           @db.Decimal(10, 2)
-  method          PaymentMethod?    // set for PAYMENT_MADE
+  method          PaymentMethod? // set for PAYMENT_MADE
   note            String?
-  refType         String?           // e.g. PURCHASE
-  refId           String?           // e.g. purchase id
+  refType         String? // e.g. PURCHASE
+  refId           String? // e.g. purchase id
   createdByUserId String?
   /// Cash drawer (shift) a cash PAYMENT_MADE was paid from, if one was open when recorded.
   shiftId         String?
@@ -498,9 +498,9 @@ model SupplierLedger {
 }
 
 enum SupplierEntryType {
-  PURCHASE_CREDIT   // bought on credit — payable increases
-  PAYMENT_MADE      // paid the supplier — payable decreases
-  OPENING_BALANCE   // initial amount already owed when supplier added
+  PURCHASE_CREDIT // bought on credit — payable increases
+  PAYMENT_MADE // paid the supplier — payable decreases
+  OPENING_BALANCE // initial amount already owed when supplier added
   ADJUSTMENT
 }
 
@@ -525,14 +525,14 @@ model Purchase {
 }
 
 model PurchaseLine {
-  id          String          @id @default(cuid())
-  purchaseId  String
-  productId   String
-  quantity    Decimal         @db.Decimal(10, 3)
-  unitCost    Decimal?        @db.Decimal(10, 2)
-  createdAt   DateTime        @default(now())
-  purchase    Purchase        @relation(fields: [purchaseId], references: [id])
-  product     Product         @relation(fields: [productId], references: [id])
+  id         String   @id @default(cuid())
+  purchaseId String
+  productId  String
+  quantity   Decimal  @db.Decimal(10, 3)
+  unitCost   Decimal? @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+  purchase   Purchase @relation(fields: [purchaseId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
 
   @@index([purchaseId])
 }
@@ -542,20 +542,20 @@ model PurchaseLine {
 // -----------------------------------------------------
 
 model Customer {
-  id        String           @id @default(cuid())
-  shopId    String
-  name      String
-  phone     String?
-  notes     String?
+  id          String           @id @default(cuid())
+  shopId      String
+  name        String
+  phone       String?
+  notes       String?
   /// Offline client id — dedupes customers created offline so re-sync can't duplicate them.
-  clientId  String?
-  createdAt DateTime         @default(now())
-  shop      Shop             @relation(fields: [shopId], references: [id])
-  invoices  Invoice[]
-  ledger    CustomerLedger[]
-  payments  Payment[]
+  clientId    String?
+  createdAt   DateTime         @default(now())
+  shop        Shop             @relation(fields: [shopId], references: [id])
+  invoices    Invoice[]
+  ledger      CustomerLedger[]
+  payments    Payment[]
   saleReturns SaleReturn[]
-  quotations Quotation[]
+  quotations  Quotation[]
 
   @@unique([shopId, clientId])
   @@index([shopId, name])
@@ -563,17 +563,17 @@ model Customer {
 }
 
 model CustomerLedger {
-  id          String             @id @default(cuid())
-  shopId      String
-  customerId  String
-  type        CustomerEntryType
-  direction   LedgerDirection
-  amount      Decimal            @db.Decimal(10, 2)
-  refType     String?
-  refId       String?
-  createdAt   DateTime           @default(now())
-  shop        Shop               @relation(fields: [shopId], references: [id])
-  customer    Customer           @relation(fields: [customerId], references: [id])
+  id         String            @id @default(cuid())
+  shopId     String
+  customerId String
+  type       CustomerEntryType
+  direction  LedgerDirection
+  amount     Decimal           @db.Decimal(10, 2)
+  refType    String?
+  refId      String?
+  createdAt  DateTime          @default(now())
+  shop       Shop              @relation(fields: [shopId], references: [id])
+  customer   Customer          @relation(fields: [customerId], references: [id])
 
   @@index([shopId])
   @@index([customerId])
@@ -588,8 +588,8 @@ enum CustomerEntryType {
 }
 
 enum LedgerDirection {
-  DEBIT   // customer owes more
-  CREDIT  // owes less
+  DEBIT // customer owes more
+  CREDIT // owes less
 }
 
 // -----------------------------------------------------
@@ -597,29 +597,29 @@ enum LedgerDirection {
 // -----------------------------------------------------
 
 model Invoice {
-  id              String          @id @default(cuid())
+  id              String         @id @default(cuid())
   shopId          String
   customerId      String?
-  number          String?         // human-readable invoice no., optional
+  number          String? // human-readable invoice no., optional
   /// Set from POS offline client id (cuid) so duplicate sync paths cannot double-post the same sale
   clientSaleId    String?
-  status          InvoiceStatus   @default(COMPLETED)
+  status          InvoiceStatus  @default(COMPLETED)
   paymentStatus   PaymentStatus
-  paymentMethod   PaymentMethod?  // null for UDHAAR
-  subtotal        Decimal         @db.Decimal(10, 2)
-  discount        Decimal         @default(0) @db.Decimal(10, 2)
+  paymentMethod   PaymentMethod? // null for UDHAAR
+  subtotal        Decimal        @db.Decimal(10, 2)
+  discount        Decimal        @default(0) @db.Decimal(10, 2)
   // Extra charges added on top of (subtotal - discount). Card fee remains implicit
   // in total; receipt derives it as total - (subtotal - discount) - serviceCharge - deliveryCharge.
-  serviceCharge   Decimal         @default(0) @db.Decimal(10, 2)
-  deliveryCharge  Decimal         @default(0) @db.Decimal(10, 2)
-  total           Decimal         @db.Decimal(10, 2)
+  serviceCharge   Decimal        @default(0) @db.Decimal(10, 2)
+  deliveryCharge  Decimal        @default(0) @db.Decimal(10, 2)
+  total           Decimal        @db.Decimal(10, 2)
   createdByUserId String?
-  createdAt       DateTime        @default(now())
-  shop            Shop            @relation(fields: [shopId], references: [id])
-  customer        Customer?       @relation(fields: [customerId], references: [id])
+  createdAt       DateTime       @default(now())
+  shop            Shop           @relation(fields: [shopId], references: [id])
+  customer        Customer?      @relation(fields: [customerId], references: [id])
   lines           InvoiceLine[]
   payments        Payment[]
-  createdBy       User?           @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id])
+  createdBy       User?          @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id])
   returns         SaleReturn[]
 
   @@unique([shopId, clientSaleId])
@@ -637,26 +637,26 @@ enum QuotationStatus {
 
 /// Pre-sale estimate/quotation. Holds no stock or money until converted to a sale.
 model Quotation {
-  id              String          @id @default(cuid())
-  shopId          String
-  customerId      String?
-  customerName    String?         // free-text (e.g. a company not in the customer list)
-  number          String?         // human-readable quote no., e.g. Q000001
-  status          QuotationStatus @default(OPEN)
-  subtotal        Decimal         @db.Decimal(10, 2)
-  discount        Decimal         @default(0) @db.Decimal(10, 2)
-  total           Decimal         @db.Decimal(10, 2)
-  validUntil      DateTime?
-  note            String?
-  convertedInvoiceId String?      // set when converted (plain reference; no FK)
-  convertedAt     DateTime?
-  createdByUserId String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  shop            Shop            @relation(fields: [shopId], references: [id])
-  customer        Customer?       @relation(fields: [customerId], references: [id])
-  createdBy       User?           @relation("QuotationCreatedBy", fields: [createdByUserId], references: [id])
-  lines           QuotationLine[]
+  id                 String          @id @default(cuid())
+  shopId             String
+  customerId         String?
+  customerName       String? // free-text (e.g. a company not in the customer list)
+  number             String? // human-readable quote no., e.g. Q000001
+  status             QuotationStatus @default(OPEN)
+  subtotal           Decimal         @db.Decimal(10, 2)
+  discount           Decimal         @default(0) @db.Decimal(10, 2)
+  total              Decimal         @db.Decimal(10, 2)
+  validUntil         DateTime?
+  note               String?
+  convertedInvoiceId String? // set when converted (plain reference; no FK)
+  convertedAt        DateTime?
+  createdByUserId    String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  shop               Shop            @relation(fields: [shopId], references: [id])
+  customer           Customer?       @relation(fields: [customerId], references: [id])
+  createdBy          User?           @relation("QuotationCreatedBy", fields: [createdByUserId], references: [id])
+  lines              QuotationLine[]
 
   @@index([shopId, createdAt])
   @@index([shopId, status])
@@ -676,42 +676,42 @@ model QuotationLine {
 }
 
 model InvoiceLine {
-  id          String     @id @default(cuid())
-  invoiceId   String
-  productId   String
-  quantity    Decimal    @db.Decimal(10, 3)
-  unitPrice   Decimal    @db.Decimal(10, 2)
-  lineTotal   Decimal    @db.Decimal(10, 2)
+  id           String   @id @default(cuid())
+  invoiceId    String
+  productId    String
+  quantity     Decimal  @db.Decimal(10, 3)
+  unitPrice    Decimal  @db.Decimal(10, 2)
+  lineTotal    Decimal  @db.Decimal(10, 2)
   /// Base units per sold item (1 = loose, cartonSize for a carton, or a PackagingLevel factor).
   /// Stock deducts quantity * unitsPerItem; persisted so edits/voids reverse the right base units.
-  unitsPerItem Decimal   @default(1) @db.Decimal(10, 3)
+  unitsPerItem Decimal  @default(1) @db.Decimal(10, 3)
   /// Packaging label the item was sold as (e.g. "Carton", "Box"); null = base unit.
-  packName    String?
-  createdAt   DateTime   @default(now())
-  invoice     Invoice     @relation(fields: [invoiceId], references: [id])
-  product     Product     @relation(fields: [productId], references: [id])
+  packName     String?
+  createdAt    DateTime @default(now())
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id])
+  product      Product  @relation(fields: [productId], references: [id])
 
   @@index([invoiceId])
 }
 
 /// A return / refund / exchange against an original sale (credit note).
 model SaleReturn {
-  id                String          @id @default(cuid())
+  id                String           @id @default(cuid())
   shopId            String
   originalInvoiceId String
   customerId        String?
-  kind              SaleReturnKind  @default(REFUND)        // REFUND or EXCHANGE
-  returnTotal       Decimal         @db.Decimal(10, 2)      // value of returned goods
-  replacementTotal  Decimal         @default(0) @db.Decimal(10, 2) // value of new items (exchange)
-  netRefund         Decimal         @db.Decimal(10, 2)      // returnTotal - replacementTotal; >0 paid to customer, <0 collected
-  settlementMethod  ReturnSettlement                        // how net was settled: CASH or ACCOUNT_CREDIT
+  kind              SaleReturnKind   @default(REFUND) // REFUND or EXCHANGE
+  returnTotal       Decimal          @db.Decimal(10, 2) // value of returned goods
+  replacementTotal  Decimal          @default(0) @db.Decimal(10, 2) // value of new items (exchange)
+  netRefund         Decimal          @db.Decimal(10, 2) // returnTotal - replacementTotal; >0 paid to customer, <0 collected
+  settlementMethod  ReturnSettlement // how net was settled: CASH or ACCOUNT_CREDIT
   note              String?
   createdByUserId   String?
-  createdAt         DateTime        @default(now())
-  shop              Shop            @relation(fields: [shopId], references: [id])
-  originalInvoice   Invoice         @relation(fields: [originalInvoiceId], references: [id])
-  customer          Customer?       @relation(fields: [customerId], references: [id])
-  createdBy         User?           @relation("SaleReturnCreatedBy", fields: [createdByUserId], references: [id])
+  createdAt         DateTime         @default(now())
+  shop              Shop             @relation(fields: [shopId], references: [id])
+  originalInvoice   Invoice          @relation(fields: [originalInvoiceId], references: [id])
+  customer          Customer?        @relation(fields: [customerId], references: [id])
+  createdBy         User?            @relation("SaleReturnCreatedBy", fields: [createdByUserId], references: [id])
   lines             SaleReturnLine[]
 
   @@index([shopId, createdAt])
@@ -725,8 +725,8 @@ model SaleReturnLine {
   quantity      Decimal    @db.Decimal(10, 3)
   unitPrice     Decimal    @db.Decimal(10, 2)
   lineTotal     Decimal    @db.Decimal(10, 2)
-  isReplacement Boolean    @default(false)  // false = returned item; true = exchange new item
-  restocked     Boolean    @default(true)   // false = damaged, not added back to sellable stock
+  isReplacement Boolean    @default(false) // false = returned item; true = exchange new item
+  restocked     Boolean    @default(true) // false = damaged, not added back to sellable stock
   createdAt     DateTime   @default(now())
   saleReturn    SaleReturn @relation(fields: [returnId], references: [id])
   product       Product    @relation(fields: [productId], references: [id])
@@ -753,7 +753,7 @@ enum InvoiceStatus {
 enum PaymentStatus {
   PAID
   UDHAAR
-  PARTIAL  // for future
+  PARTIAL // for future
 }
 
 enum PaymentMethod {
@@ -763,25 +763,25 @@ enum PaymentMethod {
 }
 
 model Payment {
-  id          String          @id @default(cuid())
-  shopId      String
-  invoiceId   String?
-  customerId  String?
-  amount      Decimal         @db.Decimal(10, 2)
-  method      PaymentMethod
-  note        String?
+  id           String        @id @default(cuid())
+  shopId       String
+  invoiceId    String?
+  customerId   String?
+  amount       Decimal       @db.Decimal(10, 2)
+  method       PaymentMethod
+  note         String?
   /// Offline client id — dedupes udhaar payments created offline so re-sync can't duplicate them.
-  clientId    String?
+  clientId     String?
   /// Staff member who received/recorded this payment (accountability). Null = recorded before tracking.
   receivedById String?
   /// Cash drawer (shift) this payment belongs to, if one was open when it was recorded.
-  shiftId     String?
-  createdAt   DateTime        @default(now())
-  shop        Shop            @relation(fields: [shopId], references: [id])
-  invoice     Invoice?        @relation(fields: [invoiceId], references: [id])
-  customer    Customer?       @relation(fields: [customerId], references: [id])
-  receivedBy  User?           @relation("PaymentReceivedBy", fields: [receivedById], references: [id])
-  shift       Shift?          @relation(fields: [shiftId], references: [id])
+  shiftId      String?
+  createdAt    DateTime      @default(now())
+  shop         Shop          @relation(fields: [shopId], references: [id])
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id])
+  customer     Customer?     @relation(fields: [customerId], references: [id])
+  receivedBy   User?         @relation("PaymentReceivedBy", fields: [receivedById], references: [id])
+  shift        Shift?        @relation(fields: [shiftId], references: [id])
 
   @@unique([shopId, clientId])
   @@index([shopId, createdAt])
@@ -808,8 +808,8 @@ model Expense {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  shop Shop @relation(fields: [shopId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  shop  Shop   @relation(fields: [shopId], references: [id])
+  user  User   @relation(fields: [userId], references: [id])
   shift Shift? @relation(fields: [shiftId], references: [id])
 
   @@unique([shopId, clientId])
@@ -822,22 +822,22 @@ model Expense {
 // -----------------------------------------------------
 
 model ActivityLog {
-  id          String   @id @default(cuid())
-  userId      String
-  orgId       String
-  shopId      String?
-  action      String   // CREATE_STORE, UPDATE_USER, etc.
-  entityType  String   // STORE, USER, PRODUCT, SALE, etc.
-  entityId    String?
-  details     Json?    // Additional context (old values, new values, etc.)
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime @default(now()) @db.Timestamptz // Stored in UTC/GMT
-  
+  id         String   @id @default(cuid())
+  userId     String
+  orgId      String
+  shopId     String?
+  action     String // CREATE_STORE, UPDATE_USER, etc.
+  entityType String // STORE, USER, PRODUCT, SALE, etc.
+  entityId   String?
+  details    Json? // Additional context (old values, new values, etc.)
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz // Stored in UTC/GMT
+
   user         User         @relation(fields: [userId], references: [id])
   organization Organization @relation(fields: [orgId], references: [id])
   shop         Shop?        @relation(fields: [shopId], references: [id])
-  
+
   @@index([orgId, createdAt])
   @@index([shopId, createdAt])
   @@index([userId, createdAt])
@@ -850,13 +850,13 @@ model ActivityLog {
 
 model Notification {
   id        String   @id @default(cuid())
-  userId    String   // recipient
-  orgId     String?  // context
-  shopId    String?  // context
-  type      String   // LOW_STOCK, ORG_APPROVED, ORG_SUSPENDED, etc.
+  userId    String // recipient
+  orgId     String? // context
+  shopId    String? // context
+  type      String // LOW_STOCK, ORG_APPROVED, ORG_SUSPENDED, etc.
   title     String
   body      String?
-  href      String?  // optional in-app deep link
+  href      String? // optional in-app deep link
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -875,27 +875,27 @@ model Notification {
 // shift per (shopId, openedById). Cash events (Payment / Expense / cash SupplierLedger /
 // CashMovement) are stamped with the open shift of the person who handled them.
 model Shift {
-  id            String       @id @default(cuid())
-  shopId        String
-  openedById    String
-  label         String?      // optional drawer/register name, e.g. "Counter 1"
-  status        ShiftStatus  @default(OPEN)
-  openingFloat  Decimal      @db.Decimal(10, 2)
-  openedAt      DateTime     @default(now())
-  closedById    String?      // who closed it (may be a manager force-closing someone else's)
-  closedAt      DateTime?
-  countedCash   Decimal?     @db.Decimal(10, 2) // physical cash counted at close
-  expectedCash  Decimal?     @db.Decimal(10, 2) // computed expected drawer cash, snapshotted at close
-  variance      Decimal?     @db.Decimal(10, 2) // countedCash - expectedCash (negative = short)
-  closingNote   String?
+  id           String      @id @default(cuid())
+  shopId       String
+  openedById   String
+  label        String? // optional drawer/register name, e.g. "Counter 1"
+  status       ShiftStatus @default(OPEN)
+  openingFloat Decimal     @db.Decimal(10, 2)
+  openedAt     DateTime    @default(now())
+  closedById   String? // who closed it (may be a manager force-closing someone else's)
+  closedAt     DateTime?
+  countedCash  Decimal?    @db.Decimal(10, 2) // physical cash counted at close
+  expectedCash Decimal?    @db.Decimal(10, 2) // computed expected drawer cash, snapshotted at close
+  variance     Decimal?    @db.Decimal(10, 2) // countedCash - expectedCash (negative = short)
+  closingNote  String?
 
-  shop          Shop         @relation(fields: [shopId], references: [id])
-  openedBy      User         @relation("ShiftOpenedBy", fields: [openedById], references: [id])
-  closedBy      User?        @relation("ShiftClosedBy", fields: [closedById], references: [id])
-  payments      Payment[]
-  expenses      Expense[]
+  shop           Shop             @relation(fields: [shopId], references: [id])
+  openedBy       User             @relation("ShiftOpenedBy", fields: [openedById], references: [id])
+  closedBy       User?            @relation("ShiftClosedBy", fields: [closedById], references: [id])
+  payments       Payment[]
+  expenses       Expense[]
   supplierLedger SupplierLedger[]
-  movements     CashMovement[]
+  movements      CashMovement[]
 
   @@index([shopId, status])
   @@index([openedById, status])
@@ -910,23 +910,23 @@ enum ShiftStatus {
 // Manual cash added to / removed from a drawer that isn't a sale, refund, expense or
 // supplier payment — e.g. owner takes cash to the bank, adds change, petty pay-out.
 model CashMovement {
-  id        String        @id @default(cuid())
+  id        String       @id @default(cuid())
   shopId    String
   shiftId   String
-  userId    String        // who recorded it
+  userId    String // who recorded it
   direction CashDir
   type      CashMoveType
-  amount    Decimal       @db.Decimal(10, 2) // always positive; direction gives the sign
+  amount    Decimal      @db.Decimal(10, 2) // always positive; direction gives the sign
   reason    String?
-  createdAt DateTime      @default(now())
+  createdAt DateTime     @default(now())
 
-  shop      Shop          @relation(fields: [shopId], references: [id])
+  shop  Shop  @relation(fields: [shopId], references: [id])
   // Cascade matches what the live DB has had since
   // 20260621010000_add_cash_drawer_shifts. Declared here so `migrate diff` stops
   // proposing to downgrade it to RESTRICT: a drawer's movements belong to the
   // shift and go with it.
-  shift     Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id])
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
 
   @@index([shiftId])
   @@index([shopId, createdAt])
@@ -938,11 +938,11 @@ enum CashDir {
 }
 
 enum CashMoveType {
-  PAY_IN      // misc cash put into the drawer
-  PAY_OUT     // misc petty cash taken out
-  BANK_DROP   // cash removed to deposit at the bank
-  OWNER_DRAW  // owner takes cash from the drawer
-  FLOAT_ADD   // extra change/float added during the shift
+  PAY_IN // misc cash put into the drawer
+  PAY_OUT // misc petty cash taken out
+  BANK_DROP // cash removed to deposit at the bank
+  OWNER_DRAW // owner takes cash from the drawer
+  FLOAT_ADD // extra change/float added during the shift
   OTHER
 }
 
@@ -965,7 +965,6 @@ model SyncErrorReport {
   @@index([status, createdAt])
 }
 
-
 // -----------------------------------------------------
 // Billing / subscriptions
 //
@@ -980,17 +979,17 @@ model SyncErrorReport {
 model Plan {
   id             String   @id @default(cuid())
   code           String   @unique // SOLO | TEAM | BUSINESS
-  name           String          // "Solo" | "Team" | "Business"
-  tagline        String?         // "Just me" | "Me + 2 cashiers" | "Unlimited staff"
+  name           String // "Solo" | "Team" | "Business"
+  tagline        String? // "Just me" | "Me + 2 cashiers" | "Unlimited staff"
   monthlyPrice   Decimal  @db.Decimal(10, 2)
-  maxShops       Int?            // null = unlimited
-  maxUsers       Int?            // total seats incl. the owner. null = unlimited
-  maxCashiers    Int?            // ShopRole.CASHIER cap. 0 on Solo.
+  maxShops       Int? // null = unlimited
+  maxUsers       Int? // total seats incl. the owner. null = unlimited
+  maxCashiers    Int? // ShopRole.CASHIER cap. 0 on Solo.
   allowOrgLevel  Boolean  @default(false) // unlocks /org, multi-shop, activity log
   extraShopPrice Decimal? @db.Decimal(10, 2)
-  features       String[]        // FeatureKey list, see lib/billing/features.ts
+  features       String[] // FeatureKey list, see lib/billing/features.ts
   isPopular      Boolean  @default(false) // renders the "Most Popular" badge
-  isActive       Boolean  @default(true)  // false = retired, existing subs keep it
+  isActive       Boolean  @default(true) // false = retired, existing subs keep it
   sortOrder      Int      @default(0)
   // Who last edited this plan. ActivityLog cannot hold it: orgId is a required
   // FK there and a plan belongs to no organization. Same approach as
@@ -999,7 +998,7 @@ model Plan {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  subscriptions  Subscription[]
+  subscriptions Subscription[]
 
   @@index([isActive, sortOrder])
 }
@@ -1015,22 +1014,22 @@ model Subscription {
   /// Price agreed with THIS customer, snapshotted. Never read Plan.monthlyPrice
   /// live. This one column gives us free/friend accounts (0), referral
   /// discounts, and automatic grandfathering when prices rise later.
-  agreedMonthlyPrice Decimal        @db.Decimal(10, 2)
-  priceNote      String?            // e.g. "friend of Hamza, free"
-  priceSetBy     String?
+  agreedMonthlyPrice Decimal @db.Decimal(10, 2)
+  priceNote          String? // e.g. "friend of Hamza, free"
+  priceSetBy         String?
 
   trialEndsAt      DateTime?
   /// null = never expires. Used for orgs grandfathered in at launch.
   currentPeriodEnd DateTime?
-  extraShops       Int              @default(0)
+  extraShops       Int       @default(0)
   /// Solo tier may swap which single shop is active once per billing period.
   shopSwapUsedAt   DateTime?
   cancelledAt      DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plan           Plan               @relation(fields: [planId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id])
 
   @@index([status])
   @@index([currentPeriodEnd])
@@ -1039,11 +1038,11 @@ model Subscription {
 /// A verified payment. NOTE: `Payment` is already taken in this schema
 /// (customer payments, on Shop), hence the longer name.
 model SubscriptionPayment {
-  id             String        @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
   amount         Decimal              @db.Decimal(10, 2)
   method         BillingPaymentMethod
-  reference      String?              // bank ref / transaction id
+  reference      String? // bank ref / transaction id
   cycle          BillingCycle
   monthsAdded    Int
   periodStart    DateTime
@@ -1051,9 +1050,9 @@ model SubscriptionPayment {
   receivedAt     DateTime
   recordedBy     String
   note           String?
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime             @default(now())
 
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, receivedAt])
 }
@@ -1061,7 +1060,7 @@ model SubscriptionPayment {
 /// What the shop tells us they paid, pending admin review. Exists so payments
 /// arrive as a structured queue instead of being reconciled from WhatsApp chat.
 model PaymentClaim {
-  id             String        @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
   amount         Decimal              @db.Decimal(10, 2)
   method         BillingPaymentMethod
@@ -1072,15 +1071,15 @@ model PaymentClaim {
   /// Base64 data URL, same proven pattern as the shop logo. Max 2MB.
   /// PURGED on verify: amount/reference/date stay forever, the image does not.
   receiptImage   String?
-  status         ClaimStatus   @default(PENDING)
+  status         ClaimStatus          @default(PENDING)
   reviewedBy     String?
   reviewedAt     DateTime?
   rejectReason   String?
-  paymentId      String?       // the SubscriptionPayment created on verify
+  paymentId      String? // the SubscriptionPayment created on verify
   submittedBy    String
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime             @default(now())
 
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([status, createdAt])
   @@index([organizationId])
@@ -1105,7 +1104,7 @@ model BillingSettings {
   easypaisaNumber String?
   whatsappNumber  String?
   supportEmail    String?
-  instructions    String?  // free text shown on /billing
+  instructions    String? // free text shown on /billing
   updatedBy       String?
   updatedAt       DateTime @updatedAt
 }
@@ -1152,4 +1151,61 @@ enum ClaimStatus {
 enum PauseReason {
   OWNER_CLOSED
   PLAN_DOWNGRADE
+}
+
+/// Global, cross-org product catalog: the ready-to-use list a new shop picks from
+/// instead of hand-typing two thousand items before its first sale. Seeded from a
+/// curated real shop, then kept current by what shops add as they go.
+///
+/// Keyed by barcode. Loose goods (atta, sugar, daal) have no barcode and are
+/// priced per shop anyway, so they stay a short manual list.
+model CatalogProduct {
+  id             String        @id @default(cuid())
+  barcode        String        @unique
+  name           String
+  unit           String        @default("pcs")
+  category       String?
+  brand          String?
+  /// Median retail observed across shops. Recomputed as sightings arrive, so it
+  /// tracks the market instead of freezing one shop's price. Cost and trade
+  /// prices are never collected here.
+  suggestedPrice Decimal?      @db.Decimal(10, 2)
+  /// Shop verticals this item is offered to (OrganizationType values).
+  verticals      String[]
+  /// Captured items stay PENDING - invisible to the picker - until a second,
+  /// independent shop has the same barcode. One shop's typo never spreads.
+  status         CatalogStatus @default(PENDING)
+  /// Distinct contributing shops. Drives auto-promotion at 2.
+  shopCount      Int           @default(0)
+  /// Where the row came from: 'seed:<shopName>' or 'contributed'.
+  source         String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  sightings CatalogSighting[]
+
+  @@index([status, category])
+  @@index([status, name])
+}
+
+/// One shop's observation of a catalog item. Internal only, never exposed by any
+/// API: which shop stocks what at what price is their business, not ours to
+/// publish. Exists solely to count distinct contributors and derive the median.
+model CatalogSighting {
+  id               String   @id @default(cuid())
+  catalogProductId String
+  shopId           String
+  price            Decimal? @db.Decimal(10, 2)
+  createdAt        DateTime @default(now())
+
+  catalogProduct CatalogProduct @relation(fields: [catalogProductId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogProductId, shopId])
+  @@index([shopId])
+}
+
+enum CatalogStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { Decimal } from '@prisma/client/runtime/library'
+import { recordSighting } from '@/lib/domain/catalog'
+import { verticalForShop } from '@/lib/domain/catalog-context'
 
 /**
  * An extra packaging level above the product's base unit (which is `unit`/`price`, factor 1).
@@ -256,6 +258,20 @@ export async function createProduct(
 
     return newProduct
   })
+
+  // Teach the shared catalog what this shop stocks, so the next shop to sign up
+  // finds it already there. Outside the transaction and swallowing its own
+  // errors: a catalog hiccup must never fail the shopkeeper's save. Awaited
+  // rather than fired-and-forgotten because a serverless function can be torn
+  // down the moment it responds, and a dropped sighting is a lost contribution.
+  if (product.barcode) {
+    const vertical = await verticalForShop(shopId).catch(() => null)
+    await recordSighting(
+      shopId,
+      { barcode: product.barcode, name: product.name, unit: product.unit, price: product.price },
+      vertical
+    )
+  }
 
   return product
 }

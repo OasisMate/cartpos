@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
+import { recordSightingsBulk } from '@/lib/domain/catalog'
+import { verticalForShop } from '@/lib/domain/catalog-context'
 
 /**
  * Bulk catalog import from CSV rows. Loads the product catalog fast for large shops
@@ -167,6 +169,23 @@ export async function importProducts(
       })
       created += res.count
     }
+  }
+
+  // A shop importing its own catalog is the largest contribution the shared
+  // catalog ever receives, so feed it. Set-based and error-swallowing: the
+  // import's result must not depend on it.
+  if (created > 0) {
+    const vertical = await verticalForShop(shopId).catch(() => null)
+    await recordSightingsBulk(
+      shopId,
+      toCreate.map((p) => ({
+        barcode: p.barcode,
+        name: String(p.name),
+        unit: p.unit,
+        price: p.price,
+      })),
+      vertical
+    )
   }
 
   return { created, skipped: errors.length, errors }

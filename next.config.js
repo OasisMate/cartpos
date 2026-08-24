@@ -42,14 +42,6 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
 
-  // Starter-catalogue CSVs are read from disk at request time. Vercel's tracer
-  // can't see a runtime readFileSync, so the data dir is bundled explicitly or
-  // the seed route 404s in production while working fine locally.
-  experimental: {
-    outputFileTracingIncludes: {
-      '/api/products/seed-catalog': ['./data/starter-catalogs/**'],
-    },
-  },
   // Note: Electron builds require special handling
   // Static export is not compatible with API routes
   // Electron setup is available but requires running Next.js as a server

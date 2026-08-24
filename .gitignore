@@ -75,3 +75,7 @@ desktop.ini
 
 # logs
 *.log
+
+# Generated master-catalog seeds carry a live customer product list + prices.
+# Regenerate with scripts/build-master-catalog.ts instead of committing.
+/data/master-catalog/*.csv
