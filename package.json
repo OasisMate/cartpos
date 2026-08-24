@@ -13,6 +13,8 @@
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "electron-builder",
     "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "create-admin": "tsx scripts/create-admin-user.ts",
     "cleanup-data": "tsx scripts/cleanup-data.ts",
     "backfill-skus": "tsx scripts/backfill-product-skus.ts",
@@ -56,6 +58,7 @@
     "prisma": "^6.19.0",
     "tailwindcss": "^3.4.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.9"
   }
 }
