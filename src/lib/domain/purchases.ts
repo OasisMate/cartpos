@@ -41,7 +41,7 @@ export interface PurchaseFilters {
 }
 
 // Check if user has permission to manage purchases in a shop
-async function checkPurchasePermission(userId: string, shopId: string): Promise<boolean> {
+export async function checkPurchasePermission(userId: string, shopId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {

@@ -1,0 +1,201 @@
+import { prisma } from '@/lib/db/prisma'
+import { PurchaseListStatus } from '@prisma/client'
+import { checkPurchasePermission } from '@/lib/domain/purchases'
+
+/**
+ * Purchase lists: the reorder chit. Rules live here, routes stay thin.
+ * Every function is shop-scoped and refuses a list from another shop.
+ */
+
+export interface PurchaseListFilters {
+  status?: PurchaseListStatus
+  supplierId?: string
+  page?: number
+  limit?: number
+}
+
+export interface CreatePurchaseListInput {
+  name?: string
+  supplierId?: string
+  notes?: string
+}
+
+export interface UpdatePurchaseListInput {
+  name?: string
+  supplierId?: string | null
+  notes?: string
+  status?: PurchaseListStatus
+}
+
+const LINE_SELECT = {
+  id: true,
+  quantity: true,
+  note: true,
+  product: { select: { id: true, name: true, unit: true, barcode: true } },
+} as const
+
+async function requireList(id: string, userId: string) {
+  const list = await prisma.purchaseList.findUnique({
+    where: { id },
+    include: { lines: { select: LINE_SELECT, orderBy: { createdAt: 'asc' } }, supplier: true },
+  })
+  if (!list) throw new Error('Purchase list not found')
+  const allowed = await checkPurchasePermission(userId, list.shopId)
+  if (!allowed) throw new Error('You do not have permission to work on purchase lists in this shop')
+  return list
+}
+
+export async function listPurchaseLists(shopId: string, filters: PurchaseListFilters = {}) {
+  const page = Math.max(1, filters.page || 1)
+  const limit = Math.min(100, Math.max(1, filters.limit || 20))
+  const where = {
+    shopId,
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
+  }
+  const [lists, total] = await Promise.all([
+    prisma.purchaseList.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        notes: true,
+        sentAt: true,
+        purchaseId: true,
+        createdAt: true,
+        supplier: { select: { id: true, name: true } },
+        _count: { select: { lines: true } },
+      },
+    }),
+    prisma.purchaseList.count({ where }),
+  ])
+  return { lists, total, page, limit }
+}
+
+export async function getPurchaseList(id: string, userId: string) {
+  return requireList(id, userId)
+}
+
+export async function createPurchaseList(
+  shopId: string,
+  input: CreatePurchaseListInput,
+  userId: string
+) {
+  const allowed = await checkPurchasePermission(userId, shopId)
+  if (!allowed) throw new Error('You do not have permission to create purchase lists in this shop')
+
+  if (input.supplierId) {
+    const supplier = await prisma.supplier.findUnique({ where: { id: input.supplierId } })
+    if (!supplier || supplier.shopId !== shopId) throw new Error('Invalid supplier')
+  }
+
+  return prisma.purchaseList.create({
+    data: {
+      shopId,
+      name: input.name?.trim() || null,
+      supplierId: input.supplierId || null,
+      notes: input.notes?.trim() || null,
+      createdByUserId: userId,
+    },
+  })
+}
+
+export async function updatePurchaseList(
+  id: string,
+  input: UpdatePurchaseListInput,
+  userId: string
+) {
+  const list = await requireList(id, userId)
+  if (list.status === 'RECEIVED') throw new Error('This list has already been received')
+
+  if (input.supplierId) {
+    const supplier = await prisma.supplier.findUnique({ where: { id: input.supplierId } })
+    if (!supplier || supplier.shopId !== list.shopId) throw new Error('Invalid supplier')
+  }
+
+  // SENT is stamped by the share/print action. The list stays editable after it.
+  const goingOut = input.status === 'SENT' && list.status !== 'SENT'
+
+  return prisma.purchaseList.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name.trim() || null } : {}),
+      ...(input.supplierId !== undefined ? { supplierId: input.supplierId || null } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes.trim() || null } : {}),
+      ...(input.status ? { status: input.status } : {}),
+      ...(goingOut ? { sentAt: new Date() } : {}),
+    },
+  })
+}
+
+export async function addOrBumpLine(
+  id: string,
+  input: { productId: string; quantity: number },
+  userId: string
+) {
+  const list = await requireList(id, userId)
+  if (list.status === 'RECEIVED') throw new Error('This list has already been received')
+  if (!input.quantity || input.quantity <= 0) throw new Error('Quantity must be greater than 0')
+
+  const product = await prisma.product.findUnique({ where: { id: input.productId } })
+  if (!product || product.shopId !== list.shopId) throw new Error('Product not found in this shop')
+
+  // The unique index does the merging: scanning the same item twice bumps the
+  // quantity instead of leaving two lines for one product.
+  return prisma.purchaseListLine.upsert({
+    where: { purchaseListId_productId: { purchaseListId: id, productId: input.productId } },
+    update: { quantity: { increment: input.quantity } },
+    create: { purchaseListId: id, productId: input.productId, quantity: input.quantity },
+    select: LINE_SELECT,
+  })
+}
+
+export async function updateLine(
+  lineId: string,
+  input: { quantity?: number; note?: string },
+  userId: string
+) {
+  const line = await prisma.purchaseListLine.findUnique({
+    where: { id: lineId },
+    include: { purchaseList: { select: { id: true, shopId: true, status: true } } },
+  })
+  if (!line) throw new Error('Line not found')
+  const allowed = await checkPurchasePermission(userId, line.purchaseList.shopId)
+  if (!allowed) throw new Error('You do not have permission to work on purchase lists in this shop')
+  if (line.purchaseList.status === 'RECEIVED') throw new Error('This list has already been received')
+  if (input.quantity !== undefined && input.quantity <= 0) {
+    throw new Error('Quantity must be greater than 0')
+  }
+
+  return prisma.purchaseListLine.update({
+    where: { id: lineId },
+    data: {
+      ...(input.quantity !== undefined ? { quantity: input.quantity } : {}),
+      ...(input.note !== undefined ? { note: input.note.trim() || null } : {}),
+    },
+    select: LINE_SELECT,
+  })
+}
+
+export async function removeLine(lineId: string, userId: string) {
+  const line = await prisma.purchaseListLine.findUnique({
+    where: { id: lineId },
+    include: { purchaseList: { select: { shopId: true, status: true } } },
+  })
+  if (!line) throw new Error('Line not found')
+  const allowed = await checkPurchasePermission(userId, line.purchaseList.shopId)
+  if (!allowed) throw new Error('You do not have permission to work on purchase lists in this shop')
+  if (line.purchaseList.status === 'RECEIVED') throw new Error('This list has already been received')
+
+  await prisma.purchaseListLine.delete({ where: { id: lineId } })
+}
+
+export async function deletePurchaseList(id: string, userId: string) {
+  const list = await requireList(id, userId)
+  if (list.status === 'RECEIVED') throw new Error('A received list is history and cannot be deleted')
+  await prisma.purchaseList.delete({ where: { id } })
+}
