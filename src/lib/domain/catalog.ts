@@ -47,20 +47,33 @@ export interface CatalogItem {
   alreadyAdded: boolean
 }
 
-export async function searchCatalog(params: CatalogSearchParams) {
-  const page = Math.max(1, params.page ?? 1)
-  const limit = Math.min(100, Math.max(1, params.limit ?? 50))
+/**
+ * The filter behind both browsing and "add everything matching". Shared so the
+ * count a shopkeeper is shown can never disagree with what the button adds.
+ */
+export function buildCatalogWhere(
+  params: Pick<CatalogSearchParams, 'vertical' | 'search' | 'category'>
+): Prisma.CatalogProductWhereInput {
   const search = params.search?.trim()
-
   const where: Prisma.CatalogProductWhereInput = { status: 'APPROVED' }
   if (params.vertical) where.verticals = { has: params.vertical }
   if (params.category) where.category = params.category
   if (search) {
     where.OR = [
       { name: { contains: search, mode: 'insensitive' } },
-      { barcode: { contains: search } },
+      // Case-insensitive on barcode too: local codes carry letters
+      // ("ALFB525267979", "http://myproduct.info/..."), so a lowercase typed
+      // search would otherwise miss a product a scanner can find.
+      { barcode: { contains: search, mode: 'insensitive' } },
     ]
   }
+  return where
+}
+
+export async function searchCatalog(params: CatalogSearchParams) {
+  const page = Math.max(1, params.page ?? 1)
+  const limit = Math.min(100, Math.max(1, params.limit ?? 50))
+  const where = buildCatalogWhere(params)
 
   const [total, items] = await Promise.all([
     prisma.catalogProduct.count({ where }),
@@ -287,10 +300,17 @@ export async function refreshCatalogEntries(ids: string[]): Promise<void> {
   await prisma.$executeRaw`
     UPDATE "CatalogProduct" cp
     SET "shopCount" = agg.shops,
-        "suggestedPrice" = COALESCE(agg.median, cp."suggestedPrice")
+        "suggestedPrice" = CASE
+          -- A curated seed price is worth more than one shop's opinion, so a
+          -- single sighting never overrides it. Two shops agreeing is evidence.
+          WHEN agg.priced >= 2 THEN agg.median
+          WHEN cp."suggestedPrice" IS NULL THEN agg.median
+          ELSE cp."suggestedPrice"
+        END
     FROM (
       SELECT "catalogProductId" AS id,
              COUNT(DISTINCT "shopId") AS shops,
+             COUNT("price") AS priced,
              percentile_cont(0.5) WITHIN GROUP (ORDER BY "price") AS median
       FROM "CatalogSighting"
       WHERE "catalogProductId" = ANY(${ids}::text[])
@@ -336,9 +356,14 @@ export async function refreshCatalogEntry(catalogProductId: string): Promise<voi
 
   const current = await prisma.catalogProduct.findUnique({
     where: { id: catalogProductId },
-    select: { status: true },
+    select: { status: true, suggestedPrice: true },
   })
   if (!current) return
+
+  // A curated seed price is worth more than one shop's opinion, so a single
+  // sighting never overrides it - two shops agreeing is evidence, one is not.
+  // An entry with no price yet takes whatever it can get.
+  const takePrice = median !== null && (prices.length >= 2 || current.suggestedPrice === null)
 
   // Seeded rows arrive APPROVED and stay there. Contributed rows go live once a
   // second shop corroborates them. REJECTED is a manual decision and is never
@@ -351,7 +376,7 @@ export async function refreshCatalogEntry(catalogProductId: string): Promise<voi
     data: {
       shopCount,
       status,
-      ...(median !== null ? { suggestedPrice: new Prisma.Decimal(median.toFixed(2)) } : {}),
+      ...(takePrice ? { suggestedPrice: new Prisma.Decimal(median!.toFixed(2)) } : {}),
     },
   })
 }
