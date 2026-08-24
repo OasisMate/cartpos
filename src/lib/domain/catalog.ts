@@ -151,53 +151,39 @@ export async function recordSighting(
 
     const price = Number(product.price)
     const validPrice = Number.isFinite(price) && price > 0 && price < 100000000 ? price : null
+    const priceDec = validPrice !== null ? new Prisma.Decimal(validPrice) : null
 
-    const entry =
-      (await prisma.catalogProduct.findUnique({ where: { barcode }, select: { id: true, status: true } })) ??
-      (await prisma.catalogProduct.create({
-        data: {
-          barcode,
-          name,
-          unit: product.unit?.trim() || 'pcs',
-          category: categorize(name),
-          verticals: vertical ? [vertical] : [],
-          status: 'PENDING',
-          source: 'contributed',
-        },
-        select: { id: true, status: true },
-      }))
+    // Three round trips, not eight. This runs inside the shopkeeper's
+    // "Add Product" request, so the find-then-create dance it used to do was
+    // latency they paid for a bookkeeping side effect.
 
-    // Unique on (catalogProductId, shopId): a shop re-adding the same item does
-    // not count twice, so shopCount stays a count of distinct shops.
-    const existing = await prisma.catalogSighting.findUnique({
-      where: { catalogProductId_shopId: { catalogProductId: entry.id, shopId } },
+    // Upsert with an empty update: an entry that already exists is never
+    // rewritten by one shop's copy of the name.
+    const entry = await prisma.catalogProduct.upsert({
+      where: { barcode },
+      create: {
+        barcode,
+        name,
+        unit: product.unit?.trim() || 'pcs',
+        category: categorize(name),
+        verticals: vertical ? [vertical] : [],
+        status: 'PENDING',
+        source: 'contributed',
+      },
+      update: {},
       select: { id: true },
     })
 
-    if (existing) {
-      if (validPrice !== null) {
-        await prisma.catalogSighting.update({
-          where: { id: existing.id },
-          data: { price: new Prisma.Decimal(validPrice) },
-        })
-      }
-    } else {
-      await prisma.catalogSighting.create({
-        data: {
-          catalogProductId: entry.id,
-          shopId,
-          price: validPrice !== null ? new Prisma.Decimal(validPrice) : null,
-        },
-      })
-      if (vertical) {
-        await prisma.catalogProduct.update({
-          where: { id: entry.id },
-          data: { verticals: { push: vertical } },
-        }).catch(() => {})
-      }
-    }
+    // Unique on (catalogProductId, shopId): a shop re-adding the same item does
+    // not count twice, so shopCount stays a count of distinct shops.
+    await prisma.catalogSighting.upsert({
+      where: { catalogProductId_shopId: { catalogProductId: entry.id, shopId } },
+      create: { catalogProductId: entry.id, shopId, price: priceDec },
+      update: priceDec !== null ? { price: priceDec } : {},
+      select: { id: true },
+    })
 
-    await refreshCatalogEntry(entry.id)
+    await refreshCatalogEntries([entry.id], vertical)
     return true
   } catch {
     return false
@@ -280,7 +266,7 @@ export async function recordSightingsBulk(
       skipDuplicates: true,
     })
 
-    await refreshCatalogEntries(entries.map((e) => e.id))
+    await refreshCatalogEntries(entries.map((e) => e.id), vertical)
     return entries.length
   } catch {
     return 0
@@ -294,10 +280,26 @@ export async function recordSightingsBulk(
  * a bulk import. percentile_cont gives us the true median; a shop that
  * fat-fingers 5,000 instead of 50 moves it not at all.
  */
-export async function refreshCatalogEntries(ids: string[]): Promise<void> {
+export async function refreshCatalogEntries(
+  ids: string[],
+  vertical?: string | null
+): Promise<void> {
   if (ids.length === 0) return
 
+  // One statement: counts, median, promotion and vertical, all off the same
+  // aggregate. This runs inside the shopkeeper's "Add Product" request, so
+  // every round trip saved here is latency they feel.
+  const v = vertical ?? ''
   await prisma.$executeRaw`
+    WITH agg AS (
+      SELECT "catalogProductId" AS id,
+             COUNT(DISTINCT "shopId") AS shops,
+             COUNT("price") AS priced,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY "price") AS median
+      FROM "CatalogSighting"
+      WHERE "catalogProductId" = ANY(${ids}::text[])
+      GROUP BY "catalogProductId"
+    )
     UPDATE "CatalogProduct" cp
     SET "shopCount" = agg.shops,
         "suggestedPrice" = CASE
@@ -306,77 +308,19 @@ export async function refreshCatalogEntries(ids: string[]): Promise<void> {
           WHEN agg.priced >= 2 THEN agg.median
           WHEN cp."suggestedPrice" IS NULL THEN agg.median
           ELSE cp."suggestedPrice"
+        END,
+        -- REJECTED is a human decision and is never reversed automatically.
+        "status" = CASE
+          WHEN cp."status" = 'PENDING' AND agg.shops >= ${PROMOTION_THRESHOLD}
+            THEN 'APPROVED'::"CatalogStatus"
+          ELSE cp."status"
+        END,
+        "verticals" = CASE
+          WHEN ${v} <> '' AND NOT (${v} = ANY(cp."verticals"))
+            THEN array_append(cp."verticals", ${v})
+          ELSE cp."verticals"
         END
-    FROM (
-      SELECT "catalogProductId" AS id,
-             COUNT(DISTINCT "shopId") AS shops,
-             COUNT("price") AS priced,
-             percentile_cont(0.5) WITHIN GROUP (ORDER BY "price") AS median
-      FROM "CatalogSighting"
-      WHERE "catalogProductId" = ANY(${ids}::text[])
-      GROUP BY "catalogProductId"
-    ) agg
+    FROM agg
     WHERE cp.id = agg.id
   `
-
-  // Promotion is a separate statement so it reads off the counts just written.
-  // REJECTED is a human decision and is never reversed automatically.
-  await prisma.$executeRaw`
-    UPDATE "CatalogProduct"
-    SET "status" = 'APPROVED'
-    WHERE id = ANY(${ids}::text[])
-      AND "status" = 'PENDING'
-      AND "shopCount" >= ${PROMOTION_THRESHOLD}
-  `
-}
-
-/**
- * Recompute an entry's contributor count, suggested price and status.
- *
- * Median rather than mean: one shop that fat-fingers 5,000 instead of 50 would
- * drag an average badly, and a median shrugs it off.
- */
-export async function refreshCatalogEntry(catalogProductId: string): Promise<void> {
-  const sightings = await prisma.catalogSighting.findMany({
-    where: { catalogProductId },
-    select: { shopId: true, price: true },
-  })
-
-  const shopCount = new Set(sightings.map((s) => s.shopId)).size
-  const prices = sightings
-    .map((s) => (s.price === null ? NaN : Number(s.price)))
-    .filter((n) => Number.isFinite(n) && n > 0)
-    .sort((a, b) => a - b)
-
-  let median: number | null = null
-  if (prices.length > 0) {
-    const mid = Math.floor(prices.length / 2)
-    median = prices.length % 2 === 0 ? (prices[mid - 1] + prices[mid]) / 2 : prices[mid]
-  }
-
-  const current = await prisma.catalogProduct.findUnique({
-    where: { id: catalogProductId },
-    select: { status: true, suggestedPrice: true },
-  })
-  if (!current) return
-
-  // A curated seed price is worth more than one shop's opinion, so a single
-  // sighting never overrides it - two shops agreeing is evidence, one is not.
-  // An entry with no price yet takes whatever it can get.
-  const takePrice = median !== null && (prices.length >= 2 || current.suggestedPrice === null)
-
-  // Seeded rows arrive APPROVED and stay there. Contributed rows go live once a
-  // second shop corroborates them. REJECTED is a manual decision and is never
-  // undone automatically.
-  const status =
-    current.status === 'PENDING' && shopCount >= PROMOTION_THRESHOLD ? 'APPROVED' : current.status
-
-  await prisma.catalogProduct.update({
-    where: { id: catalogProductId },
-    data: {
-      shopCount,
-      status,
-      ...(takePrice ? { suggestedPrice: new Prisma.Decimal(median!.toFixed(2)) } : {}),
-    },
-  })
 }
