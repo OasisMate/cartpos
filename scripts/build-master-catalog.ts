@@ -111,8 +111,17 @@ async function main() {
   // one - seed-master-catalog.ts takes several files, later ones winning.
   const blanks = rows.filter((r) => !r.category)
   const blanksFile = outFile.replace(/\.csv$/i, '') + '-uncategorized.csv'
+  let blanksWritten = true
   if (blanks.length > 0) {
-    writeFileSync(blanksFile, toCSV(MASTER_CATALOG_HEADERS, blanks), 'utf8')
+    try {
+      writeFileSync(blanksFile, toCSV(MASTER_CATALOG_HEADERS, blanks), 'utf8')
+    } catch (e: any) {
+      // Windows locks a file open in Excel, which is exactly where these get
+      // reviewed. Losing the whole run over it would be daft.
+      blanksWritten = false
+      console.error(`\nCould not write ${blanksFile}: ${e.code || e.message}`)
+      console.error('Close it in Excel and re-run to refresh it.\n')
+    }
   }
 
   const uncategorized = blanks.length
@@ -128,7 +137,7 @@ async function main() {
       `  kept existing : ${keptExisting} categories\n` +
       `  auto-assigned : ${autoCategorized}\n` +
       `  UNCATEGORIZED : ${uncategorized} (${pct(uncategorized)}%)\n` +
-      (uncategorized > 0
+      (uncategorized > 0 && blanksWritten
         ? `\nBlank categories split out for review:\n  ${blanksFile}\n` +
           `Valid categories:\n  ${CATALOG_CATEGORIES.join(' | ')}\n`
         : '') +
