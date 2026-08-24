@@ -23,15 +23,33 @@ async function main() {
   const dryRun = args.includes('--dry-run')
   const sourceIdx = args.indexOf('--source')
   const sourceName = sourceIdx >= 0 ? args[sourceIdx + 1] : 'seed'
-  const file = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--source')
+  const files = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--source')
 
-  if (!file) {
-    console.error('Usage: npx tsx scripts/seed-master-catalog.ts <csvFile> [--source "Rose Mart"] [--dry-run]')
+  if (files.length === 0) {
+    console.error(
+      'Usage: npx tsx scripts/seed-master-catalog.ts <csvFile...> [--source "Rose Mart"] [--dry-run]'
+    )
     process.exit(1)
   }
 
-  const rows = parseCSV(readFileSync(file, 'utf8'))
-  console.log(`Read ${rows.length} rows from ${file}`)
+  // Several files layer, later ones winning per barcode. That is how a
+  // hand-corrected file of previously-blank categories folds back over the
+  // generated one without anyone editing 2,000 rows.
+  const merged = new Map<string, Record<string, string>>()
+  for (const file of files) {
+    const parsed = parseCSV(readFileSync(file, 'utf8'))
+    let overrides = 0
+    for (const row of parsed) {
+      const key = String(row.barcode ?? '').trim()
+      if (!key) continue
+      if (merged.has(key)) overrides++
+      merged.set(key, row)
+    }
+    console.log(
+      `Read ${parsed.length} rows from ${file}` + (overrides > 0 ? ` (${overrides} overrode earlier)` : '')
+    )
+  }
+  const rows = [...merged.values()]
 
   let valid = 0
   let skipped = 0

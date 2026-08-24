@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import { writeFileSync } from 'fs'
 import { toCSV } from '../src/lib/utils/csv'
 import {
+  CATALOG_CATEGORIES,
   categorize,
   normalizeCatalogBarcode,
   normalizeCatalogName,
@@ -104,7 +105,17 @@ async function main() {
 
   writeFileSync(outFile, toCSV(MASTER_CATALOG_HEADERS, rows), 'utf8')
 
-  const uncategorized = rows.filter((r) => !r.category).length
+  // Blank categories get their own file. Filling 300 gaps scattered through
+  // 2,000 rows is miserable; filling one short file is not. It carries every
+  // column, so it is a valid seed file on its own and layers back over the main
+  // one - seed-master-catalog.ts takes several files, later ones winning.
+  const blanks = rows.filter((r) => !r.category)
+  const blanksFile = outFile.replace(/\.csv$/i, '') + '-uncategorized.csv'
+  if (blanks.length > 0) {
+    writeFileSync(blanksFile, toCSV(MASTER_CATALOG_HEADERS, blanks), 'utf8')
+  }
+
+  const uncategorized = blanks.length
   const pct = (n: number) => (rows.length ? Math.round((n / rows.length) * 100) : 0)
 
   console.log(
@@ -116,9 +127,15 @@ async function main() {
       `\nWrote           : ${rows.length} rows to ${outFile}\n` +
       `  kept existing : ${keptExisting} categories\n` +
       `  auto-assigned : ${autoCategorized}\n` +
-      `  UNCATEGORIZED : ${uncategorized} (${pct(uncategorized)}%) <- fill these in before seeding\n` +
-      `\nNothing was written to the database. Review the CSV, then run:\n` +
-      `  npx tsx scripts/seed-master-catalog.ts ${outFile}\n`
+      `  UNCATEGORIZED : ${uncategorized} (${pct(uncategorized)}%)\n` +
+      (uncategorized > 0
+        ? `\nBlank categories split out for review:\n  ${blanksFile}\n` +
+          `Valid categories:\n  ${CATALOG_CATEGORIES.join(' | ')}\n`
+        : '') +
+      `\nNothing was written to the database. Review, then run:\n` +
+      `  npx tsx scripts/seed-master-catalog.ts ${outFile}` +
+      (uncategorized > 0 ? ` ${blanksFile}` : '') +
+      `\n`
   )
 }
 
