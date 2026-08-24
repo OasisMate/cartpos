@@ -249,7 +249,7 @@ export async function suggestReorderItems(
     `,
     options.excludeListId
       ? prisma.purchaseListLine.findMany({
-          where: { purchaseListId: options.excludeListId },
+          where: { purchaseListId: options.excludeListId, purchaseList: { shopId } },
           select: { productId: true },
         })
       : Promise.resolve([]),
