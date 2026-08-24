@@ -24,7 +24,7 @@ export interface UpdatePurchaseListInput {
   name?: string
   supplierId?: string | null
   notes?: string
-  status?: PurchaseListStatus
+  status?: 'DRAFT' | 'SENT'
 }
 
 const LINE_SELECT = {
@@ -111,6 +111,9 @@ export async function updatePurchaseList(
 ) {
   const list = await requireList(id, userId)
   if (list.status === 'RECEIVED') throw new Error('This list has already been received')
+  if ((input.status as string) === 'RECEIVED') {
+    throw new Error('A list becomes received by receiving it, not by editing it')
+  }
 
   if (input.supplierId) {
     const supplier = await prisma.supplier.findUnique({ where: { id: input.supplierId } })
