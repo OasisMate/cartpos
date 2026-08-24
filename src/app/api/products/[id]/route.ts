@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { DemoBlockedResponse } from '@/lib/demo'
-import { updateProduct, getProduct, deleteProduct, archiveProduct, unarchiveProduct, UpdateProductInput } from '@/lib/domain/products'
+import { updateProduct, getProduct, deleteProduct, archiveProduct, unarchiveProduct, setTrackStock, UpdateProductInput } from '@/lib/domain/products'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 // GET: Get single product
@@ -177,7 +177,7 @@ export async function PATCH(
     // checkbox is a chore. Kept out of PUT because PUT rebuilds every field
     // from the body, so a one-key request there risks clearing something.
     if (typeof body.trackStock === 'boolean') {
-      const product = await updateProduct(params.id, { trackStock: body.trackStock }, user.id)
+      const product = await setTrackStock(params.id, body.trackStock, user.id)
       if (user.currentOrgId) {
         await logActivity({
           userId: user.id,

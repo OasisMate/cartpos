@@ -593,3 +593,56 @@ export async function getProductsForPOS(shopId: string) {
     })),
   }))
 }
+/**
+ * Turn stock tracking on or off, establishing a clean baseline when switching on.
+ *
+ * Sales write a stock-ledger row whether or not the product is tracked, so a
+ * shop that onboards from the catalog (tracking off by design), sells for a
+ * week, then starts tracking one product would inherit every one of those
+ * sales as negative stock. The list clamps the display to 0, which hides it
+ * until they stock in 10 and are shown 9.
+ *
+ * So switching ON zeroes a negative balance with an explicit ADJUSTMENT row.
+ * "Start tracking" means start counting from now. A positive balance is left
+ * alone - that is real stock somebody recorded, and it is not ours to discard.
+ */
+export async function setTrackStock(productId: string, trackStock: boolean, userId: string) {
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { id: true, shopId: true, name: true },
+  })
+  if (!product) throw new Error('Product not found')
+  if (!(await checkProductPermission(userId, product.shopId))) {
+    throw new Error('You do not have permission to update products in this shop')
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.product.update({
+      where: { id: productId },
+      data: { trackStock },
+      select: { id: true, name: true, trackStock: true },
+    })
+
+    if (trackStock) {
+      const agg = await tx.stockLedger.aggregate({
+        where: { shopId: product.shopId, productId },
+        _sum: { changeQty: true },
+      })
+      const balance = Number(agg._sum.changeQty ?? 0)
+      if (balance < 0) {
+        await tx.stockLedger.create({
+          data: {
+            shopId: product.shopId,
+            productId,
+            changeQty: new Decimal(-balance),
+            type: 'ADJUSTMENT',
+            refType: 'track_stock_baseline',
+            refId: null,
+          },
+        })
+      }
+    }
+
+    return updated
+  })
+}
