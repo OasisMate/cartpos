@@ -105,6 +105,11 @@ interface CartItem {
   unitsPerItem?: number // base units per sold item (cartonSize / level factor / 1). Drives stock.
 }
 
+// Identity of a cart line: the same product sold at the same level is one line.
+function cartLineKey(item: CartItem) {
+  return `${item.product.id}|${item.packName ? `lvl:${item.packName}` : item.isCarton ? 'carton' : 'base'}`
+}
+
 interface ReceiptItem {
   name: string
   quantity: number
@@ -370,6 +375,9 @@ export default function POSPage() {
   // Keyboard-first navigation
   const [highlightIndex, setHighlightIndex] = useState(-1) // active search result (-1 = none; never auto-pick)
   const [selectedCartIndex, setSelectedCartIndex] = useState(-1) // active cart line for keyboard qty/remove
+  // The line the last scan/add landed on. `n` bumps on every scan so re-scanning the
+  // line that is already selected still re-fires the flash and the scroll.
+  const [lastScan, setLastScan] = useState<{ key: string; index: number; n: number } | null>(null)
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
   const [showShortcutsHint, setShowShortcutsHint] = useState(false)
   const discountInputRef = useRef<HTMLInputElement>(null)
@@ -738,13 +746,13 @@ export default function POSPage() {
     }
 
     // A cart line's identity: same product sold at the same level merges.
-    const keyOf = (item: CartItem) => item.packName ? `lvl:${item.packName}` : item.isCarton ? 'carton' : 'base'
-    const existingItem = cart.find((item) => item.product.id === product.id && keyOf(item) === variantKey)
+    const targetKey = `${product.id}|${variantKey}`
+    const existingIndex = cart.findIndex((item) => cartLineKey(item) === targetKey)
 
-    if (existingItem) {
+    if (existingIndex >= 0) {
       setCart(
-        cart.map((item) =>
-          item.product.id === product.id && keyOf(item) === variantKey
+        cart.map((item, i) =>
+          i === existingIndex
             ? {
                 ...item,
                 quantity: item.quantity + finalQuantity,
@@ -767,6 +775,13 @@ export default function POSPage() {
         },
       ])
     }
+
+    // Mark the line this scan landed on: a merged line keeps its place, a new one is last.
+    setLastScan((prev) => ({
+      key: targetKey,
+      index: existingIndex >= 0 ? existingIndex : cart.length,
+      n: (prev?.n ?? 0) + 1,
+    }))
 
     // Clear input
     setBarcodeInput('')
@@ -1708,8 +1723,41 @@ export default function POSPage() {
     if (highlightIndex >= 0) document.getElementById(`pos-opt-${highlightIndex}`)?.scrollIntoView({ block: 'nearest' })
   }, [highlightIndex])
   useEffect(() => {
-    if (selectedCartIndex >= 0) document.getElementById(`pos-cart-${selectedCartIndex}`)?.scrollIntoView({ block: 'nearest' })
+    if (selectedCartIndex >= 0) revealCartLine(selectedCartIndex)
   }, [selectedCartIndex])
+
+  // Scanning a product already in the cart only bumps its qty, so cart.length never
+  // changes and the effect above never fires for it. Select that line and bring it
+  // into view here, even when it was already the selected one.
+  useEffect(() => {
+    if (!lastScan) return
+    setSelectedCartIndex(lastScan.index)
+    revealCartLine(lastScan.index)
+  }, [lastScan])
+
+  // Bring a cart line into view. `scrollIntoView` is no good here: the cart panel has
+  // a sticky header, and 'nearest' happily parks the line right underneath it, which
+  // looks like nothing happened. Scroll the panel by hand, clearing the header.
+  function revealCartLine(index: number) {
+    const el = document.getElementById(`pos-cart-${index}`)
+    if (!el) return
+    const panel = cartScrollRef.current
+    // Below lg the panel is not the scroller (the page is), so let the browser do it.
+    if (!panel || panel.scrollHeight <= panel.clientHeight) {
+      el.scrollIntoView({ block: 'center' })
+      return
+    }
+    const headerHeight = panel.firstElementChild?.getBoundingClientRect().height ?? 0
+    const panelBox = panel.getBoundingClientRect()
+    const row = el.getBoundingClientRect()
+    const gap = 8
+    const topLimit = panelBox.top + headerHeight + gap
+    if (row.top < topLimit) {
+      panel.scrollTop -= topLimit - row.top
+    } else if (row.bottom > panelBox.bottom - gap) {
+      panel.scrollTop += row.bottom - (panelBox.bottom - gap)
+    }
+  }
 
   function moveCartSelection(delta: number) {
     if (cart.length === 0) return
@@ -2154,12 +2202,17 @@ export default function POSPage() {
             <div className="text-center py-8 text-gray-600">Cart is empty</div>
           ) : (
             <div className="space-y-2">
-              {cart.map((item, idx) => (
+              {cart.map((item, idx) => {
+                // Alternate the two identical flash classes so a repeat scan of the same
+                // line restarts the animation instead of leaving it finished.
+                const isLastScan = lastScan?.key === cartLineKey(item)
+                const flashClass = isLastScan ? (lastScan.n % 2 ? 'pos-scan-flash-a' : 'pos-scan-flash-b') : ''
+                return (
                 <div
-                  key={`${item.product.id}-${item.packName || (item.isCarton ? 'carton' : 'base')}`}
+                  key={cartLineKey(item)}
                   id={`pos-cart-${idx}`}
                   onClick={() => setSelectedCartIndex(idx)}
-                  className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 p-3 border rounded-lg ${idx === selectedCartIndex ? 'border-blue-400 ring-1 ring-blue-300' : 'border-[hsl(var(--border))]'}`}
+                  className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 p-3 border rounded-lg ${flashClass} ${idx === selectedCartIndex ? 'border-blue-400 ring-1 ring-blue-300' : 'border-[hsl(var(--border))]'}`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="w-6 shrink-0 text-center text-sm font-semibold text-[hsl(var(--muted-foreground))] tabular-nums">
@@ -2209,7 +2262,8 @@ export default function POSPage() {
                     </Button>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

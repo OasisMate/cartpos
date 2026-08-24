@@ -109,3 +109,39 @@
     display: none;  /* Chrome, Safari and Opera */
   }
 }
+
+/* POS cart: flash the line a scan just landed on. Two identical animations under
+   different names, alternated per scan, so re-scanning the same line restarts it
+   (swapping between classes that share an animation-name would not). */
+@keyframes pos-scan-flash-a {
+  from {
+    background-color: rgba(34, 197, 94, 0.35);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes pos-scan-flash-b {
+  from {
+    background-color: rgba(34, 197, 94, 0.35);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.pos-scan-flash-a {
+  animation: pos-scan-flash-a 700ms ease-out;
+}
+
+.pos-scan-flash-b {
+  animation: pos-scan-flash-b 700ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pos-scan-flash-a,
+  .pos-scan-flash-b {
+    animation: none;
+  }
+}
