@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { PurchaseListStatus } from '@prisma/client'
-import { checkPurchasePermission } from '@/lib/domain/purchases'
+import { checkPurchasePermission, getProductStockBatch } from '@/lib/domain/purchases'
+import { rankSuggestions } from '@/lib/purchaseLists/suggestions'
 
 /**
  * Purchase lists: the reorder chit. Rules live here, routes stay thin.
@@ -201,4 +202,81 @@ export async function deletePurchaseList(id: string, userId: string) {
   const list = await requireList(id, userId)
   if (list.status === 'RECEIVED') throw new Error('A received list is history and cannot be deleted')
   await prisma.purchaseList.delete({ where: { id } })
+}
+
+export interface SuggestionRow {
+  productId: string
+  name: string
+  unit: string
+  barcode: string | null
+  reason: 'LOW_STOCK' | 'SOLD_RECENTLY'
+  shortfall?: number
+  baseUnitsSold?: number
+}
+
+/**
+ * What the shop probably needs to buy. Two signals, because most shops here run
+ * with stock tracking off: products under their reorder level (only meaningful
+ * when trackStock is on), then whatever actually sold in the window.
+ */
+export async function suggestReorderItems(
+  shopId: string,
+  options: { days?: number; limit?: number; excludeListId?: string } = {}
+): Promise<SuggestionRow[]> {
+  const days = Math.min(365, Math.max(1, options.days ?? 30))
+  const limit = Math.min(100, Math.max(1, options.limit ?? 50))
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+  const tracked = await prisma.product.findMany({
+    where: { shopId, trackStock: true, reorderLevel: { gt: 0 } },
+    select: { id: true, reorderLevel: true },
+  })
+  const trackedIds = tracked.map((p) => p.id)
+
+  const [stockByProduct, soldRows, onList] = await Promise.all([
+    getProductStockBatch(shopId, trackedIds),
+    prisma.$queryRaw<{ productId: string; sold: number }[]>`
+      SELECT il."productId" AS "productId",
+             SUM(il."quantity" * il."unitsPerItem")::float AS "sold"
+      FROM "InvoiceLine" il
+      JOIN "Invoice" i ON i."id" = il."invoiceId"
+      WHERE i."shopId" = ${shopId}
+        AND i."status" = 'COMPLETED'
+        AND i."createdAt" >= ${since}
+      GROUP BY il."productId"
+      ORDER BY "sold" DESC
+      LIMIT 200
+    `,
+    options.excludeListId
+      ? prisma.purchaseListLine.findMany({
+          where: { purchaseListId: options.excludeListId },
+          select: { productId: true },
+        })
+      : Promise.resolve([]),
+  ])
+
+  const ranked = rankSuggestions({
+    lowStock: tracked.map((p) => ({
+      productId: p.id,
+      onHand: stockByProduct.get(p.id) ?? 0,
+      reorderLevel: Number(p.reorderLevel ?? 0),
+    })),
+    sold: soldRows.map((r) => ({ productId: r.productId, baseUnitsSold: Number(r.sold) })),
+    excludeProductIds: onList.map((l) => l.productId),
+    limit,
+  })
+
+  const products = await prisma.product.findMany({
+    where: { id: { in: ranked.map((r) => r.productId) }, shopId },
+    select: { id: true, name: true, unit: true, barcode: true },
+  })
+  const byId = new Map(products.map((p) => [p.id, p]))
+
+  return ranked
+    .map((r) => {
+      const product = byId.get(r.productId)
+      if (!product) return null
+      return { ...r, name: product.name, unit: product.unit, barcode: product.barcode }
+    })
+    .filter((row): row is SuggestionRow => row !== null)
 }
