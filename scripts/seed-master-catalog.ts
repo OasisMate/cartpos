@@ -114,12 +114,15 @@ async function main() {
         data: {
           name: data.name,
           unit: data.unit,
-          category: data.category,
           verticals: data.verticals,
           status: 'APPROVED',
           source: data.source,
           // Never overwrite a price the live shops have already taught us.
           ...(existing.suggestedPrice === null ? { suggestedPrice: data.suggestedPrice } : {}),
+          // Nor a category someone has already sorted out by hand. A rebuilt CSV
+          // arrives blank wherever the rules could not guess, and letting that
+          // blank win would silently undo the manual pass every single time.
+          ...(data.category ? { category: data.category } : {}),
         },
       })
       updated++

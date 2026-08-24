@@ -15,12 +15,24 @@ ignore rule in `.gitignore` and commit them deliberately.
 # 1. Read a curated real shop, clean + auto-categorize, write a CSV. Read-only.
 npx tsx scripts/build-master-catalog.ts <shopId> data/master-catalog/retail-pk.csv
 
-# 2. Review it. Fill in blank categories, fix wrong ones, delete junk rows.
+# 2. Rows the rules could not categorize are split into a second file:
+#      retail-pk-uncategorized.csv
+#    Fill its `category` column, then SAVE IT AS retail-pk-reviewed.csv.
 
-# 3. Load it. Idempotent; re-running updates in place.
-npx tsx scripts/seed-master-catalog.ts data/master-catalog/retail-pk.csv --source "Rose Mart" --dry-run
-npx tsx scripts/seed-master-catalog.ts data/master-catalog/retail-pk.csv --source "Rose Mart"
+# 3. Load. Later files win per barcode, so corrections layer over the generated file.
+npx tsx scripts/seed-master-catalog.ts data/master-catalog/retail-pk.csv   data/master-catalog/retail-pk-reviewed.csv --source "Rose Mart" --dry-run
+npx tsx scripts/seed-master-catalog.ts data/master-catalog/retail-pk.csv   data/master-catalog/retail-pk-reviewed.csv --source "Rose Mart"
 ```
+
+## Why `-reviewed`, not `-uncategorized`
+
+`build-master-catalog.ts` **overwrites `-uncategorized.csv` on every run**. Save
+your corrections under `-reviewed.csv`, which nothing generates, or the next
+rebuild throws the manual pass away.
+
+Belt and braces: the seed never overwrites a category or price already in the
+database with a blank one, so a rebuilt CSV cannot silently undo manual work
+that has already been loaded.
 
 ## What never travels
 
