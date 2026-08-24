@@ -54,7 +54,7 @@ async function main() {
   let valid = 0
   let skipped = 0
   const seen = new Set<string>()
-  const prepared: Prisma.CatalogProductCreateInput[] = []
+  const prepared: Prisma.CatalogProductCreateManyInput[] = []
 
   for (const r of rows) {
     const barcode = normalizeCatalogBarcode(r.barcode)
@@ -100,37 +100,70 @@ async function main() {
     return
   }
 
-  let created = 0
-  let updated = 0
-  for (const data of prepared) {
-    const existing = await prisma.catalogProduct.findUnique({
-      where: { barcode: data.barcode },
-      select: { id: true, suggestedPrice: true },
-    })
+  // One lookup for the whole file, then bulk-insert what is new. Row-at-a-time
+  // was ~3 round trips per row to Mumbai: over ten minutes for 2,000 products.
+  const existingRows = await prisma.catalogProduct.findMany({
+    where: { barcode: { in: prepared.map((p) => p.barcode) } },
+    select: {
+      id: true, barcode: true, name: true, unit: true,
+      category: true, verticals: true, suggestedPrice: true,
+    },
+  })
+  const byBarcode = new Map(existingRows.map((e) => [e.barcode, e]))
 
-    if (existing) {
-      await prisma.catalogProduct.update({
-        where: { id: existing.id },
-        data: {
-          name: data.name,
-          unit: data.unit,
-          verticals: data.verticals,
-          status: 'APPROVED',
-          source: data.source,
-          // Never overwrite a price the live shops have already taught us.
-          ...(existing.suggestedPrice === null ? { suggestedPrice: data.suggestedPrice } : {}),
-          // Nor a category someone has already sorted out by hand. A rebuilt CSV
-          // arrives blank wherever the rules could not guess, and letting that
-          // blank win would silently undo the manual pass every single time.
-          ...(data.category ? { category: data.category } : {}),
-        },
-      })
-      updated++
-    } else {
-      await prisma.catalogProduct.create({ data })
-      created++
-    }
+  const toCreate = prepared.filter((p) => !byBarcode.has(p.barcode))
+  let created = 0
+  const CHUNK = 500
+  for (let i = 0; i < toCreate.length; i += CHUNK) {
+    const res = await prisma.catalogProduct.createMany({
+      data: toCreate.slice(i, i + CHUNK),
+      skipDuplicates: true,
+    })
+    created += res.count
   }
+
+  // Only touch rows that actually differ, so re-seeding an unchanged file costs
+  // one query instead of two thousand writes.
+  let updated = 0
+  let unchanged = 0
+  for (const data of prepared) {
+    const existing = byBarcode.get(data.barcode)
+    if (!existing) continue
+
+    const fillPrice = existing.suggestedPrice === null && data.suggestedPrice !== null
+    const fillCategory = !!data.category && data.category !== existing.category
+    const differs =
+      existing.name !== data.name ||
+      existing.unit !== data.unit ||
+      existing.verticals.join('|') !== (data.verticals as string[]).join('|') ||
+      fillPrice ||
+      fillCategory
+
+    if (!differs) {
+      unchanged++
+      continue
+    }
+
+    await prisma.catalogProduct.update({
+      where: { id: existing.id },
+      data: {
+        name: data.name,
+        unit: data.unit,
+        verticals: data.verticals as string[],
+        status: 'APPROVED',
+        source: data.source,
+        // Never overwrite a price the live shops have already taught us.
+        ...(fillPrice ? { suggestedPrice: data.suggestedPrice } : {}),
+        // Nor a category someone has already sorted out by hand. A rebuilt CSV
+        // arrives blank wherever the rules could not guess, and letting that
+        // blank win would silently undo the manual pass every single time.
+        ...(fillCategory ? { category: data.category } : {}),
+      },
+    })
+    updated++
+  }
+
+  if (unchanged > 0) console.log(`Unchanged: ${unchanged}`)
 
   const total = await prisma.catalogProduct.count({ where: { status: 'APPROVED' } })
   console.log(`\nCreated ${created}, updated ${updated}. Catalog now holds ${total} approved items.`)

@@ -49,17 +49,17 @@ const RULES: Array<[CatalogCategory, RegExp]> = [
   ['Dairy', /(\bmilk\b|olper|milkpak|\bnido\b|everyday|tarang|yogurt|yoghurt|dahi|\bcream\b|butter|cheese|condensed|milk\s?pak|\bdairy\b|lassi|\bkhoya\b|margarine|blue\s?band|whit[en]er|single\s?slices|bunyad)/i],
   ['Biscuits', /(biscuit|\bgluco\b|sooper|\bprince\b|\btuc\b|\bcandi\b|\bmarie\b|zeera\s?plus|oreo|\brio\b|bisconni|peek\s?freans|\bl\.?u\.?\b|\bep\b|\bgala\b|wafer|waffle|\bpie\b|chocolato|novita|sandwich\s|khatai|cookie|cracker|\btiger\b|digestive|wheatable|\bparty\b|bisca\b|biskela|bisko|milano|little\s?hearts|mini\s?fingers|\brite\b|bona\s?papa|cake\s?bar|swiss\s?roll|chip\s?roll|chum\s?roll|cupbite|sweet\s?bites|teatime)/i],
   ['Bakery', /(bread|\brusk\b|\bcake\b|\bbun\b|pizza|pastry|muffin|donut|doughnut|crust|bakeri|bakery|dabal\s?roti|double\s?roti|\bnaan\b|sheermal|cup\s?kake|cupcake|ocake|brownie)/i],
-  ['Snacks', /(chips|\blays\b|kurkure|slanty|slany|nimko|nimco|super\s?crisp|cheetos|wavy|pop\s?corn|nachos|\btito\b|\bfryo\b|peanut|badam|almond|\bkaju\b|cashew|pista|chilgoza|makhan|dry\s?fruit|dates\b|corn\s?flakes|corne?\s?pops|cereal|\boats\b|snack|\bchip\b|fauji|popsi|potato\s?stick|potato\s?master|\bcrave\b|puffs?\b|crispoo|bistiks|krisko|chunkin|hazmazza|\btokry\b|sopper)/i],
+  ['Snacks', /(chips|\blays\b|kurkure|slanty|slany|nimko|nimco|super\s?crisp|cheetos|wavy|pop\s?corn|nachos|\btito\b|\bfryo\b|peanut|badam|almond|\bkaju\b|cashew|pista|chilgoza|makhan|dry\s?fruit|dates\b|corn\s?flakes|corne?\s?pops|cereal|\boats\b|snack|\bchip\b|fauji|popsi|potato\s?stick|potato\s?master|\bcrave\b|puffs?\b|crispoo|\bringo\b|bistiks|krisko|chunkin|hazmazza|\btokry\b|sopper)/i],
   ['Cooking Oil & Ghee', /(cooking\s?oil|banaspat[ti]i?|\bghee\b|dalda|\bsufi\b|\bkisan\b|habib|canola|sunflower\s?oil|olive\s?oil|\beva\b|manpasand|soya\s?oil|tullo|kashmir\s?oil|mezan|khopra)/i],
   ['Atta, Rice & Pulses', /(\batta\b|flour|maida|\bsuji\b|besan|\brice\b|chawal|basmati|sella|\bdaal\b|\bdal\b|lentil|chana|masoor|moong|\bmash\b|lobia|\bbeans\b|sabudana|vermicelli|\bsewian\b|macaroni|pasta|spaghetti|noodle|maggi|knorr\s?noodle|knoor|porridge)/i],
   ['Spices & Masala', /(\bshan\b|nat[ti]?ional\s|mehran|\bmasala\b|\bsalt\b|namak|haldi|turmeric|\bmirch\b|chilli|chili|\bzeera\b|cumin|garam|dhania|coriander|elaichi|cardamom|paprika|acha+ri?|pickle|\bspice\b|kalonji|methi|\bajwain\b|imli|tamarind|black\s?pepper|kali\s?mirch|seasoning|glinger|nihari|biryani|korma|tikka|oregano|kofta|choran|chatni)/i],
   ['Sauces & Condiments', /(ketchup|\bsauce\b|mayo|mayonnaise|vinegar|\bjam\b|honey|shehad|chutney|\bpaste\b|\bdip\b|mustard|soya\s?sauce|chilli\s?garlic|shangril+a|\bknorr\b|sprea[dst]|coctail|cocktail)/i],
   ['Laundry & Cleaning', /(\bsurf\b|\bariel\b|\bbonus\b|express\s?power|\bcomfort\b|softener|detergent|washing\s?powder|dish\s?wash|dishwash|\bvim\b|harpic|bleach|lemon\s?max|\bfinis\b|\brobin\b|\bneel\b|toilet\s?clean|glass\s?clean|floor\s?clean|phenyl|stain|\bbrite\b|sunlight|lemon\s?fesh|blue\s?liquid|liquid\s?refill|origi?n?al\s?lemon|oll\s?clean|big\s?cleaning)/i],
-  ['Personal Care', /(shampoo|conditioner|vatika|sunsilk|pantene|pentene|head\s?&?\s?sh[ou]{2}lder|\bclear\b|\bdove\b|life\s?buoy|\blux\b|safeguard|dettol|dettpl|\bcapri\b|palmolive|palimolive|palimolve|polimolive|loreal|elvive|garnier|\bnivea\b|\bponds\b|\bolay\b|fair\s?&?\s?lovely|glow\s?&?\s?lovely|glow\s?and\s?lovely|radiant\s?glow|\bgoree\b|golden\s?pearl|kessar|belini|enchanteur|\bjosh\b|\baxe\b|deodorant|body\s?spray|bodyspray|perfume|\bdeo\b|\btreet\b|gillet+e|gellette|\brazor\b|shaving|shave|trim\s?ii|olivia|hair\s?colo|\bhenna\b|mehndi|hair\s?oil|brylcreem|jasmine|vaseline|petroleum\s?jelly|lotion|face\s?wash|facewash|\bscrub\b|sunblock|sunscreen|toothpaste|colgate|cogate|colseup|sensodyne|close\s?up|closeup|fluoride|medicam|miswak|toothbrush|oral\s?b|listerine|mouthwash|max\s?fresh|sanitary\s?(pad|napkin)|\balways\b|\bsofy\b|\bbutterfly\b|carefree|mother\s?comf|\bveet\b|set\s?&?\s?wet|se?t\s?wet|nail\s?saver|\bsensa\b|freshrite|miss\s?world|lotus\s?creme|creme\s?lotus|\bsoap\b|talcum|shower\s?gel|hand\s?wash|handwash|cotton\s?bud|ezigrip|sunslik|\bpiano\b|dentist|\btibet\b)/i],
-  ['Household', /(kingtox|mortein|mortine|\braid\b|mosquito|mosqik|\bcoil\b|insect|\bspray\b|air\s?freshener|freshner|room\s?spray|tissue|tiisue|rose\s?petal|\bfoil\b|cling|garbage|shopping\s?bag|\bmatch(es)?\b|candle|scrubber|scouring|scotch\s?brite|\bbroom\b|sweepy|naphthalene|\bbattery\b|batteries|power\s?plus|\bbulb\b|lighter|agarbatti|\bmop\b|duster|gloves|sponge|dustbin|\bwiper\b|shoe\s?shine|shiner|cherry\s?blossom|\bpolish\b|\bkiwi\b|bin\s?bag|paper\s?cup|disposable|straw|toshiba|hanger|toothpick|mouse\s?&?\s?rat|depoxi)/i],
+  ['Personal Care', /(shampoo|conditioner|vatika|sunsilk|pantene|pentene|head\s?&?\s?sh[ou]{2}lder|\bclear\b|\bdove\b|life\s?buoy|\blux\b|safeguard|dettol|dettpl|\bcapri\b|palmolive|palimolive|palimolve|polimolive|loreal|elvive|garnier|\bnivea\b|\bponds\b|\bolay\b|fair\s?&?\s?lovely|glow\s?&?\s?lovely|glow\s?and\s?lovely|radiant\s?glow|\bgoree\b|golden\s?pearl|kessar|belini|enchanteur|\bjosh\b|\baxe\b|deodorant|body\s?spray|bodyspray|perfume|\bdeo\b|\btreet\b|gillet+e|gellette|\brazor\b|shaving|shave|trim\s?ii|olivia|hair\s?colo|\bhenna\b|mehndi|hair\s?oil|brylcreem|jasmine|vaseline|petroleum\s?jelly|glycerin|lotion|face\s?wash|facewash|\bscrub\b|sunblock|sunscreen|toothpaste|colgate|cogate|colseup|sensodyne|close\s?up|closeup|fluoride|medicam|miswak|toothbrush|oral\s?b|listerine|mouthwash|max\s?fresh|sanitary\s?(pad|napkin)|\balways\b|\bsofy\b|\bbutterfly\b|carefree|mother\s?comf|\bveet\b|set\s?&?\s?wet|se?t\s?wet|nail\s?saver|\bsensa\b|freshrite|miss\s?world|lotus\s?creme|creme\s?lotus|\bsoap\b|talcum|shower\s?gel|hand\s?wash|handwash|cotton\s?bud|ezigrip|sunslik|\bpiano\b|dentist|\btibet\b)/i],
+  ['Household', /(kingtox|mortein|mortine|\braid\b|mosquito|mosqik|\bcoil\b|insect|\bspray\b|air\s?freshener|freshner|room\s?spray|tissue|tiisue|rose\s?petal|\bfoil\b|cling|garbage|shopping\s?bag|\bmatch(es)?\b|candle|scrubber|scouring|scotch\s?brite|\bbroom\b|\bsweep\b|sweepy|naphthalene|\bbattery\b|batteries|power\s?plus|\bbulb\b|lighter|agarbatti|\bmop\b|duster|gloves|sponge|dustbin|\bwiper\b|shoe\s?shine|shiner|cherry\s?blossom|\bpolish\b|\bkiwi\b|bin\s?bag|paper\s?cup|disposable|straw|toshiba|hanger|toothpick|mouse\s?&?\s?rat|depoxi)/i],
   ['Stationery', /(\bpen\b|pencil|notebook|\bcopy\b|\bregister\b|eraser|sharpener|\bglue\b|samad\s?bond|marker|stapler|\bscale\b|\bruler\b|geometry|envelope|\btape\b|file\s?cover|sketch|colou?r\s?box|\bdollar\b|\bdux\b|\bopus\b|clip+er|high\s?liner|jetflow|dry\s?erase|pointer)/i],
   // Generic drink words last: "juice"/"water" appear inside many names above.
-  ['Beverages', /(\bcola\b|pepsi|coca|\bcoke\b|\b7\s?up\b|sprite|fanta|mirinda|\bdew\b|\bsting\b|red\s?bull|\btang\b|gourmet|lemon\s?up|lemon\s?malt|next\s?cola|pakola|\bjuice\b|nectar|fruita|\bslice\b|\bmaza\b|frooto|shezan|\brani\b|\bdrink\b|\bwater\b|aquafina|kinley|dasani|nestle\s?pure|gatorade|sharbat|rooh\s?afza|squash|\bmalta\b|\bsoda\b|energy\s?drink|\bsyrup\b|fruitien|fizup|chaunsa|big\s?apple|ever\s?flow|quice|mango\s?tango|frisk[ey]+y?|aamrus|ting\s?zing|twister)/i],
+  ['Beverages', /(\bcola\b|pepsi|coca|\bcoke\b|\b7\s?up\b|sprite|fanta|mirinda|\bdew\b|\bsting\b|red\s?bull|\btang\b|gourmet|lemon\s?up|lemon\s?malt|next\s?cola|pakola|\bjui+ce\b|nectar|fruita|\bslice\b|\bmaza\b|frooto|shezan|\brani\b|\bdrink\b|\bwater\b|aquafina|kinley|dasani|nestle\s?pure|gatorade|sharbat|rooh\s?afza|squash|\bmalta\b|\bsoda\b|energy\s?drink|\bsyrup\b|fruitien|fizup|chaunsa|big\s?apple|ever\s?flow|quice|mango\s?tango|frisk[ey]+y?|aamrus|ting\s?zing|twister)/i],
 ]
 
 /**
@@ -74,18 +74,46 @@ export function categorize(name: string): CatalogCategory | null {
   return null
 }
 
-/** Normalise a name for the shared catalog: collapse whitespace, force UPPERCASE. */
+/**
+ * Normalise a name for the shared catalog: strip stray brackets, collapse
+ * whitespace, force UPPERCASE.
+ *
+ * Deliberately minimal. Misspellings stay ("DETTPL", "SUNSLIK", "SCRUBER") -
+ * they are what shopkeepers type and will type again, and the rules above match
+ * them on purpose. Only square brackets and braces go, because those are
+ * scanner and keyboard slips ("LYCHEE]"), never part of a product name.
+ * Parentheses stay: they carry real information, as in "NESTLE BUNYAD (260G)".
+ */
 export function normalizeCatalogName(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim().toUpperCase()
+  return raw
+    .replace(/[[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
 }
 
 /**
- * A barcode is only usable in a shared catalog if it is a real GTIN. Rose Mart
- * has a QR payload ("http://myproduct.info/...") and shop-local codes
- * ("ALFB525267979") sitting in barcode fields. 8-14 digits keeps EAN-8, UPC-A,
- * EAN-13 and GTIN-14 while dropping both.
+ * Normalise a scannable code for the shared catalog.
+ *
+ * A real GTIN (8-14 digits: EAN-8, UPC-A, EAN-13, GTIN-14) is the ideal, but it
+ * is not the only thing a scanner returns. Local Pakistani products carry QR
+ * payloads ("http://myproduct.info/ckxS") and vendor codes ("ALFB525267979"),
+ * and a scanner reads those back exactly as stored - so they identify the
+ * product perfectly well and belong in the catalog.
+ *
+ * Accepting them cannot pollute the shared catalog, because promotion needs two
+ * independent shops (see catalog.ts). A code only one shop ever uses stays
+ * PENDING and invisible forever; one that several shops scan is, by definition,
+ * a shared identifier.
+ *
+ * What is still rejected: anything with whitespace, or longer than 64 chars.
+ * That is not a code someone scanned, it is a field someone typed into by
+ * mistake - Rose Mart has a whole marketing paragraph sitting in one.
  */
 export function normalizeCatalogBarcode(raw?: string | null): string | null {
   const s = String(raw ?? '').trim()
-  return /^[0-9]{8,14}$/.test(s) ? s : null
+  if (!s) return null
+  if (/^[0-9]{8,14}$/.test(s)) return s
+  if (/\s/.test(s) || s.length < 8 || s.length > 64) return null
+  return s
 }
