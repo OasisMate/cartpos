@@ -52,6 +52,14 @@ describe('rankSuggestions', () => {
     expect(out).toEqual([])
   })
 
+  it('treats onHand equal to reorderLevel as low stock, with zero shortfall', () => {
+    const out = rankSuggestions({
+      lowStock: [{ productId: 'a', onHand: 10, reorderLevel: 10 }],
+      sold: [],
+    })
+    expect(out).toEqual([{ productId: 'a', reason: 'LOW_STOCK', shortfall: 0 }])
+  })
+
   it('caps the result at the limit', () => {
     const out = rankSuggestions({
       lowStock: [],
@@ -65,6 +73,22 @@ describe('rankSuggestions', () => {
     expect(out.map((s) => s.productId)).toEqual(['a', 'b'])
   })
 
+  it('caps the combined result at the limit, filling with low stock first', () => {
+    const out = rankSuggestions({
+      lowStock: [
+        { productId: 'a', onHand: 0, reorderLevel: 5 },
+        { productId: 'b', onHand: 0, reorderLevel: 3 },
+      ],
+      sold: [
+        { productId: 'x', baseUnitsSold: 100 },
+        { productId: 'y', baseUnitsSold: 50 },
+      ],
+      limit: 3,
+    })
+    expect(out.map((s) => s.productId)).toEqual(['a', 'b', 'x'])
+    expect(out[2]).toEqual({ productId: 'x', reason: 'SOLD_RECENTLY', baseUnitsSold: 100 })
+  })
+
   it('breaks ties by product id so the order is stable', () => {
     const out = rankSuggestions({
       lowStock: [],
@@ -72,6 +96,17 @@ describe('rankSuggestions', () => {
         { productId: 'z', baseUnitsSold: 5 },
         { productId: 'a', baseUnitsSold: 5 },
       ],
+    })
+    expect(out.map((s) => s.productId)).toEqual(['a', 'z'])
+  })
+
+  it('breaks low stock ties by product id too', () => {
+    const out = rankSuggestions({
+      lowStock: [
+        { productId: 'z', onHand: 0, reorderLevel: 5 },
+        { productId: 'a', onHand: 0, reorderLevel: 5 },
+      ],
+      sold: [],
     })
     expect(out.map((s) => s.productId)).toEqual(['a', 'z'])
   })
