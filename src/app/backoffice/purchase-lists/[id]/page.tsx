@@ -266,6 +266,16 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   // later scan's Enter get lost or double up with an earlier one.
   const pendingLookupsRef = useRef<PendingLookup[]>([])
   const draining = useRef(false)
+  // Mirrors `query` synchronously (a plain useEffect sync would lag a render
+  // behind). A queued lookup that resolves long after being fired needs to know
+  // the box's CURRENT contents, not whatever `query` was closed over back when
+  // the lookup started, to decide whether it still owns the box.
+  const queryRef = useRef('')
+
+  function updateQuery(value: string) {
+    queryRef.current = value
+    setQuery(value)
+  }
 
   const loadList = useCallback(async () => {
     try {
@@ -370,8 +380,10 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     }
   }
 
-  // Resolves a scanned/typed term to a product and adds it. Always ends in one
-  // visible outcome: added, or a toast naming the term that failed - never silent.
+  // Resolves a scanned/typed term to a product. A scan always resolves through
+  // the exact-barcode branch below; a human typing a name can also land on
+  // exactly one match, which is just as unambiguous. Only a genuine multi-match
+  // name search is deferred back to the shopkeeper instead of guessed at or denied.
   async function resolveAndAddTerm(term: string) {
     try {
       const { products } = await searchProducts(term)
@@ -380,10 +392,27 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         await addResolvedProduct(exact)
         return
       }
-      // Zero matches, or several with no exact barcode: a queued scan has no
-      // shopkeeper standing by to arrow-pick from a dropdown, so anything short
-      // of one clean match is reported the same way, naming what was scanned.
-      show({ message: `No product found for "${term}"`, variant: 'destructive' })
+      if (products.length === 1) {
+        // No exact barcode, but exactly one name/SKU match: unambiguous, add it.
+        await addResolvedProduct(products[0])
+        return
+      }
+      if (products.length === 0) {
+        show({ message: `No product found for "${term}"`, variant: 'destructive' })
+        return
+      }
+      // Several matches, no exact barcode: this was a name search, not a scan,
+      // and reporting "not found" would be a lie when results were on screen a
+      // moment ago. Put them back so the shopkeeper can pick, but only if the box
+      // is exactly as this lookup left it (still empty): if they have since typed
+      // or scanned something new, that current work wins and a stale lookup must
+      // never clobber it.
+      if (queryRef.current === '') {
+        updateQuery(term)
+        setResults(products)
+        setHighlightIndex(-1)
+        searchRef.current?.focus()
+      }
     } catch (err: any) {
       show({ message: err.message || `Search failed for "${term}"`, variant: 'destructive' })
     }
@@ -401,7 +430,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   // Same capture-then-clear-then-queue shape as the Enter/highlighted-row path,
   // for a mouse/tap pick from the dropdown.
   function handleResultClick(product: ProductHit) {
-    setQuery('')
+    updateQuery('')
     setResults([])
     setHighlightIndex(-1)
     enqueueLookup({ kind: 'resolved', product })
@@ -413,10 +442,19 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     try {
       while (pendingLookupsRef.current.length > 0) {
         const item = pendingLookupsRef.current.shift()!
-        if (item.kind === 'resolved') {
-          await addResolvedProduct(item.product)
-        } else {
-          await resolveAndAddTerm(item.term)
+        // Both callees already catch their own errors and always end in a toast,
+        // but nothing enforces that going forward. This try/catch is a backstop:
+        // one bad item (a future edit that lets something throw) must never break
+        // out of the loop and strand every scan still queued behind it.
+        try {
+          if (item.kind === 'resolved') {
+            await addResolvedProduct(item.product)
+          } else {
+            await resolveAndAddTerm(item.term)
+          }
+        } catch (err: any) {
+          const label = item.kind === 'resolved' ? item.product.name : item.term
+          show({ message: err?.message || `Failed to process "${label}"`, variant: 'destructive' })
         }
       }
     } finally {
@@ -436,7 +474,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
       return
     }
     if (e.key === 'Escape') {
-      setQuery('')
+      updateQuery('')
       setResults([])
       setHighlightIndex(-1)
       return
@@ -454,7 +492,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     // A row already highlighted by the arrow keys always wins, no network needed.
     if (highlightIndex >= 0 && results[highlightIndex]) {
       const product = results[highlightIndex]
-      setQuery('')
+      updateQuery('')
       setResults([])
       setHighlightIndex(-1)
       searchRef.current?.focus()
@@ -465,7 +503,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     const term = query.trim()
     if (!term) return
 
-    setQuery('')
+    updateQuery('')
     setResults([])
     setHighlightIndex(-1)
     searchRef.current?.focus()
@@ -646,7 +684,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
           <Input
             ref={searchRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => updateQuery(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Scan barcode or search by name"
             className="h-11 w-full text-base"
