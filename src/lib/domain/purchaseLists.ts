@@ -439,6 +439,16 @@ export async function receivePurchaseList(
     list.lines.map((line) => [line.product.id, Number(line.unitsPerItem)])
   )
 
+  // The receive form is prefilled from the list, so a legitimate caller never
+  // sends a product the list doesn't have. Anything extra a supplier delivered
+  // must be added to the list first: reject it here rather than quietly
+  // falling back to a 1:1 factor, or the list stops being a real checklist.
+  for (const line of input.lines) {
+    if (!unitsPerItemByProduct.has(line.productId)) {
+      throw new Error('That item is not on this list')
+    }
+  }
+
   const purchase = await createPurchase(
     list.shopId,
     {
@@ -465,15 +475,25 @@ export async function receivePurchaseList(
     userId
   )
 
-  if (input.images?.length) {
-    await prisma.purchaseAttachment.createMany({
-      data: input.images.slice(0, 3).map((image) => ({ purchaseId: purchase.id, image })),
+  // Attachments and the list -> purchase link happen together, atomically.
+  // The updateMany only flips a row that is still purchaseId: null, so a
+  // retry after a mid-tail crash (purchase committed, list not yet linked)
+  // finds count 0 on the second attempt and skips the attachment insert
+  // instead of duplicating photos. A failure inside this transaction rolls
+  // both writes back, leaving the purchase committed but the list unlinked -
+  // safe and recoverable by a retry - and can never leave duplicate photos
+  // or a RECEIVED list with no purchase.
+  await prisma.$transaction(async (tx) => {
+    const linked = await tx.purchaseList.updateMany({
+      where: { id, purchaseId: null },
+      data: { status: 'RECEIVED', purchaseId: purchase.id },
     })
-  }
 
-  await prisma.purchaseList.update({
-    where: { id },
-    data: { status: 'RECEIVED', purchaseId: purchase.id },
+    if (linked.count > 0 && input.images?.length) {
+      await tx.purchaseAttachment.createMany({
+        data: input.images.slice(0, 3).map((image) => ({ purchaseId: purchase.id, image })),
+      })
+    }
   })
 
   return purchase
