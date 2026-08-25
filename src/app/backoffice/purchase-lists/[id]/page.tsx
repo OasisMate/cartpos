@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft, Minus, Plus, X, MessageCircle, Printer, Pencil, Loader2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -323,6 +324,7 @@ function LineRow({
 
 export default function PurchaseListBuilderPage({ params }: { params: { id: string } }) {
   const listId = params.id
+  const router = useRouter()
   const { show } = useToast()
   const { user } = useAuth()
 
@@ -892,12 +894,13 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         >
           <Printer className="mr-1 h-4 w-4" /> Print
         </Button>
-        <div className="flex flex-col items-center gap-0.5">
-          <Button size="sm" disabled title="Coming soon">
-            Receive
-          </Button>
-          <span className="whitespace-nowrap text-[10px] leading-none text-gray-400">Coming soon</span>
-        </div>
+        <Button
+          size="sm"
+          disabled={list.lines.length === 0}
+          onClick={() => router.push(`/store/purchase-lists/${listId}/receive`)}
+        >
+          Receive
+        </Button>
       </div>
 
       <PurchaseListPrintModal
