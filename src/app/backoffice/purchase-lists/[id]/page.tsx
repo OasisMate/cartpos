@@ -251,6 +251,12 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
 
   const searchRef = useRef<HTMLInputElement>(null)
   const searchReqIdRef = useRef(0)
+  // The pending 200ms debounce timer, reachable from the Enter handler so a scan
+  // can cancel it outright instead of racing it (see handleSearchKeyDown).
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A scanner can fire Enter again before the first lookup resolves; this blocks
+  // a second lookup from starting while one is already in flight.
+  const lookupInFlightRef = useRef(false)
 
   const loadList = useCallback(async () => {
     try {
@@ -273,10 +279,15 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
 
   useEffect(() => {
     fetch('/api/suppliers?limit=200')
-      .then((r) => r.json())
-      .then((d) => setSuppliers(d.suppliers || []))
-      .catch(() => {})
-  }, [])
+      .then(async (res) => {
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to load suppliers')
+        setSuppliers(data.suppliers || [])
+      })
+      .catch((err: any) => {
+        show({ message: err.message || 'Failed to load suppliers', variant: 'destructive' })
+      })
+  }, [show])
 
   // The scan box stays reachable: focus it once the list has loaded. Deliberately
   // keyed on the id only, not the whole list object, so a quantity/pack edit
@@ -286,30 +297,38 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list?.id])
 
-  // Debounced product search, 200ms. A monotonic request id means a slow/older
-  // response can never overwrite a newer one.
+  // Shared product lookup. Bumps the one monotonic request id so a slower/older
+  // call (debounced or direct) can never overwrite a newer one's result.
+  async function searchProducts(term: string): Promise<{ reqId: number; products: ProductHit[] }> {
+    const reqId = ++searchReqIdRef.current
+    const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=20`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Search failed')
+    return { reqId, products: data.products || [] }
+  }
+
+  // Debounced product search, 200ms, for the dropdown shown while typing a name.
+  // The highlight resets on every keystroke (a stale arrow-selection must never
+  // survive into a different query), synchronously, not only once the fetch lands.
   useEffect(() => {
     const term = query.trim()
+    setHighlightIndex(-1)
     if (!term) {
       setResults([])
-      setHighlightIndex(-1)
       return
     }
-    const reqId = ++searchReqIdRef.current
-    const t = setTimeout(async () => {
+    searchTimerRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=20`)
-        const data = await res.json()
+        const { reqId, products } = await searchProducts(term)
         if (reqId !== searchReqIdRef.current) return
-        if (res.ok) {
-          setResults(data.products || [])
-          setHighlightIndex(-1)
-        }
+        setResults(products)
       } catch {
-        // Transient search failure: leave the previous results showing.
+        // Transient search failure while typing: leave the previous results showing.
       }
     }, 200)
-    return () => clearTimeout(t)
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
   }, [query])
 
   function mergeLine(line: PurchaseListLine) {
@@ -323,6 +342,8 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     })
   }
 
+  // Terminal in every case, success or failure: the search box always clears and
+  // refocuses so a failed scan can never leave text behind to poison the next one.
   async function addProduct(product: ProductHit) {
     try {
       const res = await fetch(`/api/purchase-lists/${listId}/lines`, {
@@ -333,16 +354,17 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to add item')
       mergeLine(data)
+    } catch (err: any) {
+      show({ message: err.message || 'Failed to add item', variant: 'destructive' })
+    } finally {
       setQuery('')
       setResults([])
       setHighlightIndex(-1)
       searchRef.current?.focus()
-    } catch (err: any) {
-      show({ message: err.message || 'Failed to add item', variant: 'destructive' })
     }
   }
 
-  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  async function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setHighlightIndex((i) => Math.min(i + 1, results.length - 1))
@@ -361,27 +383,54 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     }
     if (e.key !== 'Enter') return
     e.preventDefault()
+    if (lookupInFlightRef.current) return
+
+    // A row already highlighted by the arrow keys always wins, no network needed.
+    if (highlightIndex >= 0 && results[highlightIndex]) {
+      lookupInFlightRef.current = true
+      await addProduct(results[highlightIndex])
+      lookupInFlightRef.current = false
+      return
+    }
+
     const term = query.trim()
     if (!term) return
 
-    // A highlighted row (arrow keys) always wins.
-    if (highlightIndex >= 0 && results[highlightIndex]) {
-      addProduct(results[highlightIndex])
-      return
-    }
-    // Otherwise Enter is a scan: an exact barcode match commits immediately so a
-    // scanner (types fast, ends with Enter) can never land on the wrong row.
-    const exact = results.find((r) => r.barcode === term)
-    if (exact) {
-      addProduct(exact)
-      return
-    }
-    if (results.length === 1) {
-      addProduct(results[0])
-      return
-    }
-    if (results.length === 0) {
-      show({ message: 'No product found for that barcode or name', variant: 'destructive' })
+    // Enter must never depend on the 200ms debounce having resolved: a real
+    // scanner types the whole barcode and sends Enter well inside that window,
+    // so `results` here can be stale or still empty. Cancel whatever the debounce
+    // has pending and look this exact term up directly, awaited.
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    lookupInFlightRef.current = true
+    try {
+      const { reqId, products } = await searchProducts(term)
+      if (reqId !== searchReqIdRef.current) return // superseded by a newer lookup
+
+      const exact = products.find((p) => p.barcode === term)
+      if (exact) {
+        await addProduct(exact)
+        return
+      }
+      if (products.length === 0) {
+        show({ message: 'No product found for that barcode or name', variant: 'destructive' })
+        setQuery('')
+        setResults([])
+        setHighlightIndex(-1)
+        searchRef.current?.focus()
+        return
+      }
+      // No exact barcode, but there are name/SKU matches: show them so the
+      // shopkeeper can pick one, same as the debounced dropdown would.
+      setResults(products)
+      setHighlightIndex(-1)
+    } catch (err: any) {
+      show({ message: err.message || 'Search failed', variant: 'destructive' })
+      setQuery('')
+      setResults([])
+      setHighlightIndex(-1)
+      searchRef.current?.focus()
+    } finally {
+      lookupInFlightRef.current = false
     }
   }
 
@@ -631,9 +680,12 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         >
           <Printer className="mr-1 h-4 w-4" /> Print
         </Button>
-        <Button size="sm" disabled title="Coming in the next step">
-          Receive
-        </Button>
+        <div className="flex flex-col items-center gap-0.5">
+          <Button size="sm" disabled title="Coming in the next step">
+            Receive
+          </Button>
+          <span className="text-[10px] leading-none text-gray-400">Coming in the next step</span>
+        </div>
       </div>
 
       <PurchaseListPrintModal
