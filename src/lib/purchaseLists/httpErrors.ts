@@ -15,6 +15,16 @@ const KNOWN_VALIDATION_ERRORS = [
   'A list becomes received by receiving it, not by editing it',
   'Quantity must be greater than 0',
   'A received list is history and cannot be deleted',
+  // Thrown by receivePurchaseList itself.
+  'That item is not on this list',
+  'Add at least one item before receiving',
+  // receivePurchaseList hands off to createPurchase (src/lib/domain/purchases.ts)
+  // to do the actual stock-in, and lets its errors bubble through unchanged.
+  // These two are reachable from a legitimate receive request (no supplier
+  // picked for a credit purchase, a line whose quantity nets to zero), so
+  // they belong here too rather than falling through to a 500.
+  'Select a supplier to record a purchase on credit',
+  'All line items must have a quantity greater than 0',
 ]
 
 export function purchaseListErrorResponse(error: unknown, context: string): NextResponse {
