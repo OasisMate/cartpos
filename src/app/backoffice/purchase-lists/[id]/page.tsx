@@ -139,6 +139,10 @@ function LineRow({
   }, [quantity])
 
   const options = packOptionsForProduct(line.product)
+  // Most products only sell in their base unit. A one-option dropdown is a dead
+  // control that still eats a chunk of the row, so show the unit as plain text.
+  const hasPackChoice = options.length > 1
+  const soleUnitLabel = options[0]?.label ?? line.product.unit
   const baseEquivalent = unitsPerItem > 1 ? quantity * unitsPerItem : null
 
   async function commitQuantity(next: number) {
@@ -191,19 +195,23 @@ function LineRow({
         {/* `sm` and up: pack, stepper, base-unit hint and remove all on this
             same line, there is room to spare. */}
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          <Select
-            className="h-8 w-24 shrink-0 text-sm"
-            value={line.packName ?? BASE_PACK_VALUE}
-            disabled={busy}
-            onChange={(e) => handlePackChange(e.target.value)}
-            aria-label={`Unit for ${line.product.name}`}
-          >
-            {options.map((o) => (
-              <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
+          {hasPackChoice ? (
+            <Select
+              className="h-8 w-24 shrink-0 text-sm"
+              value={line.packName ?? BASE_PACK_VALUE}
+              disabled={busy}
+              onChange={(e) => handlePackChange(e.target.value)}
+              aria-label={`Unit for ${line.product.name}`}
+            >
+              {options.map((o) => (
+                <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <span className="w-24 shrink-0 text-sm text-gray-500">{soleUnitLabel}</span>
+          )}
 
           <div className="flex shrink-0 flex-col items-end">
             <div className="flex items-center gap-1">
@@ -265,19 +273,23 @@ function LineRow({
       {/* Below `sm`: pack and stepper get their own line, indented under the
           name, also at 44px tap targets. */}
       <div className="mt-2 flex items-center justify-between gap-2 pl-8 sm:hidden">
-        <Select
-          className="h-11 w-28 shrink-0 text-sm"
-          value={line.packName ?? BASE_PACK_VALUE}
-          disabled={busy}
-          onChange={(e) => handlePackChange(e.target.value)}
-          aria-label={`Unit for ${line.product.name}`}
-        >
-          {options.map((o) => (
-            <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
+        {hasPackChoice ? (
+          <Select
+            className="h-11 w-28 shrink-0 text-sm"
+            value={line.packName ?? BASE_PACK_VALUE}
+            disabled={busy}
+            onChange={(e) => handlePackChange(e.target.value)}
+            aria-label={`Unit for ${line.product.name}`}
+          >
+            {options.map((o) => (
+              <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        ) : (
+          <span className="shrink-0 text-sm text-gray-500">{soleUnitLabel}</span>
+        )}
 
         <div className="flex shrink-0 items-center gap-1">
           <IconButton
@@ -740,9 +752,12 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
 
   const currentShop = user?.shops?.find((s) => s.shopId === user.currentShopId)?.shop
 
+  // A column that fills the scroll area: the action bar then sits at the bottom
+  // of the content, not pinned over the sidebar the way `fixed` was.
   return (
-    <div className="bg-gray-50 pb-24">
-      <div className="sticky top-0 z-10 space-y-2 border-b border-gray-200 bg-white px-4 py-3">
+    <div className="flex min-h-[calc(100dvh-10rem)] sm:min-h-[calc(100dvh-7rem)] flex-col bg-gray-50">
+      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white">
+        <div className="mx-auto w-full max-w-4xl space-y-2 px-4 py-3">
         <div className="flex items-center gap-2">
           <Link
             href="/store/purchase-lists"
@@ -786,7 +801,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
             )}
           </div>
           <Select
-            className="hidden h-9 w-36 shrink-0 text-sm sm:block"
+            className="hidden h-9 w-44 shrink-0 text-sm sm:block lg:w-60"
             value={list.supplierId || ''}
             onChange={(e) => changeSupplier(e.target.value)}
             aria-label="Supplier"
@@ -854,9 +869,10 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
             </div>
           )}
         </div>
+        </div>
       </div>
 
-      <div className="px-4 py-3">
+      <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-3">
         {list.lines.length === 0 ? (
           <EmptyState title="Nothing on this list yet. Scan an item or search for it." />
         ) : (
@@ -875,12 +891,13 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         )}
       </div>
 
-      <div className="px-4 pb-3">
+      <div className="mx-auto w-full max-w-4xl px-4 pb-3">
         <PurchaseListSuggestions listId={listId} onAdded={mergeLine} refreshSignal={suggestionsRefreshKey} />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 flex items-center gap-2 border-t border-gray-200 bg-white px-4 py-3">
-        <div className="mr-auto text-sm text-gray-500">
+      <div className="sticky bottom-0 border-t border-gray-200 bg-white">
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-2 px-4 py-3">
+        <div className="mr-auto whitespace-nowrap text-sm text-gray-500">
           {list.lines.length} item{list.lines.length === 1 ? '' : 's'}
         </div>
         <Button variant="outline" size="sm" onClick={handleShare} disabled={list.lines.length === 0}>
@@ -901,6 +918,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         >
           Receive
         </Button>
+        </div>
       </div>
 
       <PurchaseListPrintModal

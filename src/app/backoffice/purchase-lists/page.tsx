@@ -104,6 +104,16 @@ export default function PurchaseListsPage() {
         <EmptyState
           title="No purchase lists yet"
           description="Start one when you next walk the shelves."
+          action={
+            <Button onClick={handleCreate} disabled={creating} className="inline-flex items-center gap-2">
+              {creating ? (
+                <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              <span>{creating ? 'Creating...' : 'New list'}</span>
+            </Button>
+          }
         />
       ) : (
         <>
