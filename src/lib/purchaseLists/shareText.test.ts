@@ -48,4 +48,16 @@ describe('buildListShareText', () => {
     })
     expect(text).toContain('1. SUGAR - 2.5 kg')
   })
+
+  it('shows the pack the order is placed in, not the piece count', () => {
+    // Its own date (not the shared `date` fixture, whose 24th-of-the-month would
+    // collide with the assertion below): this is about the pack, not the day.
+    const text = buildListShareText({
+      shopName: 'SHOP',
+      date: new Date('2026-08-20T10:00:00Z'),
+      lines: [{ name: 'PEPSI 500ML', quantity: 4, unit: 'pet' }],
+    })
+    expect(text).toContain('1. PEPSI 500ML - 4 pet')
+    expect(text).not.toContain('24')
+  })
 })

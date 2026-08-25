@@ -31,9 +31,67 @@ export interface UpdatePurchaseListInput {
 const LINE_SELECT = {
   id: true,
   quantity: true,
+  packName: true,
+  unitsPerItem: true,
   note: true,
-  product: { select: { id: true, name: true, unit: true, barcode: true } },
+  product: {
+    select: {
+      id: true,
+      name: true,
+      unit: true,
+      barcode: true,
+      cartonSize: true,
+      packagingLevels: { select: { name: true, factorToBase: true, level: true } },
+    },
+  },
 } as const
+
+export interface PackOption {
+  packName: string | null
+  unitsPerItem: number
+  label: string
+}
+
+/**
+ * The units a product can be ordered in, smallest last. A shop orders in the
+ * biggest pack it stocks, so the first entry is the default.
+ */
+export function packOptionsForProduct(product: {
+  unit: string
+  cartonSize?: number | null
+  packagingLevels?: { name: string; factorToBase: unknown; level: number }[]
+}): PackOption[] {
+  const options: PackOption[] = []
+
+  for (const level of product.packagingLevels ?? []) {
+    const factor = Number(level.factorToBase)
+    if (!Number.isFinite(factor) || factor <= 1) continue
+    options.push({ packName: level.name, unitsPerItem: factor, label: level.name })
+  }
+  options.sort((a, b) => b.unitsPerItem - a.unitsPerItem)
+
+  // Legacy carton, only when no packaging level already covers that size.
+  const cartonSize = product.cartonSize ?? 0
+  if (cartonSize > 1 && !options.some((o) => o.unitsPerItem === cartonSize)) {
+    options.push({ packName: 'Carton', unitsPerItem: cartonSize, label: 'Carton' })
+    options.sort((a, b) => b.unitsPerItem - a.unitsPerItem)
+  }
+
+  options.push({ packName: null, unitsPerItem: 1, label: product.unit })
+  return options
+}
+
+/**
+ * Match a caller-named pack against the product's own options. Never trust a
+ * unitsPerItem from the request: a wrong factor multiplies into the stock
+ * ledger when the list is received, so the factor always comes from here.
+ */
+function matchPackOption(packName: string | null | undefined, options: PackOption[]): PackOption {
+  const wanted = packName ?? null
+  const match = options.find((o) => o.packName === wanted)
+  if (!match) throw new Error('That pack is not available for this product')
+  return match
+}
 
 async function requireList(id: string, userId: string) {
   const list = await prisma.purchaseList.findUnique({
@@ -138,34 +196,64 @@ export async function updatePurchaseList(
 
 export async function addOrBumpLine(
   id: string,
-  input: { productId: string; quantity: number },
+  input: { productId: string; quantity: number; packName?: string | null; unitsPerItem?: number },
   userId: string
 ) {
   const list = await requireList(id, userId)
   if (list.status === 'RECEIVED') throw new Error('This list has already been received')
   if (!input.quantity || input.quantity <= 0) throw new Error('Quantity must be greater than 0')
 
-  const product = await prisma.product.findUnique({ where: { id: input.productId } })
+  const product = await prisma.product.findUnique({
+    where: { id: input.productId },
+    select: {
+      shopId: true,
+      unit: true,
+      cartonSize: true,
+      packagingLevels: { select: { name: true, factorToBase: true, level: true } },
+    },
+  })
   if (!product || product.shopId !== list.shopId) throw new Error('Product not found in this shop')
 
+  // Never trust unitsPerItem from the caller: it multiplies into the stock ledger
+  // when the list is received, so the factor always comes from the product's own
+  // packaging options, not the request body.
+  const options = packOptionsForProduct(product)
+  const pack = input.packName !== undefined ? matchPackOption(input.packName, options) : options[0]
+
   // The unique index does the merging: scanning the same item twice bumps the
-  // quantity instead of leaving two lines for one product.
+  // quantity instead of leaving two lines for one product. Re-scanning bumps the
+  // count in the unit the line already carries, so the pack is set on create only.
   return prisma.purchaseListLine.upsert({
     where: { purchaseListId_productId: { purchaseListId: id, productId: input.productId } },
     update: { quantity: { increment: input.quantity } },
-    create: { purchaseListId: id, productId: input.productId, quantity: input.quantity },
+    create: {
+      purchaseListId: id,
+      productId: input.productId,
+      quantity: input.quantity,
+      packName: pack.packName,
+      unitsPerItem: pack.unitsPerItem,
+    },
     select: LINE_SELECT,
   })
 }
 
 export async function updateLine(
   lineId: string,
-  input: { quantity?: number; note?: string },
+  input: { quantity?: number; note?: string; packName?: string | null; unitsPerItem?: number },
   userId: string
 ) {
   const line = await prisma.purchaseListLine.findUnique({
     where: { id: lineId },
-    include: { purchaseList: { select: { id: true, shopId: true, status: true } } },
+    include: {
+      purchaseList: { select: { id: true, shopId: true, status: true } },
+      product: {
+        select: {
+          unit: true,
+          cartonSize: true,
+          packagingLevels: { select: { name: true, factorToBase: true, level: true } },
+        },
+      },
+    },
   })
   if (!line) throw new Error('Line not found')
   const allowed = await checkPurchasePermission(userId, line.purchaseList.shopId)
@@ -175,11 +263,20 @@ export async function updateLine(
     throw new Error('Quantity must be greater than 0')
   }
 
+  // As with addOrBumpLine, the factor is never taken from the request: it is
+  // looked up fresh from the product's own packaging options.
+  const pack =
+    input.packName !== undefined
+      ? matchPackOption(input.packName, packOptionsForProduct(line.product))
+      : undefined
+
   return prisma.purchaseListLine.update({
     where: { id: lineId },
     data: {
+      // Changing the unit leaves the number alone (4 pcs becomes 4 pet).
       ...(input.quantity !== undefined ? { quantity: input.quantity } : {}),
       ...(input.note !== undefined ? { note: input.note.trim() || null } : {}),
+      ...(pack ? { packName: pack.packName, unitsPerItem: pack.unitsPerItem } : {}),
     },
     select: LINE_SELECT,
   })

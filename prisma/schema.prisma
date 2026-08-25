@@ -576,6 +576,8 @@ model PurchaseListLine {
   purchaseListId String
   productId      String
   quantity       Decimal      @db.Decimal(10, 3)
+  packName       String?
+  unitsPerItem   Decimal      @default(1) @db.Decimal(10, 3)
   note           String?
   createdAt      DateTime     @default(now())
   purchaseList   PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)

@@ -9,6 +9,8 @@ import { formatNumber } from '@/lib/utils/money'
 export interface ShareTextLine {
   name: string
   quantity: number
+  /** Unit label as printed after the quantity: the pack name (e.g. "pet", "carton")
+   * when the line is ordered by the pack, else the product's base unit. */
   unit?: string | null
 }
 
