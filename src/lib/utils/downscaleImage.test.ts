@@ -17,4 +17,8 @@ describe('fitWithin', () => {
   it('rounds to whole pixels', () => {
     expect(fitWithin(1000, 333, 500)).toEqual({ width: 500, height: 167 })
   })
+
+  it('pins a square photo at the max edge unchanged', () => {
+    expect(fitWithin(1000, 1000, 1600)).toEqual({ width: 1000, height: 1000 })
+  })
 })
