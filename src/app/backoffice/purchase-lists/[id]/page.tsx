@@ -255,6 +255,11 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
 
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
+  // Bumped on every line add so the suggestions panel knows to re-fetch. A tap on a
+  // suggestion row already removes it locally, but a product added via the scan box
+  // or search never touches that panel, so it would otherwise keep showing a
+  // suggestion for something already on the list.
+  const [suggestionsRefreshKey, setSuggestionsRefreshKey] = useState(0)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const searchReqIdRef = useRef(0)
@@ -352,6 +357,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   }, [query])
 
   function mergeLine(line: PurchaseListLine) {
+    setSuggestionsRefreshKey((k) => k + 1)
     setList((current) => {
       if (!current) return current
       const exists = current.lines.some((l) => l.id === line.id)
@@ -599,7 +605,26 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     }
   }
 
-  function handleShare() {
+  // Sharing or printing both mean the order has left the shop. The domain only
+  // stamps sentAt on the first DRAFT -> SENT transition, so calling this again
+  // on a resend is safe and never overwrites the original send time.
+  async function markSent() {
+    if (!list || list.status === 'RECEIVED') return
+    try {
+      const res = await fetch(`/api/purchase-lists/${listId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'SENT' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update list status')
+      setList((current) => (current ? { ...current, status: data.status } : current))
+    } catch (err: any) {
+      show({ message: err.message || 'Failed to update list status', variant: 'destructive' })
+    }
+  }
+
+  async function handleShare() {
     if (!list) return
     const shopName = user?.shops?.find((s) => s.shopId === user.currentShopId)?.shop.name
     const text = buildListShareText({
@@ -614,6 +639,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
       })),
     })
     window.open(waUrl(list.supplier?.phone, text), '_blank', 'noopener,noreferrer')
+    await markSent()
   }
 
   if (loading) {
@@ -743,7 +769,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
       </div>
 
       <div className="px-4 pb-3">
-        <PurchaseListSuggestions listId={listId} onAdded={mergeLine} />
+        <PurchaseListSuggestions listId={listId} onAdded={mergeLine} refreshSignal={suggestionsRefreshKey} />
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 flex items-center gap-2 border-t border-gray-200 bg-white px-4 py-3">
@@ -772,6 +798,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
       <PurchaseListPrintModal
         isOpen={showPrint}
         onClose={() => setShowPrint(false)}
+        onPrinted={markSent}
         shop={{
           name: currentShop?.name,
           city: currentShop?.city,

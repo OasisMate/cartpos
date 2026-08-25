@@ -13,11 +13,13 @@ interface PurchaseListPrintModalProps {
   onClose: () => void
   list: PurchaseListDocumentProps['list']
   shop: PurchaseListDocumentProps['shop']
+  /** Called once a print actually goes through, e.g. so the caller can mark the list SENT. */
+  onPrinted?: () => void
 }
 
 const printElementId = 'purchase-list-print-content'
 
-export default function PurchaseListPrintModal({ isOpen, onClose, list, shop }: PurchaseListPrintModalProps) {
+export default function PurchaseListPrintModal({ isOpen, onClose, list, shop, onPrinted }: PurchaseListPrintModalProps) {
   const [paper, setPaper] = useState<PaperSize>('80mm')
   const [isPrinting, setIsPrinting] = useState(false)
 
@@ -25,6 +27,7 @@ export default function PurchaseListPrintModal({ isOpen, onClose, list, shop }: 
     setIsPrinting(true)
     try {
       await printReceipt(printElementId, { silent: true, paper })
+      onPrinted?.()
     } catch (err) {
       console.error('Print failed:', err)
     } finally {

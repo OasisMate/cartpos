@@ -25,11 +25,18 @@ interface Suggestion {
 export default function PurchaseListSuggestions({
   listId,
   onAdded,
+  refreshSignal,
 }: {
   listId: string
   // Whatever shape POST /api/purchase-lists/{listId}/lines returns, passed straight
   // through to the caller (the builder merges it into its own line list).
   onAdded: (line: any) => void
+  // Bumped by the builder whenever a line is added by any means. A tap on a row
+  // here already removes it locally, but a product added via the scan box or
+  // search never touches this panel, so without this it keeps showing a
+  // suggestion for something already on the list. Any change re-fetches, which
+  // naturally drops it since the suggestions query excludes what's on the list.
+  refreshSignal?: number
 }) {
   const { show } = useToast()
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -58,7 +65,7 @@ export default function PurchaseListSuggestions({
     return () => {
       cancelled = true
     }
-  }, [listId, show])
+  }, [listId, show, refreshSignal])
 
   // Adds one of the product's largest pack: quantity 1, no pack specified, the
   // server defaults an unspecified pack to the product's largest. The shop buys

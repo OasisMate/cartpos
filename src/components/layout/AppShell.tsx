@@ -32,6 +32,7 @@ import {
   Wallet,
   TriangleAlert,
   ReceiptText,
+  ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/ui/Logo'
@@ -317,6 +318,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         label: t('purchases'),
         href: '/store/purchases',
         icon: <ShoppingBag className="h-4 w-4 flex-shrink-0 text-gray-700" />,
+      },
+      {
+        label: 'Purchase Lists',
+        href: '/store/purchase-lists',
+        icon: <ClipboardList className="h-4 w-4 flex-shrink-0 text-gray-700" />,
       },
       {
         label: t('suppliers'),
