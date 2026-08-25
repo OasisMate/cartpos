@@ -21,6 +21,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { lineId
       {
         quantity: body.quantity !== undefined ? Number(body.quantity) : undefined,
         note: body.note,
+        packName: body.packName !== undefined ? body.packName : undefined,
       },
       user.id
     )
