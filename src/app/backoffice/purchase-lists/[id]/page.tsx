@@ -14,6 +14,7 @@ import { formatNumber } from '@/lib/utils/money'
 import { waUrl } from '@/lib/utils/whatsapp'
 import { buildListShareText } from '@/lib/purchaseLists/shareText'
 import PurchaseListPrintModal from '@/components/purchases/PurchaseListPrintModal'
+import PurchaseListSuggestions from '@/components/purchases/PurchaseListSuggestions'
 
 /**
  * The purchase list builder: the screen a shopkeeper uses on the shop floor,
@@ -739,6 +740,10 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
             ))}
           </div>
         )}
+      </div>
+
+      <div className="px-4 pb-3">
+        <PurchaseListSuggestions listId={listId} onAdded={mergeLine} />
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 flex items-center gap-2 border-t border-gray-200 bg-white px-4 py-3">
