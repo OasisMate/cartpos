@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { requirePaidWrite } from '@/lib/billing/guards'
+import { isDemoUser, DemoBlockedResponse } from '@/lib/demo'
 import { removeLine, updateLine } from '@/lib/domain/purchaseLists'
 import { purchaseListErrorResponse } from '@/lib/purchaseLists/httpErrors'
 
@@ -37,6 +38,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { lineI
     const blocked = requirePaidWrite(user)
     if (blocked) return blocked
     if (!user.currentShopId) return NextResponse.json({ error: 'No shop selected' }, { status: 400 })
+    if (isDemoUser(user)) return DemoBlockedResponse()
 
     await removeLine(params.lineId, user.id)
     return NextResponse.json({ ok: true })
