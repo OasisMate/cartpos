@@ -1,4 +1,5 @@
 import React from 'react'
+import { cn } from '@/lib/utils'
 
 type Variant = 'neutral' | 'primary' | 'danger' | 'success' | 'warning'
 
@@ -28,7 +29,11 @@ export default function IconButton({
       type="button"
       title={label}
       aria-label={label}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-gray-300 disabled:pointer-events-none disabled:opacity-40 ${variantHover[variant]} ${className}`}
+      className={cn(
+        'inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-gray-300 disabled:pointer-events-none disabled:opacity-40',
+        variantHover[variant],
+        className
+      )}
       {...props}
     >
       {children}
