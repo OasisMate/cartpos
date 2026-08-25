@@ -6,6 +6,13 @@
 export interface PrintOptions {
   silent?: boolean
   debug?: boolean // Show printable area boundaries
+  /**
+   * Paper the print job is formatted for. Defaults to the 80mm thermal roll
+   * the sale receipt has always used; every existing caller omits this and
+   * keeps that exact behaviour. 'a4' is for order documents (e.g. the
+   * purchase list) that a shopkeeper prints on a regular sheet instead.
+   */
+  paper?: '80mm' | 'a4'
 }
 
 // Type declaration for Electron API
@@ -49,7 +56,7 @@ function waitForImages(root: ParentNode, timeoutMs = 5000): Promise<void> {
 }
 
 export async function printReceipt(elementId: string, options: PrintOptions = {}): Promise<void> {
-  const { debug = false, silent = false } = options
+  const { debug = false, silent = false, paper = '80mm' } = options
   const element = document.getElementById(elementId)
   if (!element) {
     window.print()
@@ -58,28 +65,30 @@ export async function printReceipt(elementId: string, options: PrintOptions = {}
 
   if (silent && typeof window !== 'undefined' && window.electronAPI?.isElectron) {
     try {
-      // Send the FULL styled 80mm document (same template the browser path uses),
+      // Send the FULL styled document (same template the browser path uses),
       // not the raw innerHTML - otherwise the silent desktop print comes out unstyled.
-      await window.electronAPI.printReceipt(buildReceiptPrintDocument(element))
+      await window.electronAPI.printReceipt(buildReceiptPrintDocument(element, false, paper))
       return
     } catch (err) {
       console.error('Electron print failed, falling back to browser print:', err)
-      await fallbackBrowserPrint(element, debug)
+      await fallbackBrowserPrint(element, debug, paper)
       return
     }
   }
 
-  await fallbackBrowserPrint(element, debug)
+  await fallbackBrowserPrint(element, debug, paper)
 }
 
 /**
- * Build the full self-contained 80mm print document for a receipt element.
- * Clones the element, strips Next.js asset references that can't resolve outside
- * the app, then wraps the cleaned markup in the canonical thermal stylesheet.
+ * Build the full self-contained print document for an element: 80mm thermal
+ * by default (byte-identical to the original receipt-only template), or A4
+ * when `paper: 'a4'` is passed. Clones the element, strips Next.js asset
+ * references that can't resolve outside the app, then wraps the cleaned
+ * markup in the canonical stylesheet for the requested paper.
  * Shared by the browser iframe path AND the Electron silent-print path so both
  * produce the exact same styled output.
  */
-function buildReceiptPrintDocument(element: HTMLElement, debug = false): string {
+function buildReceiptPrintDocument(element: HTMLElement, debug = false, paper: '80mm' | 'a4' = '80mm'): string {
   const clonedElement = element.cloneNode(true) as HTMLElement
 
   const scripts = clonedElement.querySelectorAll('script')
@@ -148,11 +157,27 @@ function buildReceiptPrintDocument(element: HTMLElement, debug = false): string 
   `
       : ''
 
+  // Paper geometry: 80mm (default) is the untouched thermal-roll layout the
+  // sale receipt has always used - a fixed 60mm body pinned 5.5mm from the
+  // left so it centers on the roll, page margin 0. A4 is the only branch
+  // that may differ from that: a real sheet size/margin, and a body that
+  // follows the printable area of the sheet instead of the roll's width.
+  const pageRule =
+    paper === 'a4' ? '@page { size: A4; margin: 10mm; }' : '@page { size: 80mm auto; margin: 0; }'
+  const bodyWidthCss =
+    paper === 'a4'
+      ? `width: 100%;
+  max-width: 100%;`
+      : `width: 60mm;
+  max-width: 60mm;`
+  const bodyMarginLeftCss = paper === 'a4' ? 'margin-left: 0 !important;' : 'margin-left: 5.5mm !important;'
+  const printMediaPageMargin = paper === 'a4' ? '10mm' : '0'
+
   return `<!DOCTYPE html><html><head>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:,">
 <base href="${window.location.origin}"><style>
-@page { size: 80mm auto; margin: 0; }
+${pageRule}
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
   font-family: Arial, Helvetica, sans-serif;
@@ -160,12 +185,11 @@ body {
   line-height: 1.3;
   padding: 0 1mm;
   padding-top: 0 !important;
-  width: 60mm;
-  max-width: 60mm;
+  ${bodyWidthCss}
   margin-top: 0 !important;
   margin-right: 0 !important;
   margin-bottom: 0 !important;
-  margin-left: 5.5mm !important;
+  ${bodyMarginLeftCss}
   position: relative;
   background: white;
   color: #000000;
@@ -231,12 +255,12 @@ th { font-weight: 700 !important; }
 img { display: block !important; }
 
 @media print { 
-  @page { margin: 0; }
+  @page { margin: ${printMediaPageMargin}; }
 }
 </style></head><body>${debug ? '<div class="debug-text">DEBUG: Red lines show printable area boundaries. Content should stay within.</div>' : ''}${htmlContent}</body></html>`
 }
 
-function fallbackBrowserPrint(element: HTMLElement, debug: boolean): Promise<void> {
+function fallbackBrowserPrint(element: HTMLElement, debug: boolean, paper: '80mm' | 'a4' = '80mm'): Promise<void> {
   return new Promise((resolve) => {
     const iframe = document.createElement('iframe')
     iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
@@ -250,7 +274,7 @@ function fallbackBrowserPrint(element: HTMLElement, debug: boolean): Promise<voi
     }
 
     doc.open()
-    doc.write(buildReceiptPrintDocument(element, debug))
+    doc.write(buildReceiptPrintDocument(element, debug, paper))
     doc.close()
 
     const win = iframe.contentWindow

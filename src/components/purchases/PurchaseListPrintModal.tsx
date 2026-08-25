@@ -24,7 +24,7 @@ export default function PurchaseListPrintModal({ isOpen, onClose, list, shop }: 
   async function handlePrint() {
     setIsPrinting(true)
     try {
-      await printReceipt(printElementId, { silent: true })
+      await printReceipt(printElementId, { silent: true, paper })
     } catch (err) {
       console.error('Print failed:', err)
     } finally {
