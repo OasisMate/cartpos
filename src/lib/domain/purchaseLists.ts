@@ -311,6 +311,14 @@ export interface SuggestionRow {
   baseUnitsSold?: number
 }
 
+export interface SuggestReorderItemsResult {
+  suggestions: SuggestionRow[]
+  // Whether the shop has ever completed a sale, independent of the days window.
+  // A shop with old sales that fall outside the window is not a new shop, and
+  // the empty-suggestions copy needs to tell those two cases apart honestly.
+  hasAnySales: boolean
+}
+
 /**
  * What the shop probably needs to buy. Two signals, because most shops here run
  * with stock tracking off: products under their reorder level (only meaningful
@@ -319,7 +327,7 @@ export interface SuggestionRow {
 export async function suggestReorderItems(
   shopId: string,
   options: { days?: number; limit?: number; excludeListId?: string } = {}
-): Promise<SuggestionRow[]> {
+): Promise<SuggestReorderItemsResult> {
   const days = Math.min(365, Math.max(1, options.days ?? 30))
   const limit = Math.min(100, Math.max(1, options.limit ?? 50))
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -330,7 +338,7 @@ export async function suggestReorderItems(
   })
   const trackedIds = tracked.map((p) => p.id)
 
-  const [stockByProduct, soldRows, onList] = await Promise.all([
+  const [stockByProduct, soldRows, onList, anySale] = await Promise.all([
     getProductStockBatch(shopId, trackedIds),
     prisma.$queryRaw<{ productId: string; sold: number }[]>`
       SELECT il."productId" AS "productId",
@@ -350,6 +358,10 @@ export async function suggestReorderItems(
           select: { productId: true },
         })
       : Promise.resolve([]),
+    prisma.invoice.findFirst({
+      where: { shopId, status: 'COMPLETED' },
+      select: { id: true },
+    }),
   ])
 
   const ranked = rankSuggestions({
@@ -369,11 +381,13 @@ export async function suggestReorderItems(
   })
   const byId = new Map(products.map((p) => [p.id, p]))
 
-  return ranked
+  const suggestions = ranked
     .map((r) => {
       const product = byId.get(r.productId)
       if (!product) return null
       return { ...r, name: product.name, unit: product.unit, barcode: product.barcode }
     })
     .filter((row): row is SuggestionRow => row !== null)
+
+  return { suggestions, hasAnySales: anySale !== null }
 }

@@ -40,6 +40,12 @@ export default function PurchaseListSuggestions({
 }) {
   const { show } = useToast()
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  // Whether the shop has ever completed a sale, regardless of the 30 day
+  // suggestion window. Lets the empty state tell "no sales in the window" (a
+  // shop that just happens to be quiet lately) apart from "no sales yet" (a
+  // genuinely new shop), instead of telling a shop with sales history that it
+  // has none.
+  const [hasAnySales, setHasAnySales] = useState(false)
   const [loading, setLoading] = useState(true)
   // Collapsed by default: this is a phone-first screen and the panel sits below
   // the lines the shopkeeper is actively working on.
@@ -53,7 +59,10 @@ export default function PurchaseListSuggestions({
         const res = await fetch(`/api/purchase-lists/suggestions?listId=${listId}&days=30&limit=50`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Failed to load suggestions')
-        if (!cancelled) setSuggestions(data.suggestions || [])
+        if (!cancelled) {
+          setSuggestions(data.suggestions || [])
+          setHasAnySales(Boolean(data.hasAnySales))
+        }
       } catch (err: any) {
         if (!cancelled) {
           show({ message: err.message || 'Failed to load suggestions', variant: 'destructive' })
@@ -113,8 +122,9 @@ export default function PurchaseListSuggestions({
         <div className="border-t border-gray-100 px-4 py-2">
           {suggestions.length === 0 ? (
             <p className="py-4 text-center text-sm text-gray-500">
-              No suggestions yet. They appear once you have some sales, or once you turn on stock
-              tracking for a product.
+              {hasAnySales
+                ? 'Nothing sold in the last 30 days, so there is nothing to suggest from sales right now. Items also appear here once you turn on stock tracking for a product.'
+                : 'No suggestions yet. They appear once you have some sales, or once you turn on stock tracking for a product.'}
             </p>
           ) : (
             <div className="divide-y divide-gray-100">
