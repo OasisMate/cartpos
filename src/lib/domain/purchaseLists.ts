@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { PurchaseListStatus } from '@prisma/client'
-import { checkPurchasePermission, getProductStockBatch } from '@/lib/domain/purchases'
+import { checkPurchasePermission, createPurchase, getProductStockBatch } from '@/lib/domain/purchases'
 import { rankSuggestions } from '@/lib/purchaseLists/suggestions'
 
 /**
@@ -390,4 +390,91 @@ export async function suggestReorderItems(
     .filter((row): row is SuggestionRow => row !== null)
 
   return { suggestions, hasAnySales: anySale !== null }
+}
+
+export interface ReceivePurchaseListInput {
+  lines: { productId: string; quantity: number; unitCost?: number }[]
+  supplierId?: string
+  date?: Date
+  reference?: string
+  notes?: string
+  onCredit?: boolean
+  /** Base64 data URLs, already downscaled by the browser. */
+  images?: string[]
+}
+
+/**
+ * Turn a list into a real stock-in.
+ *
+ * The shop sells in pieces but buys in packs (a pet of 6 cold drinks, ordered
+ * one pet at a time). createPurchase knows nothing about packs: it works
+ * purely in base units and per-base-unit cost. So the conversion happens
+ * here, using each line's own stored unitsPerItem - never a factor the
+ * caller sends, since a forged factor would multiply straight into the
+ * stock ledger.
+ *
+ * The purchase is created through the existing createPurchase() with a clientId
+ * derived from the list id. Purchase already has @@unique([shopId, clientId])
+ * and returns the existing row for a repeated clientId, so a double tap or a
+ * replayed request cannot stock the same goods twice - the database decides,
+ * not this function.
+ */
+export async function receivePurchaseList(
+  id: string,
+  input: ReceivePurchaseListInput,
+  userId: string
+) {
+  const list = await requireList(id, userId)
+
+  if (list.purchaseId) {
+    const existing = await prisma.purchase.findUnique({ where: { id: list.purchaseId } })
+    if (existing) return existing
+  }
+  if (!input.lines?.length) throw new Error('Add at least one item before receiving')
+
+  // The pack factor per product, read from the list's own lines - never from
+  // the request body. A missing, zero, or non-finite factor is guarded to 1
+  // below so a bad row can never divide by zero or zero out a movement.
+  const unitsPerItemByProduct = new Map(
+    list.lines.map((line) => [line.product.id, Number(line.unitsPerItem)])
+  )
+
+  const purchase = await createPurchase(
+    list.shopId,
+    {
+      supplierId: input.supplierId || list.supplierId || undefined,
+      date: input.date,
+      reference: input.reference,
+      notes: input.notes ?? list.notes ?? undefined,
+      onCredit: input.onCredit === true,
+      clientId: `plist:${id}`,
+      lines: input.lines.map((line) => {
+        const stored = unitsPerItemByProduct.get(line.productId)
+        const unitsPerItem = stored && Number.isFinite(stored) && stored > 0 ? stored : 1
+
+        return {
+          productId: line.productId,
+          // Ordering 4 pets of 6 must move the ledger by 24 pieces, not 4.
+          quantity: line.quantity * unitsPerItem,
+          // The shopkeeper is quoted the price of a pack, so PurchaseLine gets
+          // the per-piece cost, not the pack cost.
+          unitCost: line.unitCost !== undefined ? line.unitCost / unitsPerItem : undefined,
+        }
+      }),
+    },
+    userId
+  )
+
+  if (input.images?.length) {
+    await prisma.purchaseAttachment.createMany({
+      data: input.images.slice(0, 3).map((image) => ({ purchaseId: purchase.id, image })),
+    })
+  }
+
+  await prisma.purchaseList.update({
+    where: { id },
+    data: { status: 'RECEIVED', purchaseId: purchase.id },
+  })
+
+  return purchase
 }
