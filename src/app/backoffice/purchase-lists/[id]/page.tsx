@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Minus, Plus, X, MessageCircle, Printer } from 'lucide-react'
+import { ArrowLeft, Minus, Plus, X, MessageCircle, Printer, Pencil, Loader2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import IconButton from '@/components/ui/IconButton'
@@ -169,40 +169,126 @@ function LineRow({
   const busy = saving || removing
 
   return (
-    <div className="flex items-center gap-3 py-3">
-      <div className="w-5 shrink-0 text-xs text-gray-400">{index + 1}</div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-gray-900">{line.product.name}</div>
-        {line.product.barcode && (
-          <div className="truncate text-xs text-gray-400">{line.product.barcode}</div>
-        )}
+    <div className="py-3">
+      <div className="flex items-start gap-3 sm:items-center">
+        <div className="w-5 shrink-0 pt-1 text-xs text-gray-400 sm:pt-0">{index + 1}</div>
+
+        {/* The name: one shared element, not two variants swapped by breakpoint,
+            so it is never at risk of a hidden duplicate reporting a zero width.
+            It clamps to two lines below `sm`, where it is the hero of the row,
+            and truncates to one line at `sm` and up, where there is room for
+            the old single-line layout. */}
+        <div className="min-w-0 flex-1">
+          <div className="line-clamp-2 text-sm font-medium text-gray-900 sm:line-clamp-none sm:truncate">
+            {line.product.name}
+          </div>
+          {line.product.barcode && (
+            <div className="truncate text-xs text-gray-400">{line.product.barcode}</div>
+          )}
+        </div>
+
+        {/* `sm` and up: pack, stepper, base-unit hint and remove all on this
+            same line, there is room to spare. */}
+        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+          <Select
+            className="h-8 w-24 shrink-0 text-sm"
+            value={line.packName ?? BASE_PACK_VALUE}
+            disabled={busy}
+            onChange={(e) => handlePackChange(e.target.value)}
+            aria-label={`Unit for ${line.product.name}`}
+          >
+            {options.map((o) => (
+              <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+
+          <div className="flex shrink-0 flex-col items-end">
+            <div className="flex items-center gap-1">
+              <IconButton
+                label="Decrease quantity"
+                disabled={busy || quantity <= 1}
+                onClick={() => commitQuantity(quantity - 1)}
+              >
+                <Minus className="h-4 w-4" />
+              </IconButton>
+              <input
+                className="input h-8 w-14 px-1 text-center"
+                inputMode="decimal"
+                value={draft}
+                disabled={busy}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={() => commitQuantity(Number(draft))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    ;(e.target as HTMLInputElement).blur()
+                  }
+                }}
+                aria-label={`Quantity for ${line.product.name}`}
+              />
+              <IconButton
+                label="Increase quantity"
+                disabled={busy}
+                onClick={() => commitQuantity(quantity + 1)}
+              >
+                <Plus className="h-4 w-4" />
+              </IconButton>
+            </div>
+            {baseEquivalent !== null && (
+              <div className="mt-0.5 text-xs text-gray-400">
+                = {formatNumber(baseEquivalent)} {line.product.unit}
+              </div>
+            )}
+          </div>
+
+          <IconButton label="Remove item" variant="danger" disabled={busy} onClick={handleRemove}>
+            <X className="h-4 w-4" />
+          </IconButton>
+        </div>
+
+        {/* Below `sm`: remove sits beside the name, top-right of the row, at a
+            44px tap target since a thumb in an aisle is not a mouse. */}
+        <IconButton
+          label="Remove item"
+          variant="danger"
+          disabled={busy}
+          onClick={handleRemove}
+          className="h-11 w-11 shrink-0 sm:hidden"
+        >
+          <X className="h-5 w-5" />
+        </IconButton>
       </div>
 
-      <Select
-        className="h-8 w-24 shrink-0 text-sm"
-        value={line.packName ?? BASE_PACK_VALUE}
-        disabled={busy}
-        onChange={(e) => handlePackChange(e.target.value)}
-        aria-label={`Unit for ${line.product.name}`}
-      >
-        {options.map((o) => (
-          <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
-            {o.label}
-          </option>
-        ))}
-      </Select>
+      {/* Below `sm`: pack and stepper get their own line, indented under the
+          name, also at 44px tap targets. */}
+      <div className="mt-2 flex items-center justify-between gap-2 pl-8 sm:hidden">
+        <Select
+          className="h-11 w-28 shrink-0 text-sm"
+          value={line.packName ?? BASE_PACK_VALUE}
+          disabled={busy}
+          onChange={(e) => handlePackChange(e.target.value)}
+          aria-label={`Unit for ${line.product.name}`}
+        >
+          {options.map((o) => (
+            <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
+              {o.label}
+            </option>
+          ))}
+        </Select>
 
-      <div className="flex shrink-0 flex-col items-end">
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <IconButton
             label="Decrease quantity"
             disabled={busy || quantity <= 1}
             onClick={() => commitQuantity(quantity - 1)}
+            className="h-11 w-11"
           >
             <Minus className="h-4 w-4" />
           </IconButton>
           <input
-            className="input h-8 w-14 px-1 text-center"
+            className="input h-11 w-14 px-1 text-center text-base"
             inputMode="decimal"
             value={draft}
             disabled={busy}
@@ -220,20 +306,17 @@ function LineRow({
             label="Increase quantity"
             disabled={busy}
             onClick={() => commitQuantity(quantity + 1)}
+            className="h-11 w-11"
           >
             <Plus className="h-4 w-4" />
           </IconButton>
         </div>
-        {baseEquivalent !== null && (
-          <div className="mt-0.5 text-xs text-gray-400">
-            = {formatNumber(baseEquivalent)} {line.product.unit}
-          </div>
-        )}
       </div>
-
-      <IconButton label="Remove item" variant="danger" disabled={busy} onClick={handleRemove}>
-        <X className="h-4 w-4" />
-      </IconButton>
+      {baseEquivalent !== null && (
+        <div className="mt-1 pl-8 text-right text-xs text-gray-400 sm:hidden">
+          = {formatNumber(baseEquivalent)} {line.product.unit}
+        </div>
+      )}
     </div>
   )
 }
@@ -656,7 +739,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   const currentShop = user?.shops?.find((s) => s.shopId === user.currentShopId)?.shop
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="bg-gray-50 pb-24">
       <div className="sticky top-0 z-10 space-y-2 border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center gap-2">
           <Link
@@ -666,34 +749,42 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          {editingName ? (
-            <input
-              autoFocus
-              className="input h-9 min-w-0 flex-1 font-semibold"
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={saveName}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  ;(e.target as HTMLInputElement).blur()
-                } else if (e.key === 'Escape') {
-                  setNameDraft(list.name || '')
-                  setEditingName(false)
-                }
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              className="min-w-0 flex-1 truncate text-left font-semibold text-gray-900"
-              onClick={() => setEditingName(true)}
-            >
-              {list.name || 'Untitled list'}
-            </button>
-          )}
+          <div className="min-w-0 flex-1">
+            {editingName ? (
+              <input
+                autoFocus
+                className="input h-9 w-full font-semibold"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={saveName}
+                placeholder="Name this list"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    ;(e.target as HTMLInputElement).blur()
+                  } else if (e.key === 'Escape') {
+                    setNameDraft(list.name || '')
+                    setEditingName(false)
+                  }
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className="flex w-full items-center gap-1.5 rounded-md py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]"
+                onClick={() => setEditingName(true)}
+              >
+                <span
+                  className={`min-w-0 break-words font-semibold ${list.name ? 'text-gray-900' : 'text-gray-400'}`}
+                >
+                  {list.name || 'Name this list'}
+                </span>
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              </button>
+            )}
+          </div>
           <Select
-            className="h-9 w-36 shrink-0 text-sm"
+            className="hidden h-9 w-36 shrink-0 text-sm sm:block"
             value={list.supplierId || ''}
             onChange={(e) => changeSupplier(e.target.value)}
             aria-label="Supplier"
@@ -706,6 +797,20 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
             ))}
           </Select>
         </div>
+
+        <Select
+          className="h-10 w-full text-sm sm:hidden"
+          value={list.supplierId || ''}
+          onChange={(e) => changeSupplier(e.target.value)}
+          aria-label="Supplier"
+        >
+          <option value="">No supplier</option>
+          {suppliers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </Select>
 
         <div className="relative">
           <Input
@@ -788,10 +893,10 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
           <Printer className="mr-1 h-4 w-4" /> Print
         </Button>
         <div className="flex flex-col items-center gap-0.5">
-          <Button size="sm" disabled title="Coming in the next step">
+          <Button size="sm" disabled title="Coming soon">
             Receive
           </Button>
-          <span className="text-[10px] leading-none text-gray-400">Coming in the next step</span>
+          <span className="whitespace-nowrap text-[10px] leading-none text-gray-400">Coming soon</span>
         </div>
       </div>
 
