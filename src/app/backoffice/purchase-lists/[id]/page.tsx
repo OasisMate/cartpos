@@ -68,6 +68,12 @@ interface ProductHit {
   barcode: string | null
 }
 
+/**
+ * One entry in the scan queue: either an already-resolved product (the shopkeeper
+ * arrow-selected or clicked it) or a raw scanned/typed term still needing a lookup.
+ */
+type PendingLookup = { kind: 'resolved'; product: ProductHit } | { kind: 'term'; term: string }
+
 interface PackOption {
   packName: string | null
   unitsPerItem: number
@@ -254,9 +260,12 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   // The pending 200ms debounce timer, reachable from the Enter handler so a scan
   // can cancel it outright instead of racing it (see handleSearchKeyDown).
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // A scanner can fire Enter again before the first lookup resolves; this blocks
-  // a second lookup from starting while one is already in flight.
-  const lookupInFlightRef = useRef(false)
+  // A scanner is a firehose: every Enter must be accepted, never dropped. Enter
+  // captures and clears the box synchronously, then pushes onto this FIFO queue;
+  // one drain loop works through it in order so a slow lookup can never make a
+  // later scan's Enter get lost or double up with an earlier one.
+  const pendingLookupsRef = useRef<PendingLookup[]>([])
+  const draining = useRef(false)
 
   const loadList = useCallback(async () => {
     try {
@@ -342,9 +351,11 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     })
   }
 
-  // Terminal in every case, success or failure: the search box always clears and
-  // refocuses so a failed scan can never leave text behind to poison the next one.
-  async function addProduct(product: ProductHit) {
+  // Adds one already-resolved product. Never touches the search box: by the time
+  // this runs the box may already belong to a different, later scan (see the
+  // queue below), so only the caller that captured a given term is allowed to
+  // clear it, and only at capture time, not once this settles.
+  async function addResolvedProduct(product: ProductHit) {
     try {
       const res = await fetch(`/api/purchase-lists/${listId}/lines`, {
         method: 'POST',
@@ -355,16 +366,65 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
       if (!res.ok) throw new Error(data.error || 'Failed to add item')
       mergeLine(data)
     } catch (err: any) {
-      show({ message: err.message || 'Failed to add item', variant: 'destructive' })
-    } finally {
-      setQuery('')
-      setResults([])
-      setHighlightIndex(-1)
-      searchRef.current?.focus()
+      show({ message: err.message || `Failed to add ${product.name}`, variant: 'destructive' })
     }
   }
 
-  async function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  // Resolves a scanned/typed term to a product and adds it. Always ends in one
+  // visible outcome: added, or a toast naming the term that failed - never silent.
+  async function resolveAndAddTerm(term: string) {
+    try {
+      const { products } = await searchProducts(term)
+      const exact = products.find((p) => p.barcode === term)
+      if (exact) {
+        await addResolvedProduct(exact)
+        return
+      }
+      // Zero matches, or several with no exact barcode: a queued scan has no
+      // shopkeeper standing by to arrow-pick from a dropdown, so anything short
+      // of one clean match is reported the same way, naming what was scanned.
+      show({ message: `No product found for "${term}"`, variant: 'destructive' })
+    } catch (err: any) {
+      show({ message: err.message || `Search failed for "${term}"`, variant: 'destructive' })
+    }
+  }
+
+  // FIFO queue: Enter pushes here and returns immediately (see handleSearchKeyDown).
+  // If a drain is already running it will pick up the new entry on its next loop
+  // iteration, since pendingLookupsRef is the same shared array; only one drain
+  // loop is ever active, so lookups are always processed one at a time, in order.
+  function enqueueLookup(item: PendingLookup) {
+    pendingLookupsRef.current.push(item)
+    void drainLookupQueue()
+  }
+
+  // Same capture-then-clear-then-queue shape as the Enter/highlighted-row path,
+  // for a mouse/tap pick from the dropdown.
+  function handleResultClick(product: ProductHit) {
+    setQuery('')
+    setResults([])
+    setHighlightIndex(-1)
+    enqueueLookup({ kind: 'resolved', product })
+  }
+
+  async function drainLookupQueue() {
+    if (draining.current) return
+    draining.current = true
+    try {
+      while (pendingLookupsRef.current.length > 0) {
+        const item = pendingLookupsRef.current.shift()!
+        if (item.kind === 'resolved') {
+          await addResolvedProduct(item.product)
+        } else {
+          await resolveAndAddTerm(item.term)
+        }
+      }
+    } finally {
+      draining.current = false
+    }
+  }
+
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setHighlightIndex((i) => Math.min(i + 1, results.length - 1))
@@ -383,55 +443,33 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     }
     if (e.key !== 'Enter') return
     e.preventDefault()
-    if (lookupInFlightRef.current) return
+
+    // Capture and clear the box synchronously, in this same tick, before any
+    // await runs anywhere: a scanner is a firehose, and the box must belong to
+    // the NEXT scan the instant this one is queued, never mingling leftover
+    // characters between the two. Cancel any pending debounce for what is being
+    // replaced, since its eventual response is no longer for what's on screen.
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
 
     // A row already highlighted by the arrow keys always wins, no network needed.
     if (highlightIndex >= 0 && results[highlightIndex]) {
-      lookupInFlightRef.current = true
-      await addProduct(results[highlightIndex])
-      lookupInFlightRef.current = false
+      const product = results[highlightIndex]
+      setQuery('')
+      setResults([])
+      setHighlightIndex(-1)
+      searchRef.current?.focus()
+      enqueueLookup({ kind: 'resolved', product })
       return
     }
 
     const term = query.trim()
     if (!term) return
 
-    // Enter must never depend on the 200ms debounce having resolved: a real
-    // scanner types the whole barcode and sends Enter well inside that window,
-    // so `results` here can be stale or still empty. Cancel whatever the debounce
-    // has pending and look this exact term up directly, awaited.
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    lookupInFlightRef.current = true
-    try {
-      const { reqId, products } = await searchProducts(term)
-      if (reqId !== searchReqIdRef.current) return // superseded by a newer lookup
-
-      const exact = products.find((p) => p.barcode === term)
-      if (exact) {
-        await addProduct(exact)
-        return
-      }
-      if (products.length === 0) {
-        show({ message: 'No product found for that barcode or name', variant: 'destructive' })
-        setQuery('')
-        setResults([])
-        setHighlightIndex(-1)
-        searchRef.current?.focus()
-        return
-      }
-      // No exact barcode, but there are name/SKU matches: show them so the
-      // shopkeeper can pick one, same as the debounced dropdown would.
-      setResults(products)
-      setHighlightIndex(-1)
-    } catch (err: any) {
-      show({ message: err.message || 'Search failed', variant: 'destructive' })
-      setQuery('')
-      setResults([])
-      setHighlightIndex(-1)
-      searchRef.current?.focus()
-    } finally {
-      lookupInFlightRef.current = false
-    }
+    setQuery('')
+    setResults([])
+    setHighlightIndex(-1)
+    searchRef.current?.focus()
+    enqueueLookup({ kind: 'term', term })
   }
 
   async function updateQuantity(lineId: string, quantity: number): Promise<boolean> {
@@ -632,7 +670,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
                   aria-selected={i === highlightIndex}
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => addProduct(r)}
+                  onClick={() => handleResultClick(r)}
                   className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
                     i === highlightIndex ? 'bg-blue-50' : 'hover:bg-gray-50'
                   }`}
