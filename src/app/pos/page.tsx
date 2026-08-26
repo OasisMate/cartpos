@@ -151,6 +151,29 @@ interface ReceiptData {
 // The search box/dropdown still reaches the full catalog by scan/name/SKU.
 const POS_GRID_LIMIT = 60
 
+/**
+ * Mobile shows far fewer tiles. The panels stack there, so every extra row is
+ * another swipe between the grid and the cart, and with best-seller ordering the
+ * top few tiles are the ones that actually get tapped. "Show all" is there for
+ * browsing.
+ */
+const POS_GRID_LIMIT_MOBILE = 8
+
+/** True from Tailwind's lg up, where the grid and cart sit side by side. */
+function useIsWideLayout(): boolean {
+  // Starts true and corrects after mount: the desktop layout is the one where a
+  // wrong first paint would be visible, since mobile only ever shrinks.
+  const [wide, setWide] = useState(true)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    setWide(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setWide(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return wide
+}
+
 /** Key the cached top-seller order is stored under, per shop. */
 const TOP_SELLERS_META_KEY = (shopId: string) => `posTopSellers:${shopId}`
 
@@ -293,6 +316,8 @@ export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([])
   // Ids of the last 7 days' best sellers, busiest first. Drives the grid order.
   const [topProductIds, setTopProductIds] = useState<string[]>([])
+  // Mobile only: the shopkeeper asked for the full grid.
+  const [gridExpanded, setGridExpanded] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -1762,9 +1787,11 @@ export default function POSPage() {
     }
   }, [])
   // Cap the tappable grid; scanning / the search dropdown still reach every product.
+  const isWideLayout = useIsWideLayout()
+  const gridLimit = isWideLayout || gridExpanded ? POS_GRID_LIMIT : POS_GRID_LIMIT_MOBILE
   const gridItems = useMemo(
-    () => orderGridProducts(products, topProductIds, user?.currentShopId || '', POS_GRID_LIMIT),
-    [products, topProductIds, user?.currentShopId]
+    () => orderGridProducts(products, topProductIds, user?.currentShopId || '', gridLimit),
+    [products, topProductIds, user?.currentShopId, gridLimit]
   )
 
   // --- Keyboard-first POS ---
@@ -2247,6 +2274,17 @@ export default function POSPage() {
               {products.length > gridItems.length && (
                 <div className="px-3 pb-3 text-center text-xs text-[hsl(var(--muted-foreground))]">
                   Showing {gridItems.length} of {products.length} products - scan or search above to add any product.
+                </div>
+              )}
+              {!isWideLayout && products.length > POS_GRID_LIMIT_MOBILE && (
+                <div className="px-3 pb-3 text-center">
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => setGridExpanded((v) => !v)}
+                  >
+                    {gridExpanded ? 'Show fewer products' : 'Show more products'}
+                  </Button>
                 </div>
               )}
             </>
