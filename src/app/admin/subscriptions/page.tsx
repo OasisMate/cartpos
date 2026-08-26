@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Search, Settings, Tag, Wallet } from 'lucide-react'
 import { ModalShell } from '@/components/ui/ModalShell'
@@ -75,11 +75,7 @@ export default function AdminSubscriptionsPage() {
   const [customPrice, setCustomPrice] = useState('')
   const [priceNote, setPriceNote] = useState('')
 
-  useEffect(() => {
-    load()
-  }, [filter])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       const res = await fetch(`/api/admin/subscriptions${filter ? `?filter=${filter}` : ''}`)
@@ -92,7 +88,11 @@ export default function AdminSubscriptionsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filter])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   async function submitPayment() {
     if (!payOrg) return

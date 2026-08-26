@@ -19,6 +19,7 @@ export function UserAvatar({
 
   if (imageUrl) {
     return (
+      // eslint-disable-next-line @next/next/no-img-element -- base64 data URL, see note above
       <img
         src={imageUrl}
         alt={name || 'User'}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Check, Image as ImageIcon, Loader2, X } from 'lucide-react'
 import { ModalShell } from '@/components/ui/ModalShell'
 
@@ -47,11 +47,7 @@ export default function PaymentClaimsPage() {
   const [rejecting, setRejecting] = useState<Claim | null>(null)
   const [reason, setReason] = useState('')
 
-  useEffect(() => {
-    load()
-  }, [status])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       const res = await fetch(`/api/admin/payment-claims?status=${status}`)
@@ -63,7 +59,11 @@ export default function PaymentClaimsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [status])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   async function viewReceipt(claimId: string) {
     // Fetched one at a time: base64 images in a list payload would be enormous.
@@ -201,6 +201,9 @@ export default function PaymentClaimsPage() {
         // A receipt is just an image, so the panel is transparent and the image
         // fills it: no white card around a screenshot.
         <ModalShell onClose={() => setReceipt(null)} bare className="max-w-3xl">
+          {/* Receipts arrive as base64 data URLs, which next/image cannot
+              optimise and would need no domain config for anyway. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={receipt.src} alt="Payment receipt" className="max-h-[85vh] max-w-full rounded-lg" />
         </ModalShell>
       )}

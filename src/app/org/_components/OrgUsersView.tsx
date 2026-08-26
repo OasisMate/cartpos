@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { UserPlus, Edit, Trash2, Mail, Eye, EyeOff, Phone, Fingerprint, Shield, Store } from 'lucide-react'
@@ -49,14 +49,9 @@ export default function OrgUsersView({ orgId, orgName }: OrgUsersViewProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
 
-  useEffect(() => {
-    if (user) {
-      load()
-      fetchShops()
-    }
-  }, [user, orgId])
-
-  async function load() {
+  // Both loaders key off `scope`, which is derived from orgId, so depending on
+  // them in the effect covers the orgId change too.
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -69,15 +64,22 @@ export default function OrgUsersView({ orgId, orgName }: OrgUsersViewProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [scope])
 
-  async function fetchShops() {
+  const fetchShops = useCallback(async () => {
     const res = await fetch(`/api/org/shops${scope}`)
     const data = await res.json()
     if (res.ok) {
       setShops((data.shops || []).map((s: any) => ({ id: s.id, name: s.name })))
     }
-  }
+  }, [scope])
+
+  useEffect(() => {
+    if (user) {
+      load()
+      fetchShops()
+    }
+  }, [user, load, fetchShops])
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault()
