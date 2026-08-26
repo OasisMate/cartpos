@@ -1022,14 +1022,17 @@ export default function OrganizationsPage() {
               </label>
             </div>
 
+            {/* Trimmed on both sides. Several stored names carry a trailing
+                space, which is invisible here, so comparing against the raw
+                value made the confirm button impossible to satisfy. */}
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Type <span className="font-mono font-semibold">{purgeOrgData.name}</span> to confirm
+              Type <span className="font-mono font-semibold">{purgeOrgData.name.trim()}</span> to confirm
             </label>
             <input
               value={purgeConfirmName}
               onChange={(e) => setPurgeConfirmName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md mb-4"
-              placeholder={purgeOrgData.name}
+              placeholder={purgeOrgData.name.trim()}
             />
 
             <div className="flex gap-2 justify-end">
@@ -1042,7 +1045,7 @@ export default function OrganizationsPage() {
               </button>
               <button
                 onClick={confirmPurge}
-                disabled={purging || purgeConfirmName.trim() !== purgeOrgData.name}
+                disabled={purging || purgeConfirmName.trim() !== purgeOrgData.name.trim()}
                 className="px-4 py-2 bg-red-700 text-white rounded-md hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {purging ? 'Deleting…' : 'Delete permanently'}

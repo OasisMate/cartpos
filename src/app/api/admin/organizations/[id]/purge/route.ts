@@ -15,10 +15,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const body = await request.json().catch(() => ({}))
     const confirmName: string = (body.confirmName || '').trim()
 
-    // Server-side type-to-confirm: the typed name must match exactly.
+    // Server-side type-to-confirm. Trimmed on both sides: some stored names
+    // carry a trailing space the admin cannot see or type.
     const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } })
     if (!org) return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
-    if (confirmName !== org.name) {
+    if (confirmName !== org.name.trim()) {
       return NextResponse.json({ error: 'Confirmation text does not match the organization name' }, { status: 400 })
     }
 

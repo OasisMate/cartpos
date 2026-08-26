@@ -59,6 +59,11 @@ export async function createOrganizationWithOwner(
   if (!organizationName || !organizationType || !city || !ownerName || !ownerEmail || !ownerPassword) {
     throw new Error('Missing required fields: organization name, type, city, owner name, email, password')
   }
+  // Trim before it is ever stored. A trailing space is invisible in the admin UI
+  // but broke type-to-confirm on deletion, and forced .trim() calls at every
+  // display site.
+  const orgName = String(organizationName).trim()
+  const orgLegalName = legalName ? String(legalName).trim() : ''
   const ownerPwError = passwordPolicyError(ownerPassword)
   if (ownerPwError) {
     throw new Error(ownerPwError)
@@ -108,8 +113,8 @@ export async function createOrganizationWithOwner(
 
     const org = await tx.organization.create({
       data: {
-        name: organizationName,
-        legalName: legalName || organizationName,
+        name: orgName,
+        legalName: orgLegalName || orgName,
         type: organizationType as any,
         phone: normalizedOrgPhone,
         city,
@@ -132,7 +137,7 @@ export async function createOrganizationWithOwner(
     const shop = await tx.shop.create({
       data: {
         orgId: org.id,
-        name: organizationName,
+        name: orgName,
         city,
         phone: normalizedOrgPhone,
         addressLine1: addressLine1 || null,

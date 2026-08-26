@@ -54,6 +54,11 @@ export async function POST(request: Request) {
       )
     }
 
+    // Trim before storing: a trailing space here is invisible everywhere in the
+    // UI and broke type-to-confirm on org deletion.
+    const orgName = String(organizationName).trim()
+    const orgLegalName = legalName ? String(legalName).trim() : ''
+
     // Enforce password strength server-side (client validation can be bypassed)
     const pwError = passwordPolicyError(password)
     if (pwError) {
@@ -118,8 +123,8 @@ export async function POST(request: Request) {
 
       const org = await tx.organization.create({
         data: {
-          name: organizationName,
-          legalName: legalName || organizationName,
+          name: orgName,
+          legalName: orgLegalName || orgName,
           type: organizationType,
           phone: normalizedOrgPhone,
           city,
@@ -156,7 +161,7 @@ export async function POST(request: Request) {
       const shop = await tx.shop.create({
         data: {
           orgId: org.id,
-          name: organizationName,
+          name: orgName,
           city,
           phone: normalizedOrgPhone,
           addressLine1: addressLine1 || null,
