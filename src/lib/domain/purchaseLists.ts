@@ -34,6 +34,7 @@ const LINE_SELECT = {
   packName: true,
   unitsPerItem: true,
   note: true,
+  customName: true,
   product: {
     select: {
       id: true,
@@ -91,6 +92,44 @@ function matchPackOption(packName: string | null | undefined, options: PackOptio
   const match = options.find((o) => o.packName === wanted)
   if (!match) throw new Error('That pack is not available for this product')
   return match
+}
+
+/** Longest an off-catalogue item name or an ad-hoc pack name may be. */
+const MAX_NAME_LENGTH = 120
+/** A pack nobody orders in. Guards the factor that multiplies into the ledger. */
+const MAX_UNITS_PER_ITEM = 10000
+
+/**
+ * A buying unit the shopkeeper typed on this line, for the common case of
+ * selling singles but ordering in bulk ("Carton of 24") when the product has
+ * no packaging configured. Deliberately list-only: it never writes back to the
+ * product. The factor does reach the stock ledger on receive, so it is bounded
+ * here and shown on the receive screen before anything moves.
+ */
+export interface CustomPackInput {
+  name: string
+  unitsPerItem: number
+}
+
+function cleanCustomPack(pack: CustomPackInput): PackOption {
+  const name = pack.name?.trim()
+  if (!name) throw new Error('Give the pack a name, like Carton or Box')
+  if (name.length > MAX_NAME_LENGTH) throw new Error('That pack name is too long')
+
+  const units = Number(pack.unitsPerItem)
+  if (!Number.isFinite(units) || units <= 0) {
+    throw new Error('How many pieces are in the pack?')
+  }
+  if (units > MAX_UNITS_PER_ITEM) throw new Error('That pack size is too large')
+
+  return { packName: name, unitsPerItem: units, label: name }
+}
+
+function cleanCustomName(name: string): string {
+  const trimmed = name?.trim()
+  if (!trimmed) throw new Error('Type a name for the item')
+  if (trimmed.length > MAX_NAME_LENGTH) throw new Error('That item name is too long')
+  return trimmed
 }
 
 async function requireList(id: string, userId: string) {
@@ -196,12 +235,51 @@ export async function updatePurchaseList(
 
 export async function addOrBumpLine(
   id: string,
-  input: { productId: string; quantity: number; packName?: string | null; unitsPerItem?: number },
+  input: {
+    productId?: string
+    /** An item that is not in the catalogue at all, typed by hand. */
+    customName?: string
+    quantity: number
+    packName?: string | null
+    customPack?: CustomPackInput
+  },
   userId: string
 ) {
   const list = await requireList(id, userId)
   if (list.status === 'RECEIVED') throw new Error('This list has already been received')
   if (!input.quantity || input.quantity <= 0) throw new Error('Quantity must be greater than 0')
+
+  // An off-catalogue item: no product to look packs up on, so the only unit it
+  // can carry is one the shopkeeper typed. Merged by name so typing the same
+  // thing twice bumps the count instead of leaving two lines, matching how a
+  // repeat scan behaves for a real product.
+  if (!input.productId) {
+    const name = cleanCustomName(input.customName || '')
+    const pack = input.customPack ? cleanCustomPack(input.customPack) : null
+
+    const existing = list.lines.find(
+      (l) => !l.product && l.customName?.toLowerCase() === name.toLowerCase()
+    )
+    if (existing) {
+      return prisma.purchaseListLine.update({
+        where: { id: existing.id },
+        data: { quantity: { increment: input.quantity } },
+        select: LINE_SELECT,
+      })
+    }
+
+    return prisma.purchaseListLine.create({
+      data: {
+        purchaseListId: id,
+        productId: null,
+        customName: name,
+        quantity: input.quantity,
+        packName: pack?.packName ?? null,
+        unitsPerItem: pack?.unitsPerItem ?? 1,
+      },
+      select: LINE_SELECT,
+    })
+  }
 
   const product = await prisma.product.findUnique({
     where: { id: input.productId },
@@ -214,11 +292,17 @@ export async function addOrBumpLine(
   })
   if (!product || product.shopId !== list.shopId) throw new Error('Product not found in this shop')
 
-  // Never trust unitsPerItem from the caller: it multiplies into the stock ledger
-  // when the list is received, so the factor always comes from the product's own
-  // packaging options, not the request body.
+  // A configured pack's factor always comes from the product, never the request.
+  // The one exception is an explicit customPack: a shop that sells singles but
+  // orders in bulk has nothing configured to pick from, so the shopkeeper names
+  // the buying unit here. That factor is bounded by cleanCustomPack and shown on
+  // the receive screen before it reaches the ledger.
   const options = packOptionsForProduct(product)
-  const pack = input.packName !== undefined ? matchPackOption(input.packName, options) : options[0]
+  const pack = input.customPack
+    ? cleanCustomPack(input.customPack)
+    : input.packName !== undefined
+      ? matchPackOption(input.packName, options)
+      : options[0]
 
   // The unique index does the merging: scanning the same item twice bumps the
   // quantity instead of leaving two lines for one product. Re-scanning bumps the
@@ -239,7 +323,12 @@ export async function addOrBumpLine(
 
 export async function updateLine(
   lineId: string,
-  input: { quantity?: number; note?: string; packName?: string | null; unitsPerItem?: number },
+  input: {
+    quantity?: number
+    note?: string
+    packName?: string | null
+    customPack?: CustomPackInput
+  },
   userId: string
 ) {
   const line = await prisma.purchaseListLine.findUnique({
@@ -263,12 +352,16 @@ export async function updateLine(
     throw new Error('Quantity must be greater than 0')
   }
 
-  // As with addOrBumpLine, the factor is never taken from the request: it is
-  // looked up fresh from the product's own packaging options.
-  const pack =
-    input.packName !== undefined
-      ? matchPackOption(input.packName, packOptionsForProduct(line.product))
-      : undefined
+  // As with addOrBumpLine: a named pack is resolved against the product, and a
+  // customPack is the shopkeeper's own buying unit, bounded rather than trusted.
+  // An off-catalogue line has no product, so a pack there can only be custom.
+  let pack: PackOption | undefined
+  if (input.customPack) {
+    pack = cleanCustomPack(input.customPack)
+  } else if (input.packName !== undefined) {
+    if (!line.product) throw new Error('Name the pack for this item')
+    pack = matchPackOption(input.packName, packOptionsForProduct(line.product))
+  }
 
   return prisma.purchaseListLine.update({
     where: { id: lineId },
@@ -371,7 +464,8 @@ export async function suggestReorderItems(
       reorderLevel: Number(p.reorderLevel ?? 0),
     })),
     sold: soldRows.map((r) => ({ productId: r.productId, baseUnitsSold: Number(r.sold) })),
-    excludeProductIds: onList.map((l) => l.productId),
+    // Off-catalogue lines have no productId, so they exclude nothing.
+    excludeProductIds: onList.map((l) => l.productId).filter((id): id is string => id !== null),
     limit,
   })
 
@@ -435,9 +529,18 @@ export async function receivePurchaseList(
   // The pack factor per product, read from the list's own lines - never from
   // the request body. A missing, zero, or non-finite factor is guarded to 1
   // below so a bad row can never divide by zero or zero out a movement.
+  // Off-catalogue lines are order-only: they reach the supplier on the shared
+  // and printed list, but there is no product to move stock against, so they are
+  // not part of the receive at all. Anything the shopkeeper actually wants
+  // stocked has to exist as a product first.
   const unitsPerItemByProduct = new Map(
-    list.lines.map((line) => [line.product.id, Number(line.unitsPerItem)])
+    list.lines
+      .filter((line) => line.product)
+      .map((line) => [line.product!.id, Number(line.unitsPerItem)])
   )
+  if (unitsPerItemByProduct.size === 0) {
+    throw new Error('This list only has hand-typed items, so there is nothing to receive')
+  }
 
   // The receive form is prefilled from the list, so a legitimate caller never
   // sends a product the list doesn't have. Anything extra a supplier delivered

@@ -43,7 +43,10 @@ interface PurchaseListLine {
   packName: string | null
   unitsPerItem: number | string
   note: string | null
-  product: LineProduct
+  /** Null for an off-catalogue item the shopkeeper typed by hand. */
+  product: LineProduct | null
+  /** The typed name, set only when product is null. */
+  customName: string | null
 }
 
 interface SupplierLite {
@@ -83,6 +86,8 @@ interface PackOption {
 }
 
 const BASE_PACK_VALUE = '__base__'
+/** Picking this in the unit dropdown opens the "name your buying unit" editor. */
+const CUSTOM_PACK_VALUE = '__custom__'
 
 /**
  * Mirrors packOptionsForProduct in src/lib/domain/purchaseLists.ts. Kept as a
@@ -120,12 +125,14 @@ function LineRow({
   line,
   onQuantityChange,
   onPackChange,
+  onCustomPack,
   onRemove,
 }: {
   index: number
   line: PurchaseListLine
   onQuantityChange: (lineId: string, quantity: number) => Promise<boolean>
   onPackChange: (lineId: string, packName: string | null) => Promise<boolean>
+  onCustomPack: (lineId: string, pack: { name: string; unitsPerItem: number }) => Promise<boolean>
   onRemove: (lineId: string) => Promise<boolean>
 }) {
   const quantity = Number(line.quantity)
@@ -133,16 +140,24 @@ function LineRow({
   const [draft, setDraft] = useState(String(quantity))
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [packDraft, setPackDraft] = useState<{ name: string; units: string } | null>(null)
 
   useEffect(() => {
     setDraft(String(quantity))
   }, [quantity])
 
-  const options = packOptionsForProduct(line.product)
-  // Most products only sell in their base unit. A one-option dropdown is a dead
-  // control that still eats a chunk of the row, so show the unit as plain text.
-  const hasPackChoice = options.length > 1
-  const soleUnitLabel = options[0]?.label ?? line.product.unit
+  const displayName = line.product?.name ?? line.customName ?? 'Item'
+  const baseUnit = line.product?.unit ?? 'pcs'
+
+  // A shop that sells singles but orders in bulk has nothing configured to pick
+  // from, so every line keeps a unit control: the product's own packs when it
+  // has them, plus "Custom pack..." to name the buying unit on this line.
+  // An off-catalogue line has no product, so custom is all it can offer.
+  const options = line.product
+    ? packOptionsForProduct(line.product)
+    : [{ packName: null, unitsPerItem: 1, label: 'pcs' }]
+  const isCustomPack =
+    line.packName !== null && !options.some((o) => o.packName === line.packName)
   const baseEquivalent = unitsPerItem > 1 ? quantity * unitsPerItem : null
 
   async function commitQuantity(next: number) {
@@ -158,11 +173,50 @@ function LineRow({
   }
 
   async function handlePackChange(value: string) {
+    if (value === CUSTOM_PACK_VALUE) {
+      setPackDraft({ name: line.packName ?? '', units: isCustomPack ? String(unitsPerItem) : '' })
+      return
+    }
     const packName = value === BASE_PACK_VALUE ? null : value
     if (packName === line.packName) return
     setSaving(true)
     await onPackChange(line.id, packName)
     setSaving(false)
+  }
+
+  async function saveCustomPack() {
+    if (!packDraft) return
+    const units = Number(packDraft.units)
+    if (!packDraft.name.trim() || !Number.isFinite(units) || units <= 0) return
+    setSaving(true)
+    const ok = await onCustomPack(line.id, { name: packDraft.name.trim(), unitsPerItem: units })
+    setSaving(false)
+    if (ok) setPackDraft(null)
+  }
+
+  /** The unit control, shared by both breakpoints. */
+  function packSelect(className: string) {
+    return (
+      <Select
+        className={className}
+        value={isCustomPack ? CUSTOM_PACK_VALUE : (line.packName ?? BASE_PACK_VALUE)}
+        disabled={busy}
+        onChange={(e) => handlePackChange(e.target.value)}
+        aria-label={`Unit for ${displayName}`}
+      >
+        {options.map((o) => (
+          <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
+            {o.label}
+          </option>
+        ))}
+        {isCustomPack && (
+          <option value={CUSTOM_PACK_VALUE}>
+            {line.packName} ({formatNumber(unitsPerItem)})
+          </option>
+        )}
+        {!isCustomPack && <option value={CUSTOM_PACK_VALUE}>Custom pack...</option>}
+      </Select>
+    )
   }
 
   async function handleRemove() {
@@ -185,33 +239,20 @@ function LineRow({
             the old single-line layout. */}
         <div className="min-w-0 flex-1">
           <div className="line-clamp-2 text-sm font-medium text-gray-900 sm:line-clamp-none sm:truncate">
-            {line.product.name}
+            {displayName}
           </div>
-          {line.product.barcode && (
+          {line.product?.barcode && (
             <div className="truncate text-xs text-gray-400">{line.product.barcode}</div>
+          )}
+          {!line.product && (
+            <div className="text-xs text-amber-600">Not in your products, order only</div>
           )}
         </div>
 
         {/* `sm` and up: pack, stepper, base-unit hint and remove all on this
             same line, there is room to spare. */}
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          {hasPackChoice ? (
-            <Select
-              className="h-8 w-24 shrink-0 text-sm"
-              value={line.packName ?? BASE_PACK_VALUE}
-              disabled={busy}
-              onChange={(e) => handlePackChange(e.target.value)}
-              aria-label={`Unit for ${line.product.name}`}
-            >
-              {options.map((o) => (
-                <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <span className="w-24 shrink-0 text-sm text-gray-500">{soleUnitLabel}</span>
-          )}
+          {packSelect('h-8 w-28 shrink-0 text-sm')}
 
           <div className="flex shrink-0 flex-col items-end">
             <div className="flex items-center gap-1">
@@ -235,7 +276,7 @@ function LineRow({
                     ;(e.target as HTMLInputElement).blur()
                   }
                 }}
-                aria-label={`Quantity for ${line.product.name}`}
+                aria-label={`Quantity for ${displayName}`}
               />
               <IconButton
                 label="Increase quantity"
@@ -247,7 +288,7 @@ function LineRow({
             </div>
             {baseEquivalent !== null && (
               <div className="mt-0.5 text-xs text-gray-400">
-                = {formatNumber(baseEquivalent)} {line.product.unit}
+                = {formatNumber(baseEquivalent)} {baseUnit}
               </div>
             )}
           </div>
@@ -273,23 +314,7 @@ function LineRow({
       {/* Below `sm`: pack and stepper get their own line, indented under the
           name, also at 44px tap targets. */}
       <div className="mt-2 flex items-center justify-between gap-2 pl-8 sm:hidden">
-        {hasPackChoice ? (
-          <Select
-            className="h-11 w-28 shrink-0 text-sm"
-            value={line.packName ?? BASE_PACK_VALUE}
-            disabled={busy}
-            onChange={(e) => handlePackChange(e.target.value)}
-            aria-label={`Unit for ${line.product.name}`}
-          >
-            {options.map((o) => (
-              <option key={o.packName ?? BASE_PACK_VALUE} value={o.packName ?? BASE_PACK_VALUE}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        ) : (
-          <span className="shrink-0 text-sm text-gray-500">{soleUnitLabel}</span>
-        )}
+        {packSelect('h-11 w-32 shrink-0 text-sm')}
 
         <div className="flex shrink-0 items-center gap-1">
           <IconButton
@@ -313,7 +338,7 @@ function LineRow({
                 ;(e.target as HTMLInputElement).blur()
               }
             }}
-            aria-label={`Quantity for ${line.product.name}`}
+            aria-label={`Quantity for ${displayName}`}
           />
           <IconButton
             label="Increase quantity"
@@ -327,7 +352,50 @@ function LineRow({
       </div>
       {baseEquivalent !== null && (
         <div className="mt-1 pl-8 text-right text-xs text-gray-400 sm:hidden">
-          = {formatNumber(baseEquivalent)} {line.product.unit}
+          = {formatNumber(baseEquivalent)} {baseUnit}
+        </div>
+      )}
+
+      {/* Naming the buying unit: for a shop that sells singles but orders in
+          bulk. Stays on this list, nothing is written back to the product. */}
+      {packDraft && (
+        <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 p-2 pl-3 sm:ml-8">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Pack name</span>
+              <Input
+                autoFocus
+                className="h-10 w-full text-sm"
+                placeholder="Carton"
+                value={packDraft.name}
+                onChange={(e) => setPackDraft({ ...packDraft, name: e.target.value })}
+              />
+            </label>
+            <label className="w-28 shrink-0">
+              <span className="mb-1 block text-xs font-medium text-gray-600">{baseUnit} in it</span>
+              <Input
+                className="h-10 w-full text-sm"
+                inputMode="decimal"
+                placeholder="24"
+                value={packDraft.units}
+                onChange={(e) => setPackDraft({ ...packDraft, units: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    saveCustomPack()
+                  }
+                }}
+              />
+            </label>
+            <div className="flex shrink-0 gap-2">
+              <Button size="sm" disabled={busy} onClick={saveCustomPack}>
+                Save
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setPackDraft(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -531,12 +599,16 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     void drainLookupQueue()
   }
 
-  // Same capture-then-clear-then-queue shape as the Enter/highlighted-row path,
-  // for a mouse/tap pick from the dropdown.
-  function handleResultClick(product: ProductHit) {
+  function clearSearch() {
     updateQuery('')
     setResults([])
     setHighlightIndex(-1)
+  }
+
+  // Same capture-then-clear-then-queue shape as the Enter/highlighted-row path,
+  // for a mouse/tap pick from the dropdown.
+  function handleResultClick(product: ProductHit) {
+    clearSearch()
     enqueueLookup({ kind: 'resolved', product })
   }
 
@@ -648,6 +720,45 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
     }
   }
 
+  async function setCustomPack(
+    lineId: string,
+    pack: { name: string; unitsPerItem: number }
+  ): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/purchase-lists/lines/${lineId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customPack: pack }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save the pack')
+      mergeLine(data)
+      return true
+    } catch (err: any) {
+      show({ message: err.message || 'Failed to save the pack', variant: 'destructive' })
+      return false
+    }
+  }
+
+  /** Put a name the shopkeeper typed on the list, with no product behind it. */
+  async function addCustomItem(name: string): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/purchase-lists/${listId}/lines`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customName: name, quantity: 1 }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `Failed to add ${name}`)
+      mergeLine(data)
+      clearSearch()
+      return true
+    } catch (err: any) {
+      show({ message: err.message || `Failed to add ${name}`, variant: 'destructive' })
+      return false
+    }
+  }
+
   async function removeLine(lineId: string): Promise<boolean> {
     try {
       const res = await fetch(`/api/purchase-lists/lines/${lineId}`, { method: 'DELETE' })
@@ -730,9 +841,9 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
       supplierName: list.supplier?.name,
       date: new Date(list.createdAt),
       lines: list.lines.map((l) => ({
-        name: l.product.name,
+        name: l.product?.name ?? l.customName ?? 'Item',
         quantity: Number(l.quantity),
-        unit: l.packName || l.product.unit,
+        unit: l.packName || l.product?.unit || 'pcs',
       })),
     })
     window.open(waUrl(list.supplier?.phone, text), '_blank', 'noopener,noreferrer')
@@ -751,6 +862,15 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   }
 
   const currentShop = user?.shops?.find((s) => s.shopId === user.currentShopId)?.shop
+
+  // Offer "add what you typed" once there is something to add and the catalogue
+  // has no product by that exact name. Barcodes are excluded: a bare number is
+  // almost always a scan whose lookup is still in flight, not an item name.
+  const typed = query.trim()
+  const canAddTyped =
+    typed.length > 1 &&
+    !/^\d+$/.test(typed) &&
+    !results.some((r) => r.name.toLowerCase() === typed.toLowerCase())
 
   // A column that fills the scroll area: the action bar then sits at the bottom
   // of the content, not pinned over the sidebar the way `fixed` was.
@@ -839,11 +959,11 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
             className="h-11 w-full text-base"
             autoFocus
             role="combobox"
-            aria-expanded={results.length > 0}
+            aria-expanded={results.length > 0 || canAddTyped}
             aria-controls="purchase-list-search-results"
             aria-activedescendant={highlightIndex >= 0 ? `purchase-list-opt-${highlightIndex}` : undefined}
           />
-          {results.length > 0 && (
+          {(results.length > 0 || canAddTyped) && (
             <div
               id="purchase-list-search-results"
               role="listbox"
@@ -866,6 +986,24 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
                   {r.barcode && <span className="ml-2 shrink-0 text-xs text-gray-400">{r.barcode}</span>}
                 </button>
               ))}
+
+              {/* Nothing in the catalogue matches. A shopkeeper still needs it
+                  on the sheet going to the supplier, so let them put the name
+                  they typed straight onto the list. */}
+              {canAddTyped && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addCustomItem(query.trim())}
+                  className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  <Plus className="h-4 w-4 shrink-0 text-gray-400" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Add <span className="font-medium">{query.trim()}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-gray-400">not in products</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -884,6 +1022,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
                 line={line}
                 onQuantityChange={updateQuantity}
                 onPackChange={changePack}
+                onCustomPack={setCustomPack}
                 onRemove={removeLine}
               />
             ))}
@@ -936,9 +1075,9 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
           createdAt: new Date(list.createdAt),
           notes: list.notes,
           lines: list.lines.map((l) => ({
-            name: l.product.name,
+            name: l.product?.name ?? l.customName ?? 'Item',
             quantity: Number(l.quantity),
-            unit: l.packName || l.product.unit,
+            unit: l.packName || l.product?.unit || 'pcs',
           })),
         }}
       />

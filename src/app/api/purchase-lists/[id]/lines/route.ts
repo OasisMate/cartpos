@@ -17,7 +17,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const body = await request.json()
     const line = await addOrBumpLine(
       params.id,
-      { productId: body.productId, quantity: Number(body.quantity) || 1 },
+      {
+        productId: body.productId,
+        // Set instead of productId for an item that is not in the catalogue.
+        customName: body.customName,
+        quantity: Number(body.quantity) || 1,
+        // A buying unit typed on this line, for selling singles but ordering
+        // in bulk. Validated in the domain, never trusted as sent.
+        customPack: body.customPack
+          ? { name: body.customPack.name, unitsPerItem: Number(body.customPack.unitsPerItem) }
+          : undefined,
+      },
       user.id
     )
 

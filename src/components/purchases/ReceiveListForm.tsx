@@ -37,7 +37,9 @@ interface PurchaseListLine {
   quantity: number | string
   packName: string | null
   unitsPerItem: number | string
-  product: LineProduct
+  /** Null for an off-catalogue item: order-only, never received. */
+  product: LineProduct | null
+  customName: string | null
 }
 
 interface SupplierLite {
@@ -100,6 +102,8 @@ export default function ReceiveListForm({ listId }: { listId: string }) {
   const [reference, setReference] = useState('')
   const [onCredit, setOnCredit] = useState(false)
   const [lines, setLines] = useState<DraftLine[]>([])
+  /** Names of off-catalogue items on the list, shown but not received. */
+  const [skipped, setSkipped] = useState<string[]>([])
   const [photos, setPhotos] = useState<PhotoDraft[]>([])
   const [submitting, setSubmitting] = useState(false)
 
@@ -123,20 +127,27 @@ export default function ReceiveListForm({ listId }: { listId: string }) {
       if (!res.ok) throw new Error(data.error || 'Failed to load list')
       setList(data)
       setSupplierId(data.supplierId || '')
+      // Off-catalogue lines are order-only: they went to the supplier on the
+      // shared list, but there is no product to move stock against, so they are
+      // not part of the receive. Named below the form so nothing looks lost.
+      const all: PurchaseListLine[] = data.lines || []
+      setSkipped(all.filter((line) => !line.product).map((line) => line.customName || 'Item'))
       setLines(
-        (data.lines || []).map((line: PurchaseListLine) => {
-          const unitsPerItem = Number(line.unitsPerItem) || 1
-          return {
-            lineId: line.id,
-            productId: line.product.id,
-            name: line.product.name,
-            barcode: line.product.barcode,
-            packLabel: line.packName || line.product.unit,
-            unitsPerItem,
-            quantity: String(Number(line.quantity)),
-            cost: '',
-          }
-        })
+        all
+          .filter((line) => line.product)
+          .map((line) => {
+            const unitsPerItem = Number(line.unitsPerItem) || 1
+            return {
+              lineId: line.id,
+              productId: line.product!.id,
+              name: line.product!.name,
+              barcode: line.product!.barcode,
+              packLabel: line.packName || line.product!.unit,
+              unitsPerItem,
+              quantity: String(Number(line.quantity)),
+              cost: '',
+            }
+          })
       )
       setLoadError('')
     } catch (err: any) {
@@ -367,6 +378,20 @@ export default function ReceiveListForm({ listId }: { listId: string }) {
             )
           })}
         </div>
+
+        {skipped.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <span className="mb-1 block text-xs font-medium text-amber-800">
+              Not received: {skipped.length} hand-typed item
+              {skipped.length === 1 ? '' : 's'}
+            </span>
+            <p className="text-xs text-amber-700">
+              {skipped.join(', ')} went to the supplier on this list, but {skipped.length === 1 ? 'it is' : 'they are'}{' '}
+              not in your products, so no stock can move. Add {skipped.length === 1 ? 'it' : 'them'} as a
+              product first if you want {skipped.length === 1 ? 'it' : 'them'} counted.
+            </p>
+          </div>
+        )}
 
         <div className="rounded-lg border border-gray-200 bg-white p-3">
           <span className="mb-2 block text-xs font-medium text-gray-500">
