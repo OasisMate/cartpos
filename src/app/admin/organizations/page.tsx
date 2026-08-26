@@ -531,7 +531,13 @@ export default function OrganizationsPage() {
                   )}
                   {/* Free access: full features, no charge, and the owner's
                       plan picker is hidden so they are never offered a choice
-                      that does nothing. */}
+                      that does nothing.
+
+                      Only offered on an ACTIVE org: granting it to a pending or
+                      suspended one decides nothing. The one exception is an org
+                      that already has it, which stays togglable at any status so
+                      it can always be revoked. */}
+                  {(org.status === 'ACTIVE' || org.billingExempt) && (
                   <label
                     className="flex items-center gap-2 self-center pr-1 select-none"
                     title={
@@ -565,6 +571,7 @@ export default function OrganizationsPage() {
                       />
                     </button>
                   </label>
+                  )}
                   {org.status === 'ACTIVE' && (
                     <button
                       className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 disabled:opacity-50"
