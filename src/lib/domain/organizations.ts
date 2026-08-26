@@ -341,7 +341,7 @@ export async function reactivateOrganization(orgId: string, adminUserId: string)
 
 // --- Safe organization deletion (schedule -> buffer -> manual purge) ---
 
-export const ORG_DELETION_BUFFER_DAYS = 7
+export const ORG_DELETION_BUFFER_DAYS = 3
 
 function purgeEligibleAt(scheduledAt: Date): Date {
   return new Date(scheduledAt.getTime() + ORG_DELETION_BUFFER_DAYS * 24 * 60 * 60 * 1000)

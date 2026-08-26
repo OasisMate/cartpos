@@ -66,7 +66,7 @@ export default function OrganizationsPage() {
   const [purgeDeleteStaff, setPurgeDeleteStaff] = useState(true)
   const [purging, setPurging] = useState(false)
   const [purgeError, setPurgeError] = useState('')
-  const DELETION_BUFFER_DAYS = 7
+  const DELETION_BUFFER_DAYS = 3
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -562,30 +562,33 @@ export default function OrganizationsPage() {
                   {/* Safe deletion controls (rejected or suspended only) */}
                   {(org.status === 'INACTIVE' || org.status === 'SUSPENDED') &&
                     (org.deletionScheduledAt ? (
-                      <>
-                        <button
-                          className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50"
-                          disabled={actioningId === org.id}
-                          onClick={() => cancelDeletion(org.id)}
-                        >
-                          Cancel deletion
-                        </button>
-                        {(() => {
-                          const due = purgeEligibleDate(org)
-                          return due && new Date() >= due ? (
+                      (() => {
+                        // Once the buffer has elapsed the only ways out are
+                        // Reactivate (or Approve) and permanent deletion, so
+                        // Cancel deletion is dropped to keep the choice clear.
+                        const due = purgeEligibleDate(org)
+                        return due && new Date() >= due ? (
+                          <button
+                            className="px-3 py-1 bg-red-700 text-white rounded text-sm hover:bg-red-800"
+                            onClick={() => openPurge(org)}
+                          >
+                            Delete permanently
+                          </button>
+                        ) : (
+                          <>
                             <button
-                              className="px-3 py-1 bg-red-700 text-white rounded text-sm hover:bg-red-800"
-                              onClick={() => openPurge(org)}
+                              className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50"
+                              disabled={actioningId === org.id}
+                              onClick={() => cancelDeletion(org.id)}
                             >
-                              Delete permanently
+                              Cancel deletion
                             </button>
-                          ) : (
                             <span className="px-2 text-xs text-gray-500 self-center whitespace-nowrap">
                               Deletable {due?.toLocaleDateString()}
                             </span>
-                          )
-                        })()}
-                      </>
+                          </>
+                        )
+                      })()
                     ) : (
                       <button
                         className="px-3 py-1 border border-red-300 text-red-700 rounded text-sm hover:bg-red-50 disabled:opacity-50"
@@ -687,13 +690,24 @@ export default function OrganizationsPage() {
                 </div>
               )}
 
-              {org.deletionScheduledAt && (
-                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
-                  ⏳ Scheduled for deletion - can be permanently deleted on{' '}
-                  <span className="font-medium">{purgeEligibleDate(org)?.toLocaleDateString()}</span>.
-                  Click <span className="font-medium">Cancel deletion</span> to restore it any time before then.
-                </div>
-              )}
+              {org.deletionScheduledAt && (() => {
+                const due = purgeEligibleDate(org)
+                const ready = !!due && new Date() >= due
+                return ready ? (
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                    ⚠️ Ready to delete. The buffer ended on{' '}
+                    <span className="font-medium">{due?.toLocaleDateString()}</span>.
+                    Use <span className="font-medium">{org.status === 'SUSPENDED' ? 'Reactivate' : 'Approve'}</span> to
+                    bring it back, or <span className="font-medium">Delete permanently</span> to erase it and all its data.
+                  </div>
+                ) : (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                    ⏳ Scheduled for deletion - can be deleted after{' '}
+                    <span className="font-medium">{due?.toLocaleDateString()}</span>.
+                    Click <span className="font-medium">Cancel deletion</span> to restore it any time before then.
+                  </div>
+                )
+              })()}
             </div>
           ))}
         </div>
