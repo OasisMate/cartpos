@@ -8,6 +8,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { getProductsWithCache, getCachedProducts, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 import { saveSale } from '@/lib/offline/sales'
+import { ensureInvoiceNumbers, takeInvoiceNumber } from '@/lib/offline/invoiceNumbers'
 import { getCustomers, saveCustomers, saveProducts, addCustomer as addLocalCustomer, saveShopSettings, getCachedShopSettings, getMeta, setMeta } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
 import { validatePhone } from '@/lib/validation'
@@ -22,6 +23,13 @@ import { Minus, Plus, X, ShoppingCart, Package, Trash2, Edit3, Keyboard } from '
 // Receipt modal carries the print markup/CSS and only renders after a sale completes,
 // so load it lazily to keep it out of the initial POS bundle (faster first paint on mobile).
 const ReceiptModal = dynamic(() => import('@/components/receipt/ReceiptModal'), { ssr: false })
+
+/**
+ * Shown when this device is offline and has used up its reserved block. The sale is saved and
+ * will be numbered by the server on sync; printing a made-up number instead would recreate the
+ * exact bug reserved blocks exist to remove.
+ */
+const PENDING_INVOICE_NUMBER = 'PENDING'
 import Modal from '@/components/ui/Modal'
 import DrawerWidget from '@/components/shifts/DrawerWidget'
 
@@ -625,6 +633,10 @@ export default function POSPage() {
 
     if (user?.currentShopId) {
       loadPOSData()
+      // Top up this device's invoice-number block ahead of the first sale. Fire and forget:
+      // the POS must never wait on it, and checkout never fetches. Re-runs on reconnect
+      // because isOnline is a dependency, which is when a drained block gets refilled.
+      void ensureInvoiceNumbers(user.currentShopId, isOnline)
     }
   }, [user?.currentShopId, isOnline])
 
@@ -1472,10 +1484,17 @@ export default function POSPage() {
       // Generate client-side ID for offline-first
       const saleId = cuid()
 
+      // The number that will be printed AND stored. Comes from a block this device reserved,
+      // so it is already final: no second number is invented for the receipt. Null only when
+      // the device ran out of numbers while offline, in which case the server assigns one on
+      // sync and the receipt says so rather than showing a number that would be wrong.
+      const issued = await takeInvoiceNumber(user.currentShopId, isOnline)
+
       // Create sale input
       const sale = {
         id: saleId,
         shopId: user.currentShopId,
+        invoiceNumber: issued?.value,
         customerId: paymentStatus === 'UDHAAR' ? customerId : undefined,
         items: cart.map((item) => ({
           productId: item.product.id,
@@ -1561,12 +1580,10 @@ export default function POSPage() {
           ? parseFloat(amountReceived)
           : undefined
       
-      // Generate sequential invoice number (stored per shop in localStorage)
-      const invoiceKey = `invoice_counter_${user.currentShopId}`
-      const lastNum = parseInt(localStorage.getItem(invoiceKey) || '0', 10)
-      const nextNum = lastNum + 1
-      localStorage.setItem(invoiceKey, String(nextNum))
-      const invoiceNumber = String(nextNum).padStart(6, '0')
+      // The number issued above, already sent with the sale. A localStorage counter used to be
+      // invented here instead, which is why the receipt never matched the stored invoice and two
+      // devices in one shop both printed 000001.
+      const invoiceNumber = issued?.formatted ?? PENDING_INVOICE_NUMBER
 
       const receiptSnapshot: ReceiptData = {
         id: saleId,

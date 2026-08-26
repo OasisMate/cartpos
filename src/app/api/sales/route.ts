@@ -108,6 +108,11 @@ export async function POST(request: NextRequest) {
           ? body.clientSaleId.trim()
           : undefined,
       customerId: body.customerId || undefined,
+      // Number already printed on the customer's receipt, from this device's reserved block.
+      invoiceNumber:
+        Number.isInteger(body.invoiceNumber) && body.invoiceNumber > 0
+          ? body.invoiceNumber
+          : undefined,
       items: body.items.map((item: any) => ({
         productId: item.productId,
         quantity: parseFloat(item.quantity),

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   nextDocumentNumber,
+  reserveDocumentNumbers,
   formatInvoiceNumber,
   formatQuotationNumber,
+  MAX_RESERVATION,
 } from './documentNumbers'
 
 describe('formatInvoiceNumber', () => {
@@ -67,5 +69,61 @@ describe('nextDocumentNumber', () => {
     await expect(nextDocumentNumber(tx, 'shop_1', 'INVOICE')).rejects.toThrow(
       /could not allocate/i
     )
+  })
+})
+
+describe('reserveDocumentNumbers', () => {
+  function fakeTx(rows: Array<{ value: number }>) {
+    return { $queryRaw: vi.fn().mockResolvedValue(rows) } as any
+  }
+
+  it('derives the block from the counter value after the increment', async () => {
+    // Counter was 7253; reserving 50 leaves it at 7303, so the block is 7254..7303.
+    const tx = fakeTx([{ value: 7303 }])
+    await expect(reserveDocumentNumbers(tx, 'shop_1', 'INVOICE', 50)).resolves.toEqual({
+      start: 7254,
+      end: 7303,
+    })
+  })
+
+  it('reserves exactly the count asked for', async () => {
+    const tx = fakeTx([{ value: 100 }])
+    const { start, end } = await reserveDocumentNumbers(tx, 'shop_1', 'INVOICE', 25)
+    expect(end - start + 1).toBe(25)
+  })
+
+  it('handles a block of one', async () => {
+    const tx = fakeTx([{ value: 9 }])
+    await expect(reserveDocumentNumbers(tx, 'shop_1', 'INVOICE', 1)).resolves.toEqual({
+      start: 9,
+      end: 9,
+    })
+  })
+
+  it('gives consecutive devices non-overlapping ranges', async () => {
+    // Same counter row, two sequential reservations of 50.
+    const a = await reserveDocumentNumbers(fakeTx([{ value: 50 }]), 's', 'INVOICE', 50)
+    const b = await reserveDocumentNumbers(fakeTx([{ value: 100 }]), 's', 'INVOICE', 50)
+    expect(a).toEqual({ start: 1, end: 50 })
+    expect(b).toEqual({ start: 51, end: 100 })
+    expect(a.end).toBeLessThan(b.start)
+  })
+
+  it('allocates in one statement, so two devices cannot be given the same range', async () => {
+    const tx = fakeTx([{ value: 50 }])
+    await reserveDocumentNumbers(tx, 'shop_1', 'INVOICE', 50)
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([0, -1, 1.5, NaN, MAX_RESERVATION + 1])('rejects a count of %s', async (count) => {
+    await expect(
+      reserveDocumentNumbers(fakeTx([{ value: 1 }]), 'shop_1', 'INVOICE', count as number)
+    ).rejects.toThrow(/between 1 and/)
+  })
+
+  it('throws rather than returning a bogus block when the counter returns nothing', async () => {
+    await expect(
+      reserveDocumentNumbers(fakeTx([]), 'shop_1', 'INVOICE', 10)
+    ).rejects.toThrow(/could not reserve/i)
   })
 })

@@ -43,6 +43,13 @@ export interface SaleItemInput {
 export interface CreateSaleInput {
   /** POS offline sale id (cuid); prevents duplicate invoices if sync runs twice */
   clientSaleId?: string
+  /**
+   * Number the POS already printed on the customer's receipt, taken from a block this device
+   * reserved (see lib/offline/invoiceNumbers.ts). Honoured so the paper and the ledger agree.
+   * Ignored if it is somehow already taken in this shop, and omitted entirely by callers that
+   * do not print first (quotation conversion, edits, API clients) - those get a fresh number.
+   */
+  invoiceNumber?: number
   customerId?: string
   items: SaleItemInput[]
   subtotal: number
@@ -368,6 +375,29 @@ async function applySaleEffects(
   }
 }
 
+
+/**
+ * Accept a number the POS already printed, unless it is taken. Returns null when the caller
+ * supplied nothing usable, so the caller falls back to allocating a fresh one.
+ *
+ * The lookup is a safety net, not the guarantee: devices hand out numbers from disjoint
+ * reserved blocks, so a clash should be impossible. It exists because Invoice still has no
+ * UNIQUE(shopId, number) - three legacy duplicates in a live shop block that constraint - and
+ * a wrong number on a bill is worse than a gap in the sequence.
+ */
+async function claimGivenNumber(
+  tx: Prisma.TransactionClient,
+  shopId: string,
+  given: number | undefined,
+): Promise<number | null> {
+  if (given === undefined || !Number.isInteger(given) || given < 1) return null
+  const taken = await tx.invoice.findFirst({
+    where: { shopId, number: formatInvoiceNumber(given) },
+    select: { id: true },
+  })
+  return taken ? null : given
+}
+
 export async function createSale(
   shopId: string,
   input: CreateSaleInput,
@@ -393,10 +423,13 @@ export async function createSale(
         }
       }
 
-      // Sequential invoice number for this shop, allocated atomically. Reading MAX(number)
-      // and adding one let two concurrent sales derive the same number. See documentNumbers.ts.
+      // The POS reserves a block of numbers per device and prints from it, so the receipt the
+      // customer is holding already carries a number. Honour it, so the paper and the ledger
+      // agree. Fall back to a fresh number when the caller did not print one, or in the
+      // should-never-happen case that it is already taken in this shop.
       const invoiceNumber = formatInvoiceNumber(
-        await nextDocumentNumber(tx, shopId, 'INVOICE')
+        (await claimGivenNumber(tx, shopId, input.invoiceNumber)) ??
+          (await nextDocumentNumber(tx, shopId, 'INVOICE'))
       )
 
       const invoice = await tx.invoice.create({

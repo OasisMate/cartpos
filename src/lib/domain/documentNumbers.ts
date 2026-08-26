@@ -16,6 +16,15 @@ import { Prisma } from '@prisma/client'
  */
 export type DocumentCounterKind = 'INVOICE' | 'QUOTATION'
 
+/** Anything exposing $queryRaw: the Prisma client itself or a transaction client. */
+type PrismaLike = { $queryRaw: Prisma.TransactionClient['$queryRaw'] }
+
+/**
+ * Ceiling on one reservation. A device only needs enough to survive a day offline; a large
+ * request would burn numbers and widen the gaps for everyone else in the shop.
+ */
+export const MAX_RESERVATION = 500
+
 export async function nextDocumentNumber(
   tx: Prisma.TransactionClient,
   shopId: string,
@@ -33,6 +42,45 @@ export async function nextDocumentNumber(
     throw new Error(`Could not allocate a ${kind.toLowerCase()} number`)
   }
   return value
+}
+
+
+/**
+ * Reserve a contiguous block of numbers for one device, in a single atomic statement.
+ *
+ * This is what keeps the number a cashier sees on the printed receipt identical to the one
+ * stored in the database. The POS is offline-first: it prints before the sale reaches the
+ * server, so the number has to be decided on the device. A device claims a block while it is
+ * online and then hands numbers out locally, online or offline. Because the block is carved
+ * off the same counter row under the same row lock, two devices can never be given
+ * overlapping ranges.
+ *
+ * Unused numbers in a block become gaps. That is intended: a ledger may skip a number, it may
+ * never repeat one.
+ */
+export async function reserveDocumentNumbers(
+  client: Prisma.TransactionClient | PrismaLike,
+  shopId: string,
+  kind: DocumentCounterKind,
+  count: number
+): Promise<{ start: number; end: number }> {
+  if (!Number.isInteger(count) || count < 1 || count > MAX_RESERVATION) {
+    throw new Error(`Reservation size must be between 1 and ${MAX_RESERVATION}`)
+  }
+
+  const rows = await client.$queryRaw<Array<{ value: number }>>`
+    INSERT INTO "ShopCounter" ("shopId", "kind", "value")
+    VALUES (${shopId}, ${kind}::"DocumentCounter", ${count})
+    ON CONFLICT ("shopId", "kind")
+    DO UPDATE SET "value" = "ShopCounter"."value" + ${count}
+    RETURNING "value"
+  `
+  const end = rows[0]?.value
+  if (!end || !Number.isFinite(end)) {
+    throw new Error(`Could not reserve ${kind.toLowerCase()} numbers`)
+  }
+  // The counter now points at the LAST number in the block.
+  return { start: end - count + 1, end }
 }
 
 /** Invoice numbers: 000001, 000002, ... */

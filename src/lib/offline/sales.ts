@@ -25,6 +25,12 @@ export interface SaleInput {
   amountReceived?: number
   /** Udhaar: cash paid at the counter (may exceed total to clear old khata) */
   paidNow?: number
+  /**
+   * Number printed on the customer's receipt, taken from this device's reserved block.
+   * Sent with the sale so the stored invoice carries the same number as the paper.
+   * Undefined when the device ran out of numbers offline; the server assigns one then.
+   */
+  invoiceNumber?: number
 }
 
 /**
@@ -54,6 +60,7 @@ export async function syncSaleToServer(sale: CachedSale): Promise<boolean> {
         paymentMethod: sale.paymentMethod,
         amountReceived: sale.amountReceived,
         paidNow: sale.paidNow,
+        invoiceNumber: sale.invoiceNumber,
       }),
     })
 
@@ -108,6 +115,7 @@ export async function syncPendingSalesBatch(shopId: string): Promise<{ synced: n
       paymentMethod: (sale as CachedSale).paymentMethod,
       amountReceived: (sale as CachedSale).amountReceived,
       paidNow: (sale as CachedSale).paidNow,
+      invoiceNumber: (sale as CachedSale).invoiceNumber,
     }),
     endpoint: '/api/sales/sync-batch',
   })

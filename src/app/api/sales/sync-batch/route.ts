@@ -32,6 +32,8 @@ interface SyncSaleInput {
   /** Device clock at the moment the cashier rang it up. Decides whether a sale
    *  queued offline predates a shop freeze and therefore really happened. */
   clientCreatedAt?: number | null
+  /** Number already printed on the receipt, from this device's reserved block. */
+  invoiceNumber?: number | null
 }
 
 // POST: Batch sync sales from offline clients
@@ -84,6 +86,11 @@ export async function POST(request: NextRequest) {
 
         const input: CreateSaleInput = {
           clientSaleId: sale.id,
+          // Keep the printed number: the customer is already holding it.
+          invoiceNumber:
+            Number.isInteger(sale.invoiceNumber) && (sale.invoiceNumber as number) > 0
+              ? (sale.invoiceNumber as number)
+              : undefined,
           customerId: sale.customerId || undefined,
           items: sale.items.map((item) => ({
             productId: item.productId,

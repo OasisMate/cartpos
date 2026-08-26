@@ -97,6 +97,8 @@ export interface CachedSale {
   amountReceived?: number
   /** Udhaar: cash paid at the counter (may exceed total to clear old khata) */
   paidNow?: number
+  /** Number printed on the customer's receipt, from this device's reserved block. */
+  invoiceNumber?: number
   createdAt: number // timestamp
   syncStatus: 'PENDING' | 'SYNCED'
   syncError?: string
