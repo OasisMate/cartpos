@@ -203,6 +203,57 @@ export default function ProductsPage() {
   const unitSelectRef = useRef<HTMLSelectElement>(null)
   const priceInputRef = useRef<HTMLInputElement>(null)
 
+  // Deep-linked from the reports page: ?missingCost=true shows only products with no cost
+  // price, which are the ones being reported at zero profit.
+  const [missingCostOnly, setMissingCostOnly] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const flag = new URLSearchParams(window.location.search).get('missingCost') === 'true'
+    if (flag) setMissingCostOnly(true)
+  }, [])
+
+  const [savingCostId, setSavingCostId] = useState<string | null>(null)
+
+  /**
+   * Save one cost price straight from the list. Kept deliberately narrow: it sends only
+   * costPrice, so working through the missing-cost list can never disturb anything else on
+   * the product.
+   */
+  const saveCostPrice = async (product: Product, raw: string) => {
+    const trimmed = raw.trim()
+    const existing = product.costPrice ?? ''
+    if (trimmed === existing) return
+    if (trimmed === '') return
+
+    const value = parseFloat(trimmed)
+    if (!Number.isFinite(value) || value < 0) {
+      show({ title: 'Invalid cost', message: 'Enter a cost of 0 or more.', variant: 'destructive' })
+      return
+    }
+
+    setSavingCostId(product.id)
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ costPrice: trimmed }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Could not save the cost price')
+      }
+      // Reflect it locally rather than refetching: refetching under the missing-cost filter
+      // would pull the row out from under the cursor mid-typing.
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...p, costPrice: trimmed } : p))
+      )
+    } catch (err: any) {
+      show({ title: 'Not saved', message: err.message, variant: 'destructive' })
+    } finally {
+      setSavingCostId(null)
+    }
+  }
+
   const fetchProducts = useCallback(async () => {
     if (!user?.currentShopId) return
 
@@ -224,6 +275,9 @@ export default function ProductsPage() {
           }
           if (showArchived) {
             params.append('includeArchived', 'true')
+          }
+          if (missingCostOnly) {
+            params.append('missingCost', 'true')
           }
           // Server-side sort for DB columns (sorts the whole catalog, not just this page).
           if (sortColumn && SERVER_SORT_COLUMNS.includes(sortColumn)) {
@@ -293,7 +347,7 @@ export default function ProductsPage() {
     } finally {
       if (!isStale()) setLoading(false)
     }
-  }, [user?.currentShopId, currentPage, pageSize, debouncedSearch, sortColumn, sortDirection, showArchived])
+  }, [user?.currentShopId, currentPage, pageSize, debouncedSearch, sortColumn, sortDirection, showArchived, missingCostOnly])
 
   // Debounce the search box: wait 300ms after typing stops, then search from page 1.
   // Prevents a request per keystroke (was 7 calls for "shampoo").
@@ -810,16 +864,36 @@ export default function ProductsPage() {
           />
           <Button type="submit" variant="outline">Search</Button>
         </div>
-        <label className="mt-2 inline-flex items-center gap-2 text-sm text-gray-600">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => { setShowArchived(e.target.checked); setCurrentPage(1) }}
-            className="w-4 h-4"
-          />
-          <span>Show archived products</span>
-        </label>
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => { setShowArchived(e.target.checked); setCurrentPage(1) }}
+              className="w-4 h-4"
+            />
+            <span>Show archived products</span>
+          </label>
+          {/* Sales of these are reported at zero profit, so this is the working list for
+              making the profit figures mean something. */}
+          <label className="inline-flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={missingCostOnly}
+              onChange={(e) => { setMissingCostOnly(e.target.checked); setCurrentPage(1) }}
+              className="w-4 h-4"
+            />
+            <span>Missing cost price only</span>
+          </label>
+        </div>
       </form>
+
+      {missingCostOnly ? (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          These products have no cost price, so every sale of them is reported as zero profit.
+          Enter a cost below and your profit reports will start counting them.
+        </div>
+      ) : null}
 
       {/* Product Form Modal */}
       <Modal
@@ -1280,7 +1354,32 @@ export default function ProductsPage() {
                         <TD>{product.unit}</TD>
                         <TD className="text-right">{formatCurrency(parseFloat(product.price), '')}</TD>
                         <TD className="text-right">
-                          {product.costPrice ? formatCurrency(parseFloat(product.costPrice), '') : '-'}
+                          {missingCostOnly ? (
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              inputMode="decimal"
+                              placeholder="Cost"
+                              aria-label={`Cost price for ${product.name}`}
+                              defaultValue={product.costPrice ?? ''}
+                              disabled={savingCostId === product.id}
+                              onKeyDown={(e) => {
+                                // Enter moves down the list, so a whole page can be typed
+                                // without reaching for the mouse.
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  ;(e.target as HTMLInputElement).blur()
+                                }
+                              }}
+                              onBlur={(e) => saveCostPrice(product, e.target.value)}
+                              className="w-24 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                            />
+                          ) : product.costPrice ? (
+                            formatCurrency(parseFloat(product.costPrice), '')
+                          ) : (
+                            '-'
+                          )}
                         </TD>
                         <TD className="text-center">
                           {product.trackStock ? (

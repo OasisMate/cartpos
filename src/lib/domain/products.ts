@@ -417,6 +417,16 @@ export async function listProducts(shopId: string, filters: ProductFilters = {})
     where.trackStock = filters.trackStock
   }
 
+  // Products with no cost price. Every sale of one of these is reported at zero profit, so
+  // this is the list a shop works through to make its profit figures mean something.
+  //
+  // Goes in AND, not OR: the search filter above already owns `where.OR`, and assigning it
+  // here would silently discard the search terms when both are used together.
+  if (filters.missingCost) {
+    const existing = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []
+    where.AND = [...existing, { OR: [{ costPrice: null }, { costPrice: 0 }] }]
+  }
+
   // Sorting (DB columns only; stock is computed from the ledger so it isn't sortable here)
   const sortableColumns: ProductSortBy[] = ['name', 'price', 'costPrice', 'sku', 'createdAt', 'updatedAt']
   const sortBy = filters.sortBy && sortableColumns.includes(filters.sortBy) ? filters.sortBy : 'createdAt'

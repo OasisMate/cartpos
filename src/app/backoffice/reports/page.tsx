@@ -6,6 +6,7 @@ import { formatCurrency } from '@/lib/utils/money'
 import { SkeletonCards } from '@/components/ui/Skeleton'
 import { usePlan } from '@/lib/billing/usePlan'
 import { UpgradeCard } from '@/components/billing/UpgradeCard'
+import Link from 'next/link'
 
 interface RangeSummary {
   from: string
@@ -16,6 +17,12 @@ interface RangeSummary {
   totalPaymentsReceived: number
   costOfGoods: number
   grossProfit: number
+  costCoverage?: {
+    linesMissingCost: number
+    revenueMissingCost: number
+    shareMissingCost: number
+    costedRevenue: number
+  }
 }
 
 type Preset = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'CUSTOM'
@@ -38,6 +45,17 @@ export default function ReportsPage() {
   const [from, setFrom] = useState<string>(today)
   const [to, setTo] = useState<string>(today)
   const [summary, setSummary] = useState<RangeSummary | null>(null)
+
+  // Sales we could put a cost against. Uncosted lines are booked at zero profit by design, so
+  // they belong out of the margin denominator and in a warning the shop can act on.
+  const coverage = summary?.costCoverage
+  const hasUncosted = !!coverage && coverage.revenueMissingCost > 0
+  const costedMargin =
+    summary && coverage && coverage.costedRevenue > 0
+      ? summary.grossProfit / coverage.costedRevenue
+      : summary && summary.totalSales > 0 && !coverage
+        ? summary.grossProfit / summary.totalSales
+        : null
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -223,7 +241,17 @@ export default function ReportsPage() {
                 <div className={`text-2xl font-semibold ${summary.grossProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                   {formatCurrency(summary.grossProfit)}
                 </div>
-                <div className="text-[11px] text-gray-400 mt-1">Sales − cost of goods sold</div>
+                {/* Margin is measured against the sales we could actually cost. Dividing by total
+                    revenue drags the percentage down by exactly the uncosted share, which is a
+                    number about missing data, not about how the shop is trading. */}
+                {costedMargin !== null ? (
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    {(costedMargin * 100).toFixed(1)}% margin
+                    {hasUncosted ? ' on costed sales' : ''}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-gray-400 mt-1">Sales − cost of goods sold</div>
+                )}
               </div>
             </>
           ) : (
@@ -238,6 +266,26 @@ export default function ReportsPage() {
       ) : (
         <div className="text-gray-600 text-sm">No data for this period.</div>
       )}
+
+      {/* Why the profit figure may look low. Without this the shop just sees a small number and
+          has no way to find out that the cause is missing cost prices, not a bad week. */}
+      {summary && canSeeProfit && hasUncosted && coverage ? (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="text-sm text-amber-900">
+            <span className="font-semibold">
+              {formatCurrency(coverage.revenueMissingCost)}
+            </span>{' '}
+            of these sales ({Math.round(coverage.shareMissingCost * 100)}%) have no cost price,
+            so they are counted as zero profit. Your real profit is higher.
+          </div>
+          <Link
+            href="/store/products?missingCost=true"
+            className="mt-2 inline-block text-sm font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
+          >
+            Add cost prices to {coverage.linesMissingCost > 0 ? 'these products' : 'products'} →
+          </Link>
+        </div>
+      ) : null}
     </div>
   )
 }
