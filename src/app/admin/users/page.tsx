@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { User, Mail, Phone, CreditCard, Shield, Building2, Store } from 'lucide-react'
 import EmptyState from '@/components/ui/EmptyState'
 import { UserAvatar } from '@/components/ui/UserAvatar'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface AdminUser {
   id: string
@@ -111,7 +112,9 @@ export default function UsersPage() {
       )}
 
       {loading ? (
-        <div className="text-gray-600">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : filteredUsers.length === 0 ? (
         <EmptyState title="No users found" description="Platform users will appear here." />
       ) : (

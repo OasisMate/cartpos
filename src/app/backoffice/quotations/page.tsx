@@ -9,6 +9,7 @@ import { Table, THead, TR, TH, EmptyRow } from '@/components/ui/DataTable'
 import EmptyState from '@/components/ui/EmptyState'
 import { formatCurrency } from '@/lib/utils/money'
 import { Plus } from 'lucide-react'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface QuotationRow {
   id: string
@@ -97,7 +98,9 @@ export default function QuotationsPage() {
       {error && <div className="mb-3 p-3 bg-red-100 text-red-700 rounded">{error}</div>}
 
       {loading ? (
-        <div className="text-[hsl(var(--muted-foreground))]">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : rows.length === 0 ? (
         <EmptyState title="No quotations" description="Create a quotation to give a customer a price estimate before the sale." />
       ) : (

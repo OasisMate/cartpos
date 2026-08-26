@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button'
 import EmptyState from '@/components/ui/EmptyState'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface StockAdjustment {
   id: string
@@ -261,7 +262,9 @@ export default function StockAdjustmentsPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-8">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : adjustments.length === 0 ? (
         <EmptyState title="No stock adjustments found" description="Record damage, expiry, returns or corrections to see them here." />
       ) : (

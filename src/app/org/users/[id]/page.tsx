@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { User, ArrowLeft, Mail, Phone, CreditCard, Store, Trash2, Plus } from 'lucide-react'
 import { formatCNIC } from '@/lib/validation'
 import Link from 'next/link'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface UserData {
   id: string
@@ -212,7 +213,9 @@ export default function UserDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       </div>
     )
   }

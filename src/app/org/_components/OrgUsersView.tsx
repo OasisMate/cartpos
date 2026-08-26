@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { UserPlus, Edit, Trash2, Mail, Eye, EyeOff, Phone, Fingerprint, Shield, Store } from 'lucide-react'
 import IconButton from '@/components/ui/IconButton'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface OrgUser {
   id: string
@@ -388,7 +389,9 @@ export default function OrgUsersView({ orgId, orgName }: OrgUsersViewProps) {
       {!showForm && (
         <>
           {loading ? (
-            <div className="text-gray-600">Loading...</div>
+            <div className="flex min-h-[50vh] items-center justify-center">
+              <BrandSpinner size={40} />
+            </div>
           ) : sorted.length === 0 ? (
             <div className="bg-white rounded-xl shadow-md border border-gray-200 p-8 text-center">
               <p className="text-gray-600 mb-4">No users yet.</p>

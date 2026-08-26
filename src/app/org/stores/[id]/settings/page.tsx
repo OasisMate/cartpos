@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Settings as SettingsIcon, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface StoreSettings {
   id: string
@@ -103,7 +104,9 @@ export default function StoreSettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       </div>
     )
   }

@@ -13,6 +13,7 @@ import IconButton from '@/components/ui/IconButton'
 import Link from 'next/link'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { getSuppliersWithCache } from '@/lib/offline/data'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface Supplier {
   id: string
@@ -378,7 +379,9 @@ export default function SuppliersPage() {
 
       {/* Suppliers List */}
       {loading ? (
-        <div className="text-center py-8">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : suppliers.length === 0 ? (
         <EmptyState
           title={searchTerm ? 'No suppliers found' : 'No suppliers yet'}

@@ -295,7 +295,9 @@ export default function BackofficeSalesPage() {
       {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>}
 
       {loading ? (
-        <div className="text-center py-8">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : sales.length === 0 ? (
         <EmptyState title="No sales found" description="Completed sales will appear here." />
       ) : (

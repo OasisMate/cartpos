@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import EmptyState from '@/components/ui/EmptyState'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface Activity {
   id: string
@@ -174,7 +175,9 @@ export default function ActivityLog() {
       {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>}
 
       {loading ? (
-        <div className="text-center py-8 text-gray-500">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : activities.length === 0 ? (
         <EmptyState title="No activity yet" description="Actions taken in your stores will show up here." />
       ) : (

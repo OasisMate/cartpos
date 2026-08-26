@@ -14,6 +14,7 @@ import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import EmptyState from '@/components/ui/EmptyState'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface Product {
   id: string
@@ -1081,7 +1082,9 @@ export default function PurchasesPage() {
 
       {/* Purchases List */}
       {loading ? (
-        <div className="text-center py-8">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : purchases.length === 0 ? (
         <EmptyState title="No purchases yet" description="Record your first purchase to add stock and track suppliers." />
       ) : (
