@@ -144,6 +144,7 @@ model Shop {
   shifts         Shift[]
   cashMovements  CashMovement[]
   purchaseLists  PurchaseList[]
+  counters       ShopCounter[]
 
   @@index([orgId, name])
 }
@@ -667,6 +668,31 @@ enum LedgerDirection {
 // -----------------------------------------------------
 // Sales, Invoices, Payments
 // -----------------------------------------------------
+
+/// Which running document number a ShopCounter row hands out.
+enum DocumentCounter {
+  INVOICE
+  QUOTATION
+}
+
+/// Per-shop monotonic counter for human-readable document numbers.
+///
+/// Replaces the old "read MAX(number), add one, insert" derivation, which was not safe:
+/// under READ COMMITTED two cashiers (or two devices syncing at once) both read the same
+/// max and both wrote the same number. Incrementing this row takes a row lock, so numbers
+/// are handed out one at a time per shop. See lib/domain/documentNumbers.ts.
+///
+/// Numbers are never reused: deleting the newest invoice used to free its number for the
+/// next sale, which is both a duplicate risk and wrong for a ledger. Gaps are correct.
+model ShopCounter {
+  shopId String
+  kind   DocumentCounter
+  value  Int    @default(0)
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@id([shopId, kind])
+}
 
 model Invoice {
   id              String         @id @default(cuid())

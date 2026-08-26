@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import { createSale, type SaleItemInput } from './sales'
+import { nextDocumentNumber, formatQuotationNumber } from './documentNumbers'
 
 const D = (n: number | string) => new Prisma.Decimal(n)
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -28,18 +29,12 @@ export interface CreateQuotationInput {
   note?: string | null
 }
 
+/**
+ * Allocated atomically per shop. Reading MAX(number) and adding one let two concurrent
+ * quotations derive the same number. See documentNumbers.ts.
+ */
 async function nextQuotationNumber(tx: Prisma.TransactionClient, shopId: string): Promise<string> {
-  const last = await tx.quotation.findFirst({
-    where: { shopId },
-    orderBy: { createdAt: 'desc' },
-    select: { number: true },
-  })
-  let next = 1
-  if (last?.number) {
-    const n = parseInt(last.number.replace(/\D/g, ''), 10)
-    if (!isNaN(n)) next = n + 1
-  }
-  return 'Q' + String(next).padStart(6, '0')
+  return formatQuotationNumber(await nextDocumentNumber(tx, shopId, 'QUOTATION'))
 }
 
 export async function createQuotation(shopId: string, input: CreateQuotationInput, userId: string) {

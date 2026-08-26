@@ -6,6 +6,7 @@ import { formatNumber } from '@/lib/utils/money'
 import { readFeatureConfig } from './business-presets'
 import { getOpenShiftId } from './shifts'
 import { shopDayStartUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
+import { nextDocumentNumber, formatInvoiceNumber } from './documentNumbers'
 
 const invoiceDetailInclude = {
   lines: {
@@ -392,18 +393,11 @@ export async function createSale(
         }
       }
 
-      // Generate sequential invoice number for this shop
-      const lastInvoice = await tx.invoice.findFirst({
-        where: { shopId },
-        orderBy: { createdAt: 'desc' },
-        select: { number: true },
-      })
-      let nextNumber = 1
-      if (lastInvoice?.number) {
-        const lastNum = parseInt(lastInvoice.number, 10)
-        if (!isNaN(lastNum)) nextNumber = lastNum + 1
-      }
-      const invoiceNumber = String(nextNumber).padStart(6, '0') // 000001, 000002, ...
+      // Sequential invoice number for this shop, allocated atomically. Reading MAX(number)
+      // and adding one let two concurrent sales derive the same number. See documentNumbers.ts.
+      const invoiceNumber = formatInvoiceNumber(
+        await nextDocumentNumber(tx, shopId, 'INVOICE')
+      )
 
       const invoice = await tx.invoice.create({
         data: {

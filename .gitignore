@@ -88,3 +88,6 @@ desktop.ini
 
 # Planning docs (specs/plans) - kept locally, deleted once the feature ships
 /docs/superpowers/
+
+# Hardening working list - kept locally, not committed
+/docs/HARDENING_PLAN.md
