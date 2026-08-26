@@ -875,7 +875,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   // A column that fills the scroll area: the action bar then sits at the bottom
   // of the content, not pinned over the sidebar the way `fixed` was.
   return (
-    <div className="flex min-h-[calc(100dvh-10rem)] sm:min-h-[calc(100dvh-7rem)] flex-col bg-gray-50">
+    <div className="bg-gray-50 pb-24">
       <div className="sticky top-0 z-10 border-b border-gray-200 bg-white">
         <div className="mx-auto w-full max-w-4xl space-y-2 px-4 py-3">
         <div className="flex items-center gap-2">
@@ -1010,7 +1010,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-3">
+      <div className="mx-auto w-full max-w-4xl px-4 py-3">
         {list.lines.length === 0 ? (
           <EmptyState title="Nothing on this list yet. Scan an item or search for it." />
         ) : (
@@ -1034,7 +1034,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         <PurchaseListSuggestions listId={listId} onAdded={mergeLine} refreshSignal={suggestionsRefreshKey} />
       </div>
 
-      <div className="sticky bottom-0 border-t border-gray-200 bg-white">
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-white md:left-[60px]">
         <div className="mx-auto flex w-full max-w-4xl items-center gap-2 px-4 py-3">
         <div className="mr-auto whitespace-nowrap text-sm text-gray-500">
           {list.lines.length} item{list.lines.length === 1 ? '' : 's'}

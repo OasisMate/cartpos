@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Loader2 } from 'lucide-react'
+import { Plus, Loader2, Trash2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
+import IconButton from '@/components/ui/IconButton'
 import EmptyState from '@/components/ui/EmptyState'
 import { Table, THead, TR, TH, EmptyRow } from '@/components/ui/DataTable'
 import { useAuth } from '@/contexts/AuthContext'
@@ -38,6 +39,7 @@ export default function PurchaseListsPage() {
   const [lists, setLists] = useState<PurchaseListRow[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!user?.currentShopId) return
@@ -72,6 +74,26 @@ export default function PurchaseListsPage() {
     } catch (err: any) {
       show({ message: err.message || 'Failed to create list', variant: 'destructive' })
       setCreating(false)
+    }
+  }
+
+  // A received list is history and the API refuses to delete it, so the action
+  // is only offered on lists that are still a draft or already sent.
+  async function handleDelete(list: PurchaseListRow) {
+    const label = list.name || 'this list'
+    if (!confirm(`Delete ${label}? This cannot be undone.`)) return
+    setDeletingId(list.id)
+    try {
+      const res = await fetch(`/api/purchase-lists/${list.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to delete list')
+      }
+      setLists((current) => current.filter((l) => l.id !== list.id))
+    } catch (err: any) {
+      show({ message: err.message || 'Failed to delete list', variant: 'destructive' })
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -144,8 +166,27 @@ export default function PurchaseListsPage() {
                     {list._count.lines} item{list._count.lines === 1 ? '' : 's'}
                   </span>
                 </div>
-                <div className="mt-1 text-xs text-gray-400">
-                  {new Date(list.createdAt).toLocaleDateString()}
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-400">
+                    {new Date(list.createdAt).toLocaleDateString()}
+                  </span>
+                  {list.status !== 'RECEIVED' && (
+                    <IconButton
+                      label="Delete list"
+                      variant="danger"
+                      disabled={deletingId === list.id}
+                      className="h-9 w-9"
+                      onClick={(e) => {
+                        // The whole card is a link to the builder, so the tap
+                        // must not navigate on its way to the delete.
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleDelete(list)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </IconButton>
+                  )}
                 </div>
               </Link>
             ))}
@@ -161,11 +202,12 @@ export default function PurchaseListsPage() {
                   <TH className="text-right">Items</TH>
                   <TH>Status</TH>
                   <TH>Date</TH>
+                  <TH className="text-right">Actions</TH>
                 </TR>
               </THead>
               <tbody>
                 {lists.length === 0 ? (
-                  <EmptyRow colSpan={5} message="No purchase lists yet" />
+                  <EmptyRow colSpan={6} message="No purchase lists yet" />
                 ) : (
                   lists.map((list) => (
                     <tr
@@ -190,6 +232,18 @@ export default function PurchaseListsPage() {
                         </span>
                       </td>
                       <td className="py-2 px-3">{new Date(list.createdAt).toLocaleDateString()}</td>
+                      <td className="py-2 px-3 text-right">
+                        {list.status !== 'RECEIVED' && (
+                          <IconButton
+                            label="Delete list"
+                            variant="danger"
+                            disabled={deletingId === list.id}
+                            onClick={() => handleDelete(list)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </IconButton>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}

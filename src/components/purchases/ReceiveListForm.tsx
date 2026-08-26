@@ -271,7 +271,7 @@ export default function ReceiveListForm({ listId }: { listId: string }) {
   }
 
   return (
-    <div className="flex min-h-[calc(100dvh-10rem)] sm:min-h-[calc(100dvh-7rem)] flex-col bg-gray-50">
+    <div className="bg-gray-50 pb-28">
       <div className="sticky top-0 z-10 border-b border-gray-200 bg-white">
         <div className="mx-auto flex w-full max-w-4xl items-center gap-2 px-4 py-3">
         <Link
@@ -285,7 +285,7 @@ export default function ReceiveListForm({ listId }: { listId: string }) {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-4xl flex-1 space-y-3 px-4 py-3">
+      <div className="mx-auto w-full max-w-4xl space-y-3 px-4 py-3">
         <div className="rounded-lg border border-gray-200 bg-white p-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
@@ -436,7 +436,7 @@ export default function ReceiveListForm({ listId }: { listId: string }) {
         </div>
       </div>
 
-      <div className="sticky bottom-0 border-t border-gray-200 bg-white">
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-white md:left-[60px]">
         <div className="mx-auto w-full max-w-4xl px-4 py-3">
           <Button className="h-12 w-full text-base" disabled={submitting} onClick={handleSubmit}>
             {submitting ? (
