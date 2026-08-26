@@ -65,6 +65,12 @@ export interface CostCoverage {
   revenueMissingCost: number
   /** Share of revenue in the period with no cost behind it, 0 to 1. */
   shareMissingCost: number
+  /**
+   * Revenue we could actually cost. The honest denominator for a margin percentage: dividing
+   * profit by TOTAL revenue understates the margin by exactly the uncosted share, which is what
+   * made a shop running ~12% look like it was running ~10%.
+   */
+  costedRevenue: number
 }
 
 /**
@@ -90,5 +96,16 @@ export function summariseCostCoverage(lines: CogsLine[]): CostCoverage {
     linesMissingCost,
     revenueMissingCost: Math.round(revenueMissingCost * 100) / 100,
     shareMissingCost: revenue > 0 ? revenueMissingCost / revenue : 0,
+    costedRevenue: Math.round((revenue - revenueMissingCost) * 100) / 100,
   }
+}
+
+/**
+ * Margin to show the shop, as a fraction. Measured against the revenue we could cost, because
+ * uncosted sales contribute zero profit by construction and would drag the percentage down for
+ * a reason that has nothing to do with how well the shop is trading.
+ */
+export function costedMargin(grossProfit: number, coverage: CostCoverage): number | null {
+  if (!(coverage.costedRevenue > 0)) return null
+  return grossProfit / coverage.costedRevenue
 }

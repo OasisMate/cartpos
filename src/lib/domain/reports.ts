@@ -55,6 +55,9 @@ async function getCostOfGoods(
       // Without this a carton of 12 is costed as a single unit, which reports a profit the
       // shop never made.
       unitsPerItem: true,
+      // The cost frozen at sale time. Preferred over the product's current cost so that
+      // editing a cost price cannot rewrite the profit on sales already made.
+      unitCost: true,
       product: { select: { costPrice: true } },
     },
   })
@@ -62,7 +65,13 @@ async function getCostOfGoods(
     quantity: Number(l.quantity),
     lineTotal: Number(l.lineTotal),
     unitsPerItem: Number(l.unitsPerItem),
-    costPrice: l.product.costPrice ? Number(l.product.costPrice) : null,
+    // Fall back to the current cost only for rows written before costs were snapshotted.
+    costPrice:
+      l.unitCost != null
+        ? Number(l.unitCost)
+        : l.product.costPrice
+          ? Number(l.product.costPrice)
+          : null,
   }))
   return { cogs: sumCogs(mapped), coverage: summariseCostCoverage(mapped) }
 }

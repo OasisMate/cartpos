@@ -1,0 +1,11 @@
+-- Freeze the cost of a sold line at the moment of sale.
+--
+-- InvoiceLine already snapshotted unitPrice, so revenue was historically correct. Cost was not:
+-- reports read Product.costPrice as it is TODAY, so editing one cost price silently changed the
+-- reported profit of every sale of that product, however long ago. A shopkeeper checking last
+-- month's profit got a different answer each time they looked.
+--
+-- Additive and nullable. Existing rows stay NULL and reporting falls back to Product.costPrice
+-- for them, because the cost that actually applied back then was never recorded and cannot be
+-- reconstructed. From here on, new sales carry their own cost.
+ALTER TABLE "InvoiceLine" ADD COLUMN "unitCost" DECIMAL(10,2);

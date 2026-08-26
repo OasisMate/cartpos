@@ -221,15 +221,22 @@ export async function applySaleEffects(
   const { invoiceId, shopId, input, userId, products, batchExpiryOn } = params
 
   await tx.invoiceLine.createMany({
-    data: input.items.map((itemInput) => ({
-      invoiceId,
-      productId: itemInput.productId,
-      quantity: new Decimal(itemInput.quantity),
-      unitPrice: new Decimal(itemInput.unitPrice),
-      lineTotal: new Decimal(itemInput.lineTotal),
-      unitsPerItem: new Decimal(unitsPerItemOf(itemInput)),
-      packName: itemInput.packName || null,
-    })),
+    data: input.items.map((itemInput) => {
+      // Freeze the cost the way unitPrice is already frozen. Without this, editing a product's
+      // cost price rewrites the reported profit of every past sale of it.
+      const product = products.find((p) => p.id === itemInput.productId)
+      const cost = (product as any)?.costPrice
+      return {
+        invoiceId,
+        productId: itemInput.productId,
+        quantity: new Decimal(itemInput.quantity),
+        unitPrice: new Decimal(itemInput.unitPrice),
+        lineTotal: new Decimal(itemInput.lineTotal),
+        unitsPerItem: new Decimal(unitsPerItemOf(itemInput)),
+        packName: itemInput.packName || null,
+        unitCost: cost != null ? new Decimal(cost.toString()) : null,
+      }
+    }),
   })
 
   // Map productId -> line id for stock ledger references.

@@ -47,7 +47,7 @@ function stubTx() {
   return { tx, calls, lots }
 }
 
-const PRODUCT = { id: 'p1', trackStock: true } as any
+const PRODUCT = { id: 'p1', trackStock: true, costPrice: 45 } as any
 const num = (d: any) => Number(d.toString())
 
 function run(tx: any, input: any, products: any[] = [PRODUCT], batchExpiryOn = false) {
@@ -285,5 +285,56 @@ describe('batch/expiry shops', () => {
     lots.push({ id: 'lot_a', quantity: 50 })
     await run(tx, cashSale(), [PRODUCT], false)
     expect(calls.lotUpdates).toHaveLength(0)
+  })
+})
+
+describe('cost is frozen at the moment of sale', () => {
+  it('copies the product cost onto the line', async () => {
+    // unitPrice was always snapshotted; cost was not, so editing a cost price rewrote the
+    // reported profit of every past sale of that product.
+    const { tx, calls } = stubTx()
+    await run(tx, cashSale())
+    expect(num(calls.invoiceLines[0].unitCost)).toBe(45)
+  })
+
+  it('stores the cost per BASE unit even for a pack sale', async () => {
+    // The line records 2 cartons; the cost stays per base unit so reporting multiplies by
+    // quantity x unitsPerItem rather than double-counting the pack size.
+    const { tx, calls } = stubTx()
+    await run(
+      tx,
+      cashSale({
+        items: [
+          {
+            productId: 'p1',
+            quantity: 2,
+            unitPrice: 700,
+            lineTotal: 1400,
+            unitsPerItem: 12,
+            packName: 'Carton',
+          },
+        ],
+        subtotal: 1400,
+        total: 1400,
+      })
+    )
+    expect(num(calls.invoiceLines[0].unitCost)).toBe(45)
+    expect(num(calls.invoiceLines[0].unitsPerItem)).toBe(12)
+  })
+
+  it('leaves the cost null when the product has none, so reporting can say so', async () => {
+    const { tx, calls } = stubTx()
+    await run(tx, cashSale(), [{ id: 'p1', trackStock: true, costPrice: null } as any])
+    expect(calls.invoiceLines[0].unitCost).toBeNull()
+  })
+
+  it('is unaffected by a later change to the product cost', async () => {
+    // Two sales of the same product at different costs keep their own.
+    const first = stubTx()
+    await run(first.tx, cashSale(), [{ id: 'p1', trackStock: true, costPrice: 45 } as any])
+    const second = stubTx()
+    await run(second.tx, cashSale(), [{ id: 'p1', trackStock: true, costPrice: 60 } as any])
+    expect(num(first.calls.invoiceLines[0].unitCost)).toBe(45)
+    expect(num(second.calls.invoiceLines[0].unitCost)).toBe(60)
   })
 })

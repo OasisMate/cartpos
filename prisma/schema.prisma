@@ -785,6 +785,14 @@ model InvoiceLine {
   unitsPerItem Decimal  @default(1) @db.Decimal(10, 3)
   /// Packaging label the item was sold as (e.g. "Carton", "Box"); null = base unit.
   packName     String?
+  /// Cost per BASE unit at the moment of sale, copied from Product.costPrice.
+  ///
+  /// unitPrice was always snapshotted, so revenue is historically correct, but cost was not:
+  /// reports read the product's CURRENT cost, so editing a cost price silently rewrote the
+  /// profit on every sale ever made of that product. Line cost is now frozen the way the sale
+  /// price is. Null on rows written before this existed, and on products with no cost recorded;
+  /// reporting falls back to Product.costPrice for those.
+  unitCost     Decimal? @db.Decimal(10, 2)
   createdAt    DateTime @default(now())
   invoice      Invoice  @relation(fields: [invoiceId], references: [id])
   product      Product  @relation(fields: [productId], references: [id])

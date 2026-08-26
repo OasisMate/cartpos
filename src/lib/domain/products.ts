@@ -73,6 +73,8 @@ export interface ProductFilters {
   search?: string
   category?: string
   trackStock?: boolean
+  /** Only products with no cost price. These are the ones dragging gross profit down to zero. */
+  missingCost?: boolean
   includeArchived?: boolean // when true, also return archived products
   page?: number
   limit?: number
