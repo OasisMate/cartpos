@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { getProductsForPOS } from '@/lib/domain/products'
+import { getProductsForPOS, getTopSellingProductIds } from '@/lib/domain/products'
+
+/** Must stay in step with POS_GRID_LIMIT on the POS page. */
+const POS_GRID_SIZE = 60
 import { getShopStock } from '@/lib/domain/purchases'
 import { prisma } from '@/lib/db/prisma'
 import { canMakeSales, hasShopAccess, UnauthorizedResponse, ForbiddenResponse } from '@/lib/permissions'
@@ -27,9 +30,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all data in parallel for maximum performance
-    const [products, stock, settings, customers, ledgerSums] = await Promise.all([
+    const [products, topProductIds, stock, settings, customers, ledgerSums] = await Promise.all([
       // Products
       getProductsForPOS(user.currentShopId),
+
+      // Grid order: what this shop actually sells, busiest first.
+      getTopSellingProductIds(user.currentShopId, POS_GRID_SIZE),
       
       // Stock (optimized batch query)
       getShopStock(user.currentShopId),
@@ -93,6 +99,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       products,
+      topProductIds,
       stock: stockMap,
       settings: {
         allowNegativeStock: settings.allowNegativeStock,

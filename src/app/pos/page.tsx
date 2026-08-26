@@ -8,7 +8,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { getProductsWithCache, getCachedProducts, findProductByBarcode, searchCachedProducts, Product } from '@/lib/offline/products'
 import { saveSale } from '@/lib/offline/sales'
-import { getCustomers, saveCustomers, saveProducts, addCustomer as addLocalCustomer, saveShopSettings, getCachedShopSettings } from '@/lib/offline/indexedDb'
+import { getCustomers, saveCustomers, saveProducts, addCustomer as addLocalCustomer, saveShopSettings, getCachedShopSettings, getMeta, setMeta } from '@/lib/offline/indexedDb'
 import { cuid } from '@/lib/utils/cuid'
 import { validatePhone } from '@/lib/validation'
 import { trapTab } from '@/lib/utils/focusTrap'
@@ -151,6 +151,62 @@ interface ReceiptData {
 // The search box/dropdown still reaches the full catalog by scan/name/SKU.
 const POS_GRID_LIMIT = 60
 
+/** Key the cached top-seller order is stored under, per shop. */
+const TOP_SELLERS_META_KEY = (shopId: string) => `posTopSellers:${shopId}`
+
+/**
+ * Deterministic PRNG, so the "random" filler products are stable.
+ *
+ * Reshuffling on every load would move tiles under the cashier's thumb between
+ * sales, which is worse than a fixed order. Seeded per shop per day: the
+ * selection varies day to day but never mid-shift.
+ */
+function seededRandom(seed: string): () => number {
+  let h = 2166136261
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return () => {
+    h += 0x6d2b79f5
+    let t = h
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * Grid order: everything that sold in the last 7 days first, busiest at the
+ * top, then a stable random sample of the rest to fill the grid.
+ *
+ * The filler matters for a new shop, which has sold nothing yet: an empty grid
+ * reads as broken. As sales come in, real sellers push the filler out.
+ */
+function orderGridProducts(products: Product[], topIds: string[], shopId: string, limit: number): Product[] {
+  if (products.length === 0) return []
+
+  const byId = new Map(products.map((p) => [p.id, p]))
+  const ranked: Product[] = []
+  for (const id of topIds) {
+    const hit = byId.get(id)
+    if (hit) {
+      ranked.push(hit)
+      byId.delete(id)
+    }
+  }
+  if (ranked.length >= limit) return ranked.slice(0, limit)
+
+  // Same seed all day, so the filler does not jump around between sales.
+  const rand = seededRandom(`${shopId}:${new Date().toISOString().slice(0, 10)}`)
+  const rest = [...byId.values()]
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[rest[i], rest[j]] = [rest[j], rest[i]]
+  }
+  return [...ranked, ...rest.slice(0, limit - ranked.length)]
+}
+
 // Memoized so adding to cart (which changes cart state) does NOT re-render the
 // product grid. Re-renders only when items / stock / the select handler change.
 const ProductGrid = memo(function ProductGrid({
@@ -235,6 +291,8 @@ export default function POSPage() {
   const { t, language } = useLanguage()
 
   const [products, setProducts] = useState<Product[]>([])
+  // Ids of the last 7 days' best sellers, busiest first. Drives the grid order.
+  const [topProductIds, setTopProductIds] = useState<string[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -420,6 +478,7 @@ export default function POSPage() {
             }))
             .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
           setProducts(sortedProducts)
+          setTopProductIds((await getMeta(TOP_SELLERS_META_KEY(shopId))) || [])
           hasLocalData = true
         }
 
@@ -459,6 +518,11 @@ export default function POSPage() {
             )
             setProducts(sortedProducts)
             await saveProducts(shopId, sortedProducts)
+
+            // Cached so the grid keeps the same order offline.
+            const topIds: string[] = data.topProductIds || []
+            setTopProductIds(topIds)
+            await setMeta(TOP_SELLERS_META_KEY(shopId), topIds)
 
             // Stock
             setProductStock(data.stock || {})
@@ -585,6 +649,11 @@ export default function POSPage() {
             )
             setProducts(sortedProducts)
             await saveProducts(shopId, sortedProducts)
+
+            // Cached so the grid keeps the same order offline.
+            const topIds: string[] = data.topProductIds || []
+            setTopProductIds(topIds)
+            await setMeta(TOP_SELLERS_META_KEY(shopId), topIds)
             
             // Update stock
             setProductStock(data.stock || {})
@@ -1693,10 +1762,25 @@ export default function POSPage() {
     }
   }, [])
   // Cap the tappable grid; scanning / the search dropdown still reach every product.
-  const gridItems = useMemo(() => products.slice(0, POS_GRID_LIMIT), [products])
+  const gridItems = useMemo(
+    () => orderGridProducts(products, topProductIds, user?.currentShopId || '', POS_GRID_LIMIT),
+    [products, topProductIds, user?.currentShopId]
+  )
 
   // --- Keyboard-first POS ---
   const visibleResults = useMemo(() => filteredProducts.slice(0, 15), [filteredProducts])
+
+  /**
+   * Whether the results list is showing.
+   *
+   * Sticky is a desktop-only pattern on this page: from lg up each panel is its
+   * own scroll container, so a pinned header behaves. On mobile the panels stack
+   * into one page scroll, and two headers pinned at top:0 fought each other and
+   * sandwiched the content between them. Below lg everything sits in normal
+   * flow, and the results list pushes the page down rather than floating over
+   * the cart.
+   */
+  const suggestionsOpen = barcodeInput.trim() !== '' && visibleResults.length > 0
 
   // Show the one-time shortcuts hint until the user has seen it.
   useEffect(() => {
@@ -1946,7 +2030,7 @@ export default function POSPage() {
 
       {/* Left Panel - Product Selection */}
       <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] lg:overflow-y-auto">
-        <div className={`p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10 ${!isOnline ? 'mt-8' : ''}`}>
+        <div className={`p-4 lg:sticky lg:top-0 lg:z-10 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] ${!isOnline ? 'mt-8' : ''}`}>
           <div className="mb-4 flex items-center justify-between gap-2">
             <h1 className="text-2xl font-bold">{t('pos')}</h1>
             <div className="flex items-center gap-2">
@@ -2062,8 +2146,8 @@ export default function POSPage() {
 
           {/* Unified Search Suggestions (driven by barcodeInput) */}
           <div className="relative mb-4">
-            {barcodeInput && visibleResults.length > 0 && (
-              <div id="pos-suggestions" role="listbox" className="absolute z-20 w-full bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {suggestionsOpen && (
+              <div id="pos-suggestions" role="listbox" className="mt-1 w-full lg:absolute lg:mt-0 lg:z-20 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-60 overflow-y-auto">
                 {visibleResults.map((product, index) => {
                   // Check if there are other products with the same name
                   const sameNameProducts = filteredProducts.filter(p => p.name === product.name)
@@ -2172,7 +2256,7 @@ export default function POSPage() {
 
       {/* Right Panel - Cart */}
       <div className="w-full lg:w-1/2 bg-[hsl(var(--card))] lg:overflow-y-auto" ref={cartScrollRef}>
-        <div className="p-4 sticky top-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] z-10">
+        <div className="p-4 lg:sticky lg:top-0 lg:z-10 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))]">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xl font-bold">{t('cart')}</h2>
             <div className="flex items-center gap-2">

@@ -529,6 +529,48 @@ export async function archiveProduct(id: string, userId: string) {
   return setArchived(id, userId, new Date())
 }
 
+/** How far back "most sold" looks. Short on purpose: a POS grid should reflect
+ *  what is moving this week, not what sold well last season. */
+export const TOP_SELLER_DAYS = 7
+
+/**
+ * Product ids ordered by quantity sold, busiest first.
+ *
+ * Drives the order of the POS grid so a cashier's common items are under their
+ * thumb instead of whatever happens to be alphabetically first. Voided and
+ * cancelled invoices are excluded, otherwise a reversed sale would still push a
+ * product up the grid.
+ *
+ * Returns [] on any failure: the grid falls back to its own ordering, and a
+ * reporting query must never stop someone selling.
+ */
+export async function getTopSellingProductIds(
+  shopId: string,
+  limit: number,
+  days: number = TOP_SELLER_DAYS
+): Promise<string[]> {
+  try {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    const rows = await prisma.invoiceLine.groupBy({
+      by: ['productId'],
+      where: {
+        invoice: {
+          shopId,
+          createdAt: { gte: since },
+          status: { not: 'VOID' },
+        },
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take: limit,
+    })
+    return rows.map((r) => r.productId)
+  } catch (error) {
+    console.error('getTopSellingProductIds failed, falling back to default order:', error)
+    return []
+  }
+}
+
 /** Restore a previously archived product. */
 export async function unarchiveProduct(id: string, userId: string) {
   return setArchived(id, userId, null)
