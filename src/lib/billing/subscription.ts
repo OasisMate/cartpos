@@ -83,6 +83,8 @@ export function isBillingEnforced(): boolean {
  *  Prisma row with extra fields, or a hand-built object in tests. */
 export interface BillingInput {
   isDemo?: boolean | null
+  billingExempt?: boolean | null
+  billingExemptNote?: string | null
   subscription?: {
     status: SubscriptionStatus
     cycle: BillingCycle
@@ -124,6 +126,10 @@ export function resolveBillingState(org: BillingInput | null | undefined, now = 
     if (!org) return FULL_ACCESS
     // Demo/QA fixtures are outside billing so our own testing can never be blocked.
     if (org.isDemo) return { ...FULL_ACCESS, enforced: true }
+    // Free access granted by an admin. bypass is what hides the plan picker
+    // and the payment form, so the owner is never offered a choice that would
+    // do nothing.
+    if (org.billingExempt) return { ...FULL_ACCESS, enforced: true }
 
     const sub = org.subscription
     // No subscription row yet (a signup mid-migration, say). Never punish them.

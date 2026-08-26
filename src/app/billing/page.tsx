@@ -209,6 +209,10 @@ export default function BillingPage() {
   }
 
   const { subscription, plans, settings, cycleOptions, payments, claims, shopCount } = data
+  // Admin-granted free access. Everything to do with choosing or paying for a
+  // plan is hidden, because none of it would change anything.
+  const freeAccess: boolean = data.freeAccess === true
+  const freeAccessNote: string | null = data.freeAccessNote ?? null
   const billing = user?.billing
   const selected: CycleOption | undefined = cycleOptions.find((c: CycleOption) => c.cycle === cycle)
   const pendingClaim = claims?.find((c: Claim) => c.status === 'PENDING')
@@ -285,11 +289,16 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {isFree && (
+        {freeAccess ? (
+          <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+            Cart POS has given this account free access to every feature, with no charge and no
+            expiry{freeAccessNote ? `: ${freeAccessNote}` : '.'}
+          </p>
+        ) : isFree ? (
           <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
             This account has no charge{subscription?.priceNote ? `: ${subscription.priceNote}` : '.'}
           </p>
-        )}
+        ) : null}
       </section>
 
       {pendingClaim && (
@@ -320,7 +329,7 @@ export default function BillingPage() {
       )}
 
       {/* ---- Pay ---- */}
-      {!isFree && !neverExpires && (
+      {!freeAccess && !isFree && !neverExpires && (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">Pay for your plan</h2>
           <p className="mt-1 text-sm text-gray-600">Choose how long you want to pay for. Longer periods cost less.</p>
@@ -432,6 +441,7 @@ export default function BillingPage() {
       )}
 
       {/* ---- Plans ---- */}
+      {!freeAccess && (
       <section>
         <h2 className="mb-3 text-lg font-semibold text-gray-900">Plans</h2>
         <div className="grid gap-4 md:grid-cols-3">
@@ -477,6 +487,7 @@ export default function BillingPage() {
           })}
         </div>
       </section>
+      )}
 
       {/* ---- History ---- */}
       {payments.length > 0 && (

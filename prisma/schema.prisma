@@ -41,10 +41,17 @@ model Organization {
   approvedAt          DateTime?
   rejectionReason     String?
   suspensionReason    String?
-  // Safe deletion: admins schedule a purge; it can only run after a buffer
-  // (and is reversible until then). Never set for ACTIVE orgs.
+  // Record of when the owner was emailed that the account can be deleted.
+  // Set on suspension; kept as an audit trail, it does not gate deletion.
   deletionScheduledAt DateTime?
   deletionScheduledBy String?
+  // Free access granted by a platform admin: full Business features, no
+  // charge, no expiry, and the plan picker is hidden. Distinct from isDemo,
+  // which also blocks writes.
+  billingExempt       Boolean          @default(false)
+  billingExemptNote   String?
+  billingExemptAt     DateTime?
+  billingExemptBy     String?
   // Free-text "How did you hear about us?" captured at signup. Tells us which
   // channel actually produces paying shops.
   referralSource      String?

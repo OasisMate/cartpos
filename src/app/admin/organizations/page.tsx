@@ -35,6 +35,8 @@ interface Organization {
   rejectionReason?: string | null
   suspensionReason?: string | null
   deletionScheduledAt?: string | null
+  billingExempt?: boolean
+  billingExemptNote?: string | null
   requestedByUser: RequestedByUser | null
   _count: {
     shops: number
@@ -53,6 +55,8 @@ export default function OrganizationsPage() {
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [showSuspendModal, setShowSuspendModal] = useState(false)
+  const [freeAccessOrg, setFreeAccessOrg] = useState<Organization | null>(null)
+  const [freeAccessNote, setFreeAccessNote] = useState('')
   const [rejectReason, setRejectReason] = useState('')
   const [suspendReason, setSuspendReason] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE'>('ALL')
@@ -217,6 +221,30 @@ export default function OrganizationsPage() {
       await fetchOrgs()
     } catch (e: any) {
       setError(e.message || 'Failed to reactivate')
+    } finally {
+      setActioningId(null)
+    }
+  }
+
+  /**
+   * Grant or revoke free access. Granting takes an optional note that the owner
+   * sees on their billing page, so "why is this free" is not lost.
+   */
+  async function setFreeAccess(org: Organization, grant: boolean, note?: string) {
+    try {
+      setActioningId(org.id)
+      const res = await fetch(`/api/admin/organizations/${org.id}/free-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant, note: note || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update free access')
+      setFreeAccessOrg(null)
+      setFreeAccessNote('')
+      await fetchOrgs()
+    } catch (e: any) {
+      setError(e.message || 'Failed to update free access')
     } finally {
       setActioningId(null)
     }
@@ -410,6 +438,14 @@ export default function OrganizationsPage() {
                     >
                       {org.status}
                     </span>
+                    {org.billingExempt && (
+                      <span
+                        className="px-2 py-1 rounded text-xs font-medium bg-emerald-100 text-emerald-800"
+                        title={org.billingExemptNote || 'Free access: no charge, no expiry'}
+                      >
+                        FREE ACCESS
+                      </span>
+                    )}
                     {org.requestedByUser && !org.requestedByUser.emailVerified && (
                       <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
                         Email not verified
@@ -493,6 +529,29 @@ export default function OrganizationsPage() {
                       </button>
                     </>
                   )}
+                  {/* Free access: full features, no charge, and the owner's
+                      plan picker is hidden so they are never offered a choice
+                      that does nothing. */}
+                  <button
+                    className={`px-3 py-1 rounded text-sm border disabled:opacity-50 ${
+                      org.billingExempt
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                    disabled={actioningId === org.id}
+                    onClick={() =>
+                      org.billingExempt
+                        ? setFreeAccess(org, false)
+                        : (setFreeAccessOrg(org), setFreeAccessNote(''))
+                    }
+                    title={
+                      org.billingExempt
+                        ? 'Revoke free access and put this org back on billing'
+                        : 'Give this org every feature at no charge'
+                    }
+                  >
+                    {org.billingExempt ? 'Free access: ON' : 'Free access: OFF'}
+                  </button>
                   {org.status === 'ACTIVE' && (
                     <button
                       className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 disabled:opacity-50"
@@ -822,6 +881,48 @@ export default function OrganizationsPage() {
       )}
 
       {/* Suspend Modal */}
+      {freeAccessOrg && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Give free access</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              &quot;{freeAccessOrg.name}&quot; gets every Business feature at no charge, with no
+              expiry. Their plan and payment options are hidden while this is on.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason (optional, shown to the owner)
+              </label>
+              <input
+                value={freeAccessNote}
+                onChange={(e) => setFreeAccessNote(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="e.g. Founding customer"
+                maxLength={200}
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setFreeAccessOrg(null)
+                  setFreeAccessNote('')
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setFreeAccess(freeAccessOrg, true, freeAccessNote)}
+                disabled={actioningId === freeAccessOrg.id}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {actioningId === freeAccessOrg.id ? 'Saving...' : 'Give free access'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSuspendModal && selectedOrg && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">

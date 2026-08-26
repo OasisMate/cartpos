@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { previewDowngrade, applyDowngrade } from '@/lib/billing/downgrade'
 import { swapActiveShop } from '@/lib/billing/lifecycle'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
+import { prisma } from '@/lib/db/prisma'
 
 /**
  * Org-facing plan changes: preview what a smaller plan would pause, apply it,
@@ -27,12 +28,27 @@ async function requireOrgAdmin() {
 }
 
 /** Preview: what would this plan pause? Nothing is written. */
+/**
+ * Free-access orgs have no plan to change: the resolver already gives them
+ * everything. Hiding the picker is not enough, the endpoint has to refuse too.
+ */
+async function isFreeAccess(orgId: string): Promise<boolean> {
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { billingExempt: true },
+  })
+  return org?.billingExempt ?? false
+}
+
 export async function GET(request: Request) {
   const ctx = await requireOrgAdmin()
   if ('error' in ctx) return ctx.error
 
   const planCode = new URL(request.url).searchParams.get('planCode')
   if (!planCode) return NextResponse.json({ error: 'planCode is required' }, { status: 400 })
+  if (await isFreeAccess(ctx.orgId)) {
+    return NextResponse.json({ error: 'This account has free access, so there is no plan to change.' }, { status: 400 })
+  }
 
   try {
     return NextResponse.json({ impact: await previewDowngrade(ctx.orgId, planCode) })
@@ -71,6 +87,12 @@ export async function POST(request: Request) {
 
     // ---- Choose a plan ----------------------------------------------
     if (body.action === 'choosePlan') {
+      if (await isFreeAccess(orgId)) {
+        return NextResponse.json(
+          { error: 'This account has free access, so there is no plan to change.' },
+          { status: 400 }
+        )
+      }
       const planCode = String(body.planCode || '')
       const keepShopIds: string[] = Array.isArray(body.keepShopIds) ? body.keepShopIds.map(String) : []
 

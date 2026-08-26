@@ -64,6 +64,8 @@ What a hardware/sanitary shop needs that a kiryana doesn't.
 **Billing/trial:** LIVE. Built 2026-08-11 (three tiers, 14-day trial, manual payment collection,
 read-only on expiry), merged to `main`, and `BILLING_ENFORCED=true` is set in Vercel, so the
 paywall is enforcing in production. Daily status sweep on Vercel cron since 2026-08-26.
+Platform admins can grant per-org free access (`billingExempt`) from /admin/organizations, which
+hides the plan picker for that org.
 See local `docs/BILLING_PLAN.md`.
 
 ## Parking lot

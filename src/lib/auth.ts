@@ -145,6 +145,8 @@ export async function getCurrentUser() {
                     organization: {
                       select: {
                         isDemo: true,
+                        billingExempt: true,
+                        billingExemptNote: true,
                         type: true,
                         // Managers and cashiers have no OrganizationUser row, so
                         // their billing state has to come via their shop's org.

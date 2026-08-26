@@ -33,8 +33,8 @@ export async function sweepSubscriptions(now = new Date()): Promise<SweepResult>
   const candidates = await prisma.subscription.findMany({
     where: {
       status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE'] },
-      // Demo orgs are outside billing entirely.
-      organization: { isDemo: false },
+      // Demo and free-access orgs are outside billing entirely.
+      organization: { isDemo: false, billingExempt: false },
       OR: [{ trialEndsAt: { not: null } }, { currentPeriodEnd: { not: null } }],
     },
     select: {

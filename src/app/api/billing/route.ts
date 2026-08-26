@@ -49,6 +49,13 @@ export async function GET() {
       prisma.shop.count({ where: { orgId, isActive: true } }),
     ])
 
+    // Free access granted by an admin. The page uses this to hide the plan
+    // picker and the payment form outright.
+    const exemption = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { billingExempt: true, billingExemptNote: true },
+    })
+
     const monthly = subscription ? Number(subscription.agreedMonthlyPrice) : 0
     const extraShopPrice = subscription?.plan?.extraShopPrice
       ? Number(subscription.plan.extraShopPrice)
@@ -67,6 +74,8 @@ export async function GET() {
 
     return NextResponse.json({
       billing: user.billing,
+      freeAccess: exemption?.billingExempt ?? false,
+      freeAccessNote: exemption?.billingExemptNote ?? null,
       subscription,
       plans: plans.map((p) => ({
         ...p,
