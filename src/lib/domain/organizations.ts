@@ -9,7 +9,7 @@ import {
 } from '@/lib/domain/business-presets'
 import { hashPassword } from '@/lib/auth'
 import { normalizePhone, normalizeCNIC, validatePhone, validateCNIC } from '@/lib/validation'
-import { sendEmail, generateWelcomeEmail } from '@/lib/email'
+import { sendEmail, generateWelcomeEmail, generateSuspensionWarningEmail } from '@/lib/email'
 import { passwordPolicyError } from '@/lib/validation/password'
 
 export interface CreateOrgByAdminInput {
@@ -325,6 +325,60 @@ export async function suspendOrganization(orgId: string, adminUserId: string, re
   return updated
 }
 
+/**
+ * Warn the org's admins that they must make contact or lose the account.
+ *
+ * Also stamps deletionScheduledAt/By, which is now purely the record of when
+ * the warning went out. Best-effort: a failed send must never block a
+ * suspension, so this never throws.
+ */
+export async function sendOrgSuspendedWarningEmail(
+  orgId: string,
+  adminUserId: string,
+  reason?: string | null
+): Promise<void> {
+  try {
+    const org = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    })
+    if (!org) return
+
+    const admins = await prisma.organizationUser.findMany({
+      where: { orgId, orgRole: 'ORG_ADMIN' },
+      select: { user: { select: { email: true, name: true } } },
+    })
+    if (admins.length === 0) return
+
+    const supportEmail = process.env.BREVO_SENDER_EMAIL || 'hamzamakhdoom786@gmail.com'
+
+    const results = await Promise.all(
+      admins.map((a) =>
+        sendEmail({
+          to: a.user.email,
+          subject: `Action needed - ${org.name} has been suspended`,
+          html: generateSuspensionWarningEmail({
+            orgName: org.name,
+            ownerName: a.user.name,
+            reason: reason || null,
+            supportEmail,
+          }),
+        })
+      )
+    )
+
+    // Only stamp the audit trail if at least one warning actually left.
+    if (results.some((r) => r.success)) {
+      await prisma.organization.update({
+        where: { id: orgId },
+        data: { deletionScheduledAt: new Date(), deletionScheduledBy: adminUserId },
+      })
+    }
+  } catch (error) {
+    console.error('Failed to send suspension warning email:', error)
+  }
+}
+
 export async function reactivateOrganization(orgId: string, adminUserId: string) {
   const updated = await prisma.organization.update({
     where: { id: orgId },
@@ -339,34 +393,73 @@ export async function reactivateOrganization(orgId: string, adminUserId: string)
   return updated
 }
 
-// --- Safe organization deletion (schedule -> buffer -> manual purge) ---
+/**
+ * Wipe every row belonging to an org, children before parents.
+ *
+ * Order matters: most foreign keys are ON DELETE RESTRICT, so a single missed
+ * table aborts the whole transaction and nothing is deleted. Anything added to
+ * the schema that hangs off Shop, Product, Invoice, Customer or Supplier must
+ * be added here too.
+ */
+async function deleteOrgData(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+  shopIds: string[]
+): Promise<void> {
+  if (shopIds.length) {
+    const byShop = { shopId: { in: shopIds } }
 
-export const ORG_DELETION_BUFFER_DAYS = 3
+    // Leaves that point at products, invoices, quotations and returns.
+    await tx.saleReturnLine.deleteMany({ where: { saleReturn: byShop } })
+    await tx.saleReturn.deleteMany({ where: byShop })
+    await tx.quotationLine.deleteMany({ where: { quotation: byShop } })
+    await tx.quotation.deleteMany({ where: byShop })
+    await tx.invoiceLine.deleteMany({ where: { invoice: byShop } })
+    await tx.purchaseListLine.deleteMany({ where: { purchaseList: byShop } })
+    await tx.purchaseList.deleteMany({ where: byShop })
+    await tx.purchaseAttachment.deleteMany({ where: { purchase: byShop } })
+    await tx.purchaseLine.deleteMany({ where: { purchase: byShop } })
+    await tx.packagingLevel.deleteMany({ where: { product: byShop } })
 
-function purgeEligibleAt(scheduledAt: Date): Date {
-  return new Date(scheduledAt.getTime() + ORG_DELETION_BUFFER_DAYS * 24 * 60 * 60 * 1000)
-}
+    // Money, stock and shift history.
+    await tx.cashMovement.deleteMany({ where: byShop })
+    await tx.shift.deleteMany({ where: byShop })
+    await tx.payment.deleteMany({ where: byShop })
+    await tx.customerLedger.deleteMany({ where: byShop })
+    await tx.supplierLedger.deleteMany({ where: byShop })
+    await tx.stockLedger.deleteMany({ where: byShop })
+    await tx.stockLot.deleteMany({ where: byShop })
 
-/** Start the deletion timer. Only rejected (INACTIVE) or suspended orgs are eligible. */
-export async function scheduleOrgDeletion(orgId: string, adminUserId: string) {
-  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { status: true } })
-  if (!org) throw new Error('Organization not found')
-  if (org.status !== 'INACTIVE' && org.status !== 'SUSPENDED') {
-    throw new Error('Only rejected or suspended organizations can be scheduled for deletion')
+    // Documents, then the records they reference.
+    await tx.invoice.deleteMany({ where: byShop })
+    await tx.purchase.deleteMany({ where: byShop })
+    await tx.product.deleteMany({ where: byShop })
+    await tx.customer.deleteMany({ where: byShop })
+    await tx.supplier.deleteMany({ where: byShop })
+    await tx.expense.deleteMany({ where: byShop })
+
+    // Loose per-shop rows. No FK on these, but they would leak otherwise.
+    await tx.notification.deleteMany({ where: byShop })
+    await tx.catalogSighting.deleteMany({ where: byShop })
+    await tx.syncErrorReport.deleteMany({ where: byShop })
+    await tx.shopSettings.deleteMany({ where: byShop })
+    await tx.userShop.deleteMany({ where: byShop })
   }
-  return prisma.organization.update({
-    where: { id: orgId },
-    data: { deletionScheduledAt: new Date(), deletionScheduledBy: adminUserId },
-  })
+
+  // Org level. Subscription, SubscriptionPayment and PaymentClaim cascade off
+  // Organization, so the final delete clears them.
+  await tx.activityLog.deleteMany({ where: { orgId } })
+  await tx.organizationUser.deleteMany({ where: { orgId } })
+  await tx.shop.deleteMany({ where: { orgId } })
+  await tx.organization.delete({ where: { id: orgId } })
 }
 
-/** Cancel a scheduled deletion (restore). */
-export async function cancelOrgDeletion(orgId: string, _adminUserId: string) {
-  return prisma.organization.update({
-    where: { id: orgId },
-    data: { deletionScheduledAt: null, deletionScheduledBy: null },
-  })
-}
+// --- Organization deletion (suspend -> warn the owner -> manual purge) ---
+//
+// There is no waiting period. Suspending an org emails the owner that they must
+// contact the admin or lose the account permanently, and from that point the
+// admin can purge whenever they choose. deletionScheduledAt/By are kept purely
+// as the audit trail of when that warning went out and who triggered it.
 
 /** Counts shown to the admin before purging, plus eligibility. */
 export async function getOrgDeletionPreview(orgId: string) {
@@ -396,7 +489,6 @@ export async function getOrgDeletionPreview(orgId: string) {
   const staff = new Set([...shopUsers.map((u) => u.userId), ...orgUsers.map((u) => u.userId)])
   if (org.requestedBy) staff.delete(org.requestedBy)
 
-  const scheduledAt = org.deletionScheduledAt
   return {
     name: org.name,
     status: org.status,
@@ -408,9 +500,10 @@ export async function getOrgDeletionPreview(orgId: string) {
     purchases,
     owner: owner ? { id: owner.id, name: owner.name, email: owner.email } : null,
     staffCount: staff.size,
-    deletionScheduledAt: scheduledAt,
-    purgeEligibleAt: scheduledAt ? purgeEligibleAt(scheduledAt) : null,
-    canPurgeNow: scheduledAt ? new Date() >= purgeEligibleAt(scheduledAt) : false,
+    // When the owner was warned. Null means suspension predates the warning
+    // email, not that deletion is blocked.
+    ownerWarnedAt: org.deletionScheduledAt,
+    canPurgeNow: org.status !== 'ACTIVE',
   }
 }
 
@@ -429,11 +522,8 @@ export async function purgeOrganization(
     select: { name: true, status: true, requestedBy: true, deletionScheduledAt: true, shops: { select: { id: true } } },
   })
   if (!org) throw new Error('Organization not found')
+  // The only guard left. Suspending first is what warns the owner.
   if (org.status === 'ACTIVE') throw new Error('Active organizations cannot be deleted. Suspend it first.')
-  if (!org.deletionScheduledAt) throw new Error('Deletion has not been scheduled for this organization')
-  if (new Date() < purgeEligibleAt(org.deletionScheduledAt)) {
-    throw new Error('The deletion buffer has not elapsed yet')
-  }
 
   const shopIds = org.shops.map((s) => s.id)
   const ownerId = org.requestedBy || null
@@ -450,25 +540,7 @@ export async function purgeOrganization(
   }
 
   await prisma.$transaction(async (tx) => {
-    if (shopIds.length) {
-      await tx.invoiceLine.deleteMany({ where: { invoice: { shopId: { in: shopIds } } } })
-      await tx.purchaseLine.deleteMany({ where: { purchase: { shopId: { in: shopIds } } } })
-      await tx.payment.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.customerLedger.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.stockLedger.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.invoice.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.purchase.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.product.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.customer.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.supplier.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.expense.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.shopSettings.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.userShop.deleteMany({ where: { shopId: { in: shopIds } } })
-    }
-    await tx.activityLog.deleteMany({ where: { orgId } })
-    await tx.organizationUser.deleteMany({ where: { orgId } })
-    await tx.shop.deleteMany({ where: { orgId } })
-    await tx.organization.delete({ where: { id: orgId } })
+    await deleteOrgData(tx, orgId, shopIds)
 
     // Remove orphaned user accounts the admin opted to delete.
     const candidates = [...(opts.deleteOwner && ownerId ? [ownerId] : []), ...staffIds]
@@ -479,6 +551,8 @@ export async function purgeOrganization(
         tx.user.findUnique({ where: { id: uid }, select: { role: true } }),
       ])
       if (u && u.role !== 'PLATFORM_ADMIN' && shopCount === 0 && orgCount === 0) {
+        await tx.notification.deleteMany({ where: { userId: uid } })
+        await tx.activityLog.deleteMany({ where: { userId: uid } })
         await tx.user.delete({ where: { id: uid } })
       }
     }
@@ -519,26 +593,7 @@ export async function purgeUnverifiedOrganization(orgId: string, adminUserId: st
   const staffIds = [...ids]
 
   await prisma.$transaction(async (tx) => {
-    if (shopIds.length) {
-      await tx.invoiceLine.deleteMany({ where: { invoice: { shopId: { in: shopIds } } } })
-      await tx.purchaseLine.deleteMany({ where: { purchase: { shopId: { in: shopIds } } } })
-      await tx.payment.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.customerLedger.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.stockLedger.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.supplierLedger.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.invoice.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.purchase.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.product.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.customer.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.supplier.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.expense.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.shopSettings.deleteMany({ where: { shopId: { in: shopIds } } })
-      await tx.userShop.deleteMany({ where: { shopId: { in: shopIds } } })
-    }
-    await tx.activityLog.deleteMany({ where: { orgId } })
-    await tx.organizationUser.deleteMany({ where: { orgId } })
-    await tx.shop.deleteMany({ where: { orgId } })
-    await tx.organization.delete({ where: { id: orgId } })
+    await deleteOrgData(tx, orgId, shopIds)
 
     // Delete now-orphaned accounts (owner + staff), never a platform admin.
     for (const uid of [ownerId, ...staffIds]) {

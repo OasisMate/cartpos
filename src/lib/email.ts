@@ -398,6 +398,41 @@ export function generateWelcomeEmail(params: {
   return emailLayout(content, `Welcome to Cart POS - ${params.orgName} is approved`)
 }
 
+/**
+ * Suspension warning - sent when a platform admin suspends an organization.
+ * Deliberately blunt: after this there is no waiting period and no recovery
+ * once the account is deleted.
+ */
+export function generateSuspensionWarningEmail(params: {
+  orgName: string
+  ownerName?: string | null
+  reason?: string | null
+  supportEmail: string
+}): string {
+  const content = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827;">Your Cart POS account has been suspended</h1>
+    <p style="margin:0 0 12px;">${params.ownerName ? `Hello ${escapeAndBreak(params.ownerName)},` : 'Hello,'}</p>
+    <p style="margin:0 0 12px;">Access to <strong>${escapeAndBreak(params.orgName)}</strong> has been suspended, so you cannot sign in or make sales right now.</p>
+    ${
+      params.reason
+        ? `<div style="margin:0 0 16px;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:13px;">
+             <strong>Reason:</strong> ${escapeAndBreak(params.reason)}
+           </div>`
+        : ''
+    }
+    <div style="margin:0 0 16px;padding:14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;font-size:14px;line-height:1.6;">
+      <strong>Please contact us as soon as possible.</strong><br/>
+      If we do not hear from you, this account and all of its data (products, sales, customers,
+      udhaar balances and reports) will be permanently deleted. Deletion cannot be undone and
+      nothing can be recovered afterwards.
+    </div>
+    <p style="margin:0 0 12px;">Reply to this email or write to <a href="mailto:${params.supportEmail}" style="color:#f97316;">${params.supportEmail}</a> and we will help you sort it out.</p>
+    <p style="margin:20px 0 0;color:#9ca3af;font-size:13px;border-top:1px solid #f0f0f0;padding-top:16px;">
+      You are receiving this because you are listed as an administrator of ${escapeAndBreak(params.orgName)}.
+    </p>`
+  return emailLayout(content, `Action needed - ${params.orgName} has been suspended`)
+}
+
 /** Escape user-authored text and preserve line breaks for HTML email. */
 function escapeAndBreak(text: string): string {
   return text

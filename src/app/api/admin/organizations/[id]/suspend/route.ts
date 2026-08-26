@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { suspendOrganization } from '@/lib/domain/organizations'
+import { suspendOrganization, sendOrgSuspendedWarningEmail } from '@/lib/domain/organizations'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { notifyOrgAdmins } from '@/lib/domain/notifications'
 
@@ -40,6 +40,10 @@ export async function POST(
       title: 'Your account has been suspended',
       body: reason ? `Reason: ${reason}` : 'Please contact support for details.',
     })
+
+    // Warns the owner that the account can now be deleted permanently. There is
+    // no waiting period, so this email is the only notice they get.
+    await sendOrgSuspendedWarningEmail(orgId, user.id, reason)
 
     return NextResponse.json({ organization: updated })
   } catch (error: any) {
