@@ -8,10 +8,14 @@ import { BrandSpinner } from '@/components/ui/BrandSpinner'
 import { X } from 'lucide-react'
 
 interface ReturnableLine {
+  /** Identifies the row: same product sold loose and by the carton is two rows. */
+  lineKey: string
   productId: string
   name: string
   unit: string
   unitPrice: number
+  unitsPerItem: number
+  packName: string | null
   sold: number
   alreadyReturned: number
   returnable: number
@@ -92,7 +96,9 @@ export default function ReturnModal({
   }, [search])
 
   const returnValue = (data?.lines || []).reduce((s, l) => {
-    const q = parseFloat(qty[l.productId] || '0') || 0
+    // Keyed by lineKey, not productId: a product sold both loose and by the carton is two rows
+    // at two prices, and keying on the product would price both at whichever came first.
+    const q = parseFloat(qty[l.lineKey] || '0') || 0
     return s + q * l.unitPrice
   }, 0)
   const replacementValue = replacements.reduce((s, r) => s + r.qty * r.price, 0)
@@ -112,7 +118,13 @@ export default function ReturnModal({
   const submit = useCallback(async () => {
     if (submitting || !data) return
     const returnLines = (data.lines || [])
-      .map((l) => ({ productId: l.productId, quantity: parseFloat(qty[l.productId] || '0') || 0, damaged: !!damaged[l.productId] }))
+      .map((l) => ({
+        productId: l.productId,
+        quantity: parseFloat(qty[l.lineKey] || '0') || 0,
+        damaged: !!damaged[l.lineKey],
+        // Sent so the server knows a returned carton puts back all its units.
+        unitsPerItem: l.unitsPerItem,
+      }))
       .filter((l) => l.quantity > 0)
     if (!returnLines.length && !replacements.length) {
       setError('Select at least one item to return')
@@ -164,9 +176,16 @@ export default function ReturnModal({
             <h3 className="font-semibold mb-2 text-sm">Items to return</h3>
             <div className="space-y-2">
               {data.lines.map((l) => (
-                <div key={l.productId} className="flex items-center gap-2 text-sm border-b border-gray-100 pb-2">
+                <div key={l.lineKey} className="flex items-center gap-2 text-sm border-b border-gray-100 pb-2">
                   <div className="flex-1 min-w-0">
-                    <div className="truncate font-medium">{l.name}</div>
+                    <div className="truncate font-medium">
+                      {l.name}
+                      {l.packName ? (
+                        <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-normal text-gray-600">
+                          {l.packName} of {l.unitsPerItem}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="text-xs text-gray-500">
                       {formatCurrency(l.unitPrice)} · sold {l.sold}
                       {l.alreadyReturned > 0 ? ` · returned ${l.alreadyReturned}` : ''} · max {l.returnable}
@@ -177,17 +196,18 @@ export default function ReturnModal({
                     min={0}
                     max={l.returnable}
                     step="0.001"
-                    value={qty[l.productId] || ''}
-                    onChange={(e) => setQty((q) => ({ ...q, [l.productId]: e.target.value }))}
+                    value={qty[l.lineKey] || ''}
+                    onChange={(e) => setQty((q) => ({ ...q, [l.lineKey]: e.target.value }))}
                     disabled={l.returnable <= 0}
                     placeholder="0"
+                    aria-label={`Quantity of ${l.name}${l.packName ? ` (${l.packName})` : ''} to return`}
                     className="input h-8 w-20 text-center"
                   />
                   <label className="flex items-center gap-1 text-xs text-gray-600 w-20">
                     <input
                       type="checkbox"
-                      checked={!!damaged[l.productId]}
-                      onChange={(e) => setDamaged((d) => ({ ...d, [l.productId]: e.target.checked }))}
+                      checked={!!damaged[l.lineKey]}
+                      onChange={(e) => setDamaged((d) => ({ ...d, [l.lineKey]: e.target.checked }))}
                     />
                     damaged
                   </label>

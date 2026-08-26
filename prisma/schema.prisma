@@ -833,6 +833,14 @@ model SaleReturnLine {
   lineTotal     Decimal    @db.Decimal(10, 2)
   isReplacement Boolean    @default(false) // false = returned item; true = exchange new item
   restocked     Boolean    @default(true) // false = damaged, not added back to sellable stock
+  /// Base units per returned item, mirroring InvoiceLine.unitsPerItem.
+  ///
+  /// Without this a returned carton put ONE unit back on the shelf instead of twelve, and cost
+  /// of goods reversed a twelfth of what it should. Quantity stays in the unit the item was
+  /// sold as, so the customer returns "1 carton", and stock moves quantity * unitsPerItem.
+  unitsPerItem  Decimal    @default(1) @db.Decimal(10, 3)
+  /// Packaging label the item was sold as (e.g. "Carton"); null = base unit.
+  packName      String?
   createdAt     DateTime   @default(now())
   saleReturn    SaleReturn @relation(fields: [returnId], references: [id])
   product       Product    @relation(fields: [productId], references: [id])

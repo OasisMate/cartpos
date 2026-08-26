@@ -18,13 +18,34 @@ async function checkManagerPermission(userId: string, shopId: string): Promise<b
 }
 
 export interface ReturnableLine {
+  /**
+   * Identifies the row for the client. A product sold both loose and by the carton on one
+   * invoice is two returnable rows at two different prices, so productId alone is not enough
+   * to tell them apart.
+   */
+  lineKey: string
   productId: string
   name: string
   unit: string
   unitPrice: number
+  /** Base units per returned item: 1 for loose, cartonSize for a carton. */
+  unitsPerItem: number
+  /** Packaging label, e.g. "Carton". Null for a base-unit line. */
+  packName: string | null
   sold: number
   alreadyReturned: number
   returnable: number
+}
+
+/** How a returnable row is identified: same product AND same packaging. */
+export function returnLineKey(productId: string, unitsPerItem: number): string {
+  return `${productId}::${unitsPerItem}`
+}
+
+/** Base units a return line moves: pack count times pack size. */
+function baseUnits(quantity: number, unitsPerItem: number): number {
+  const per = Number(unitsPerItem)
+  return quantity * (Number.isFinite(per) && per > 0 ? per : 1)
 }
 
 export interface ReturnableInvoice {
@@ -53,31 +74,40 @@ export async function getReturnableInvoice(invoiceId: string, userId: string): P
 
   if (invoice.status !== 'COMPLETED') throw new Error('Only completed sales can be returned')
 
-  // Sum prior returned quantities per product for this invoice.
+  // Prior returns, counted per product AND packaging: returning a carton must not eat into
+  // what can still be returned loose.
   const priorLines = await prisma.saleReturnLine.findMany({
     where: { isReplacement: false, saleReturn: { originalInvoiceId: invoiceId } },
-    select: { productId: true, quantity: true },
+    select: { productId: true, quantity: true, unitsPerItem: true },
   })
-  const returnedByProduct = new Map<string, number>()
+  const returnedByKey = new Map<string, number>()
   for (const l of priorLines) {
-    returnedByProduct.set(l.productId, (returnedByProduct.get(l.productId) || 0) + Number(l.quantity))
+    const key = returnLineKey(l.productId, Number(l.unitsPerItem))
+    returnedByKey.set(key, (returnedByKey.get(key) || 0) + Number(l.quantity))
   }
 
-  // Collapse invoice lines by product (a product can appear on multiple lines).
+  // Collapse invoice lines by product + packaging. Grouping on product alone merged a loose
+  // sale and a carton sale into one row, which then carried whichever price came first and
+  // could not restock the right number of units.
   const byProduct = new Map<string, ReturnableLine>()
   for (const line of invoice.lines) {
-    const existing = byProduct.get(line.productId)
+    const unitsPerItem = Number(line.unitsPerItem) || 1
+    const key = returnLineKey(line.productId, unitsPerItem)
+    const existing = byProduct.get(key)
     const sold = Number(line.quantity)
     if (existing) {
       existing.sold += sold
     } else {
-      byProduct.set(line.productId, {
+      byProduct.set(key, {
+        lineKey: key,
         productId: line.productId,
         name: line.product.name,
         unit: line.product.unit,
         unitPrice: Number(line.unitPrice),
+        unitsPerItem,
+        packName: line.packName ?? null,
         sold,
-        alreadyReturned: returnedByProduct.get(line.productId) || 0,
+        alreadyReturned: returnedByKey.get(key) || 0,
         returnable: 0,
       })
     }
@@ -100,7 +130,13 @@ export async function getReturnableInvoice(invoiceId: string, userId: string): P
 
 export interface CreateReturnInput {
   invoiceId: string
-  returnLines: Array<{ productId: string; quantity: number; damaged?: boolean }>
+  returnLines: Array<{
+    productId: string
+    quantity: number
+    damaged?: boolean
+    /** Packaging the item was sold as. Omitted means loose, which is what older clients send. */
+    unitsPerItem?: number
+  }>
   replacementLines?: Array<{ productId: string; quantity: number }>
   settlement: 'CASH' | 'ACCOUNT_CREDIT'
   note?: string
@@ -127,32 +163,68 @@ export async function createReturn(shopId: string, userId: string, input: Create
     throw new Error('Nothing to return or exchange')
   }
 
-  // Original sold + already-returned per product (server-trusted prices/quantities).
-  const soldByProduct = new Map<string, { qty: number; unitPrice: number }>()
+  // Original sold + already-returned, keyed by product AND packaging (server-trusted prices
+  // and quantities). A carton and a loose unit of the same product are separate entitlements
+  // at separate prices, so they cannot share a bucket.
+  const soldByKey = new Map<string, { qty: number; unitPrice: number; unitsPerItem: number; packName: string | null }>()
   for (const l of invoice.lines) {
-    const e = soldByProduct.get(l.productId)
+    const unitsPerItem = Number(l.unitsPerItem) || 1
+    const key = returnLineKey(l.productId, unitsPerItem)
+    const e = soldByKey.get(key)
     if (e) e.qty += Number(l.quantity)
-    else soldByProduct.set(l.productId, { qty: Number(l.quantity), unitPrice: Number(l.unitPrice) })
+    else
+      soldByKey.set(key, {
+        qty: Number(l.quantity),
+        unitPrice: Number(l.unitPrice),
+        unitsPerItem,
+        packName: l.packName ?? null,
+      })
   }
   const prior = await prisma.saleReturnLine.findMany({
     where: { isReplacement: false, saleReturn: { originalInvoiceId: invoice.id } },
-    select: { productId: true, quantity: true },
+    select: { productId: true, quantity: true, unitsPerItem: true },
   })
-  const returnedByProduct = new Map<string, number>()
-  for (const l of prior) returnedByProduct.set(l.productId, (returnedByProduct.get(l.productId) || 0) + Number(l.quantity))
+  const returnedByKey = new Map<string, number>()
+  for (const l of prior) {
+    const key = returnLineKey(l.productId, Number(l.unitsPerItem))
+    returnedByKey.set(key, (returnedByKey.get(key) || 0) + Number(l.quantity))
+  }
 
   // Validate + price the returned lines.
   let returnTotal = 0
   const returnRows = (input.returnLines || []).map((rl) => {
-    const sold = soldByProduct.get(rl.productId)
+    // An older client sends no packaging. Fall back to the sole packaging this product was sold
+    // in, so a loose-only invoice keeps working unchanged; refuse to guess when it was sold in
+    // more than one, because picking wrong restocks the wrong number of units.
+    let unitsPerItem = Number(rl.unitsPerItem)
+    if (!Number.isFinite(unitsPerItem) || unitsPerItem <= 0) {
+      const matches = [...soldByKey.entries()].filter(([k]) => k.startsWith(`${rl.productId}::`))
+      if (matches.length > 1) {
+        throw new Error(
+          'This item was sold in more than one pack size; choose which one is being returned'
+        )
+      }
+      unitsPerItem = matches.length === 1 ? matches[0][1].unitsPerItem : 1
+    }
+
+    const key = returnLineKey(rl.productId, unitsPerItem)
+    const sold = soldByKey.get(key)
     if (!sold) throw new Error('Returned item was not on this invoice')
     const qty = Number(rl.quantity)
     if (!(qty > 0)) throw new Error('Return quantity must be greater than zero')
-    const remaining = sold.qty - (returnedByProduct.get(rl.productId) || 0)
+    const remaining = sold.qty - (returnedByKey.get(key) || 0)
     if (qty > remaining + 1e-6) throw new Error('Return quantity exceeds what was sold')
     const lineTotal = Math.round(qty * sold.unitPrice * 100) / 100
     returnTotal += lineTotal
-    return { productId: rl.productId, quantity: qty, unitPrice: sold.unitPrice, lineTotal, damaged: !!rl.damaged }
+    return {
+      productId: rl.productId,
+      quantity: qty,
+      unitPrice: sold.unitPrice,
+      lineTotal,
+      damaged: !!rl.damaged,
+      unitsPerItem: sold.unitsPerItem,
+      packName: sold.packName,
+    }
   })
 
   // Price the replacement (exchange) lines from current product prices.
@@ -204,6 +276,9 @@ export async function createReturn(shopId: string, userId: string, input: Create
               lineTotal: D(r.lineTotal),
               isReplacement: false,
               restocked: !r.damaged,
+              // Carried so restocking and cost reversal both work in base units.
+              unitsPerItem: D(r.unitsPerItem),
+              packName: r.packName,
             })),
             ...replRows.map((r) => ({
               productId: r.productId,
@@ -219,10 +294,20 @@ export async function createReturn(shopId: string, userId: string, input: Create
     })
 
     // Stock: returned goods back in (unless damaged); replacements out.
+    // Base units, not pack counts: returning one carton of twelve must put twelve back on the
+    // shelf. The stock ledger is denominated in base units throughout.
     const stockRows = [
       ...returnRows
         .filter((r) => !r.damaged)
-        .map((r) => ({ shopId, productId: r.productId, changeQty: D(r.quantity), type: 'RETURN' as const, refType: 'sale_return', refId: saleReturn.id })),
+        .map((r) => ({
+          shopId,
+          productId: r.productId,
+          changeQty: D(baseUnits(r.quantity, r.unitsPerItem)),
+          type: 'RETURN' as const,
+          refType: 'sale_return',
+          refId: saleReturn.id,
+        })),
+      // Replacements are picked from the product list at its base price, so they are loose units.
       ...replRows.map((r) => ({ shopId, productId: r.productId, changeQty: D(-r.quantity), type: 'SALE' as const, refType: 'exchange_replacement', refId: saleReturn.id })),
     ]
     if (stockRows.length) await tx.stockLedger.createMany({ data: stockRows })

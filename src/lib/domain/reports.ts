@@ -90,7 +90,16 @@ async function getReturnsAdjustment(shopId: string, start: Date, end: Date) {
     }),
     prisma.saleReturnLine.findMany({
       where: { saleReturn: { shopId, createdAt: { gte: start, lt: end } } },
-      select: { quantity: true, lineTotal: true, isReplacement: true, restocked: true, product: { select: { costPrice: true } } },
+      select: {
+        quantity: true,
+        lineTotal: true,
+        isReplacement: true,
+        restocked: true,
+        // Present since the pack-returns fix; a returned carton reverses the cost of all its
+        // base units, matching what the sale booked.
+        unitsPerItem: true,
+        product: { select: { costPrice: true } },
+      },
     }),
   ])
   const returnTotal = Number(agg._sum.returnTotal || 0)
@@ -98,14 +107,10 @@ async function getReturnsAdjustment(shopId: string, start: Date, end: Date) {
 
   let cogsDelta = 0
   for (const l of lines) {
-    // NOTE: SaleReturnLine has no unitsPerItem column, so a returned PACK is costed as one base
-    // unit here. Returns of packed goods are already wrong on the stock side for the same
-    // reason (returns.ts restocks quantity, not quantity × unitsPerItem); both need that column
-    // before either can be right. Loose returns, which is all any shop has recorded so far,
-    // are correct.
     const cost = lineCogs({
       quantity: Number(l.quantity),
       lineTotal: Number(l.lineTotal),
+      unitsPerItem: Number(l.unitsPerItem),
       costPrice: l.product.costPrice ? Number(l.product.costPrice) : null,
     })
     if (l.isReplacement) cogsDelta += cost // new goods out
