@@ -6,8 +6,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { savePurchaseLocally, syncPendingPurchasesBatch } from '@/lib/offline/purchases'
 import { cuid } from '@/lib/utils/cuid'
-import { Pencil, Trash2, Loader2, Plus } from 'lucide-react'
+import { Pencil, Trash2, Loader2, Plus, ImageIcon } from 'lucide-react'
 import IconButton from '@/components/ui/IconButton'
+import BillPhotosModal from '@/components/purchases/BillPhotosModal'
 import { useToast } from '@/components/ui/ToastProvider'
 import { formatNumber } from '@/lib/utils/money'
 import { Table, THead, TR, TH, TD, EmptyRow } from '@/components/ui/DataTable'
@@ -52,6 +53,7 @@ interface Purchase {
   } | null
   _count: {
     lines: number
+    attachments: number
   }
   lines: Array<{
     id: string
@@ -105,6 +107,8 @@ export default function PurchasesPage() {
   const [submitting, setSubmitting] = useState(false)
   const [showQuickAddProduct, setShowQuickAddProduct] = useState(false)
   const [deletingPurchaseId, setDeletingPurchaseId] = useState<string | null>(null)
+  /** The purchase whose bill photos are open, null when the viewer is shut. */
+  const [photosFor, setPhotosFor] = useState<Purchase | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [purchaseToDelete, setPurchaseToDelete] = useState<Purchase | null>(null)
   const [productSearchTerms, setProductSearchTerms] = useState<Record<number, string>>({})
@@ -179,7 +183,9 @@ export default function PurchasesPage() {
         notes: p.notes || null,
         supplier: p.supplierId ? { id: p.supplierId, name: 'Supplier' } : null,
         createdBy: null,
-        _count: { lines: p.lines.length },
+        // Bill photos live server-side only, so a cached row never offers the
+        // viewer. Nothing to show while offline anyway.
+        _count: { lines: p.lines.length, attachments: 0 },
         lines: p.lines.map((l) => ({
           id: l.productId,
           product: { id: l.productId, name: 'Product', unit: 'pcs' },
@@ -1133,6 +1139,18 @@ export default function PurchasesPage() {
                       <TD>{purchase.notes || '-'}</TD>
                       <TD className="text-center">
                         <div className="flex gap-2 justify-center">
+                          {purchase._count.attachments > 0 && (
+                            <IconButton
+                              variant="neutral"
+                              label={`View bill photo${purchase._count.attachments > 1 ? 's' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPhotosFor(purchase)
+                              }}
+                            >
+                              <ImageIcon className="h-4 w-4" />
+                            </IconButton>
+                          )}
                           <IconButton
                             variant="neutral"
                             label="Edit purchase"
@@ -1320,6 +1338,13 @@ export default function PurchasesPage() {
         </>,
         document.body
       )}
+
+      <BillPhotosModal
+        purchaseId={photosFor?.id ?? null}
+        reference={photosFor?.reference}
+        open={photosFor !== null}
+        onClose={() => setPhotosFor(null)}
+      />
     </div>
   )
 }
