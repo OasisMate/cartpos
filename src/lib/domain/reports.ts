@@ -1,5 +1,12 @@
 import { prisma } from '@/lib/db/prisma'
 import { shopDayBoundsUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
+import {
+  sumCogs,
+  lineCogs,
+  summariseCostCoverage,
+  type CogsLine,
+  type CostCoverage,
+} from './cogs'
 
 export interface DailySummary {
   date: string
@@ -9,6 +16,8 @@ export interface DailySummary {
   totalPaymentsReceived: number
   costOfGoods: number
   grossProfit: number
+  /** Revenue in this period with no cost price behind it, so reported at zero profit. */
+  costCoverage: CostCoverage
 }
 
 export interface RangeSummary {
@@ -20,27 +29,42 @@ export interface RangeSummary {
   totalPaymentsReceived: number
   costOfGoods: number
   grossProfit: number
+  /** Revenue in this period with no cost price behind it, so reported at zero profit. */
+  costCoverage: CostCoverage
 }
 
 /**
- * Cost of goods sold for COMPLETED sales in the period = Σ(product.costPrice × qty).
- * Products WITHOUT a cost price contribute their full sale value to COGS, so they
- * yield 0 gross profit (we can't claim profit on a sale whose cost is unknown).
+ * Cost of goods sold for COMPLETED sales in the period, plus how much of the period's revenue
+ * had no cost price behind it. See lib/domain/cogs.ts for the per-line rules; in short, cost is
+ * per BASE unit so a pack line must be costed on quantity × unitsPerItem, and a line with no
+ * cost price is costed at its own sale value so it yields zero profit rather than pure profit.
  */
 // `end` is exclusive (start of the day after the range).
-async function getCostOfGoods(shopId: string, start: Date, end: Date): Promise<number> {
+async function getCostOfGoods(
+  shopId: string,
+  start: Date,
+  end: Date
+): Promise<{ cogs: number; coverage: CostCoverage }> {
   const lines = await prisma.invoiceLine.findMany({
     where: {
       invoice: { shopId, status: 'COMPLETED', createdAt: { gte: start, lt: end } },
     },
-    select: { quantity: true, lineTotal: true, product: { select: { costPrice: true } } },
+    select: {
+      quantity: true,
+      lineTotal: true,
+      // Without this a carton of 12 is costed as a single unit, which reports a profit the
+      // shop never made.
+      unitsPerItem: true,
+      product: { select: { costPrice: true } },
+    },
   })
-  let cogs = 0
-  for (const l of lines) {
-    const cost = l.product.costPrice ? Number(l.product.costPrice) : 0
-    cogs += cost > 0 ? cost * Number(l.quantity) : Number(l.lineTotal)
-  }
-  return Math.round(cogs * 100) / 100
+  const mapped: CogsLine[] = lines.map((l) => ({
+    quantity: Number(l.quantity),
+    lineTotal: Number(l.lineTotal),
+    unitsPerItem: Number(l.unitsPerItem),
+    costPrice: l.product.costPrice ? Number(l.product.costPrice) : null,
+  }))
+  return { cogs: sumCogs(mapped), coverage: summariseCostCoverage(mapped) }
 }
 
 /**
@@ -65,11 +89,18 @@ async function getReturnsAdjustment(shopId: string, start: Date, end: Date) {
 
   let cogsDelta = 0
   for (const l of lines) {
-    const cost = l.product.costPrice ? Number(l.product.costPrice) : 0
-    // No-cost lines use sale value as cost (0 profit), matching getCostOfGoods.
-    const lineCogs = cost > 0 ? cost * Number(l.quantity) : Number(l.lineTotal)
-    if (l.isReplacement) cogsDelta += lineCogs // new goods out
-    else if (l.restocked) cogsDelta -= lineCogs // returned to stock -> reverse COGS
+    // NOTE: SaleReturnLine has no unitsPerItem column, so a returned PACK is costed as one base
+    // unit here. Returns of packed goods are already wrong on the stock side for the same
+    // reason (returns.ts restocks quantity, not quantity × unitsPerItem); both need that column
+    // before either can be right. Loose returns, which is all any shop has recorded so far,
+    // are correct.
+    const cost = lineCogs({
+      quantity: Number(l.quantity),
+      lineTotal: Number(l.lineTotal),
+      costPrice: l.product.costPrice ? Number(l.product.costPrice) : null,
+    })
+    if (l.isReplacement) cogsDelta += cost // new goods out
+    else if (l.restocked) cogsDelta -= cost // returned to stock -> reverse COGS
   }
   return {
     salesDelta: Math.round((replacementTotal - returnTotal) * 100) / 100,
@@ -104,7 +135,7 @@ export async function getDailySummary(
   ])
 
   const totalSales = Math.round((Number(invoices._sum.total || 0) + returnsAdj.salesDelta) * 100) / 100
-  const cogs = Math.round((costOfGoods + returnsAdj.cogsDelta) * 100) / 100
+  const cogs = Math.round((costOfGoods.cogs + returnsAdj.cogsDelta) * 100) / 100
   return {
     date: dateISO,
     totalSales,
@@ -113,6 +144,9 @@ export async function getDailySummary(
     totalPaymentsReceived: Number(payments._sum.amount || 0),
     costOfGoods: cogs,
     grossProfit: Math.round((totalSales - cogs) * 100) / 100,
+    // How much of this revenue had no cost price behind it. Without this the shop just sees a
+    // profit figure that looks too low and has no way to find out why.
+    costCoverage: costOfGoods.coverage,
   }
 }
 
@@ -145,7 +179,7 @@ export async function getRangeSummary(
   ])
 
   const totalSales = Math.round((Number(invoices._sum.total || 0) + returnsAdj.salesDelta) * 100) / 100
-  const cogs = Math.round((costOfGoods + returnsAdj.cogsDelta) * 100) / 100
+  const cogs = Math.round((costOfGoods.cogs + returnsAdj.cogsDelta) * 100) / 100
   return {
     from: fromISO,
     to: toISO,
@@ -155,5 +189,8 @@ export async function getRangeSummary(
     totalPaymentsReceived: Number(payments._sum.amount || 0),
     costOfGoods: cogs,
     grossProfit: Math.round((totalSales - cogs) * 100) / 100,
+    // How much of this revenue had no cost price behind it. Without this the shop just sees a
+    // profit figure that looks too low and has no way to find out why.
+    costCoverage: costOfGoods.coverage,
   }
 }
