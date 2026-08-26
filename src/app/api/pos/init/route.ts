@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { getProductsForPOS, getTopSellingProductIds } from '@/lib/domain/products'
+import { getProductsForPOS, getGridProductOrder } from '@/lib/domain/products'
 
 /** Must stay in step with POS_GRID_LIMIT on the POS page. */
 const POS_GRID_SIZE = 60
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       getProductsForPOS(user.currentShopId),
 
       // Grid order: what this shop actually sells, busiest first.
-      getTopSellingProductIds(user.currentShopId, POS_GRID_SIZE),
+      getGridProductOrder(user.currentShopId, POS_GRID_SIZE),
       
       // Stock (optimized batch query)
       getShopStock(user.currentShopId),

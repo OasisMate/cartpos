@@ -533,6 +533,10 @@ export async function archiveProduct(id: string, userId: string) {
  *  what is moving this week, not what sold well last season. */
 export const TOP_SELLER_DAYS = 7
 
+/** Second tier, for a shop that sells weekly rather than daily. Without it a
+ *  quiet week drops the whole grid back to the random sample. */
+export const TOP_SELLER_FALLBACK_DAYS = 30
+
 /**
  * Product ids ordered by quantity sold, busiest first.
  *
@@ -569,6 +573,31 @@ export async function getTopSellingProductIds(
     console.error('getTopSellingProductIds failed, falling back to default order:', error)
     return []
   }
+}
+
+/**
+ * The order the POS grid should use: this week's sellers first, then the
+ * month's, then nothing (the client fills what is left).
+ *
+ * Tiered rather than a single wider window, so genuinely current sellers always
+ * outrank something that moved three weeks ago, while a shop that sells weekly
+ * rather than daily still gets a useful grid instead of a random one.
+ */
+export async function getGridProductOrder(shopId: string, limit: number): Promise<string[]> {
+  const [thisWeek, thisMonth] = await Promise.all([
+    getTopSellingProductIds(shopId, limit, TOP_SELLER_DAYS),
+    getTopSellingProductIds(shopId, limit, TOP_SELLER_FALLBACK_DAYS),
+  ])
+
+  const seen = new Set(thisWeek)
+  const merged = [...thisWeek]
+  for (const id of thisMonth) {
+    if (merged.length >= limit) break
+    if (seen.has(id)) continue
+    seen.add(id)
+    merged.push(id)
+  }
+  return merged.slice(0, limit)
 }
 
 /** Restore a previously archived product. */
