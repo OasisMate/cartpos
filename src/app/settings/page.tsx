@@ -12,6 +12,7 @@ import { COMMON_TIMEZONES } from '@/lib/utils/timezone'
 import { validatePassword } from '@/lib/validation/password'
 import { PasswordStrength } from '@/components/ui/PasswordStrength'
 import { UserAvatar } from '@/components/ui/UserAvatar'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 // Client-only; keeps the cropper library out of the initial settings bundle.
 const AvatarCropper = dynamic(
@@ -514,7 +515,7 @@ export default function SettingsPage() {
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
+        <BrandSpinner size={44} />
       </div>
     )
   }

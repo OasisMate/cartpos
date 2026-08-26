@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertTriangle, CalendarClock } from 'lucide-react'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface ExpiryLot {
   id: string
@@ -78,7 +79,9 @@ export default function ExpiryPage() {
       </div>
 
       {loading ? (
-        <div className="text-gray-600">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : (
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">

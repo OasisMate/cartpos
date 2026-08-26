@@ -4,6 +4,12 @@
 
 @layer base {
   :root {
+    /* CartPOS is a light-only UI. Without this, a shopkeeper whose Windows is
+       set to dark mode gets OS-drawn controls in dark: native <select> popups
+       render as a solid black box, and CSS on <option> cannot override it
+       because the popup is painted by the platform, not the page. */
+    color-scheme: light;
+
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 
@@ -91,6 +97,14 @@
   }
   .input {
     @apply flex h-9 w-full rounded-md border border-[hsl(var(--input))] bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-[hsl(var(--muted-foreground))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  /* A native <select> popup is painted by the OS using the control's own
+     background. `.input` is bg-transparent, which left the open dropdown solid
+     black on Windows Chrome, so selects get an explicit surface colour. The
+     options need it too: they do not inherit the select's background. */
+  select.input,
+  select.input option {
+    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
   }
   .card {
     @apply rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))] shadow-sm;

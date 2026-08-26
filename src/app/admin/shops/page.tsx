@@ -6,6 +6,7 @@ import { Eye } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import IconButton from '@/components/ui/IconButton'
 import EmptyState from '@/components/ui/EmptyState'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface Shop {
   id: string
@@ -96,7 +97,9 @@ export default function AdminShopsPage() {
     return (
       <div>
         <h1 className="text-2xl font-bold mb-4">Shops</h1>
-        <p className="text-gray-600">Loading...</p>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       </div>
     )
   }

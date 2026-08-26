@@ -79,3 +79,12 @@ desktop.ini
 # Generated master-catalog seeds carry a live customer product list + prices.
 # Regenerate with scripts/build-master-catalog.ts instead of committing.
 /data/master-catalog/*.csv
+
+# Stray screenshots from browser QA - never part of the product
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+
+# Planning docs (specs/plans) - kept locally, deleted once the feature ships
+/docs/superpowers/

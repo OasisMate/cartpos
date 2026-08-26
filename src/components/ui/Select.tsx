@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { cn } from '@/lib/utils'
 
 export type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement>
 
@@ -7,7 +8,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <select
         ref={ref}
-        className={`input h-9 ${className}`}
+        className={cn('input h-9', className)}
         {...props}
       >
         {children}
@@ -18,5 +19,3 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
 Select.displayName = 'Select'
 
 export default Select
-
-

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Power, PowerOff, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { ModalShell } from '@/components/ui/ModalShell'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface Shop {
   id: string
@@ -225,7 +226,9 @@ export default function OrgShopsPage() {
       )}
 
       {loading ? (
-        <div className="text-gray-600">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : shops.length === 0 ? (
         <div className="bg-white rounded-xl shadow-md border border-gray-200 p-8 text-center">
           <p className="text-gray-600 mb-4">No stores yet.</p>

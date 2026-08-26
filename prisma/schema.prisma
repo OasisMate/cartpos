@@ -136,6 +136,7 @@ model Shop {
   stockLots      StockLot[]
   shifts         Shift[]
   cashMovements  CashMovement[]
+  purchaseLists  PurchaseList[]
 
   @@index([orgId, name])
 }
@@ -171,6 +172,7 @@ model User {
   openedShifts          Shift[]                  @relation("ShiftOpenedBy")
   closedShifts          Shift[]                  @relation("ShiftClosedBy")
   cashMovements         CashMovement[]
+  purchaseListsCreated  PurchaseList[]           @relation("PurchaseListCreatedBy")
 
   @@index([phone])
   @@index([cnic])
@@ -335,32 +337,33 @@ enum ReceiptHeaderDisplay {
 // -----------------------------------------------------
 
 model Product {
-  id              String           @id @default(cuid())
-  shopId          String
-  name            String
-  sku             String?
-  barcode         String?
-  unit            String
-  price           Decimal          @db.Decimal(10, 2)
-  tradePrice      Decimal?         @db.Decimal(10, 2) // Optional wholesale/trade per-unit rate (contractors)
-  cartonPrice     Decimal?         @db.Decimal(10, 2) // Price for full carton
-  costPrice       Decimal?         @db.Decimal(10, 2)
-  category        String?
-  trackStock      Boolean          @default(false)
-  reorderLevel    Int?
-  cartonSize      Int? // Number of pieces in a carton
-  cartonBarcode   String?
-  archivedAt      DateTime? // Non-null = hidden from POS/lists/dashboard; history preserved
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  shop            Shop             @relation(fields: [shopId], references: [id])
-  invoiceLines    InvoiceLine[]
-  purchaseLines   PurchaseLine[]
-  stockLedger     StockLedger[]
-  saleReturnLines SaleReturnLine[]
-  quotationLines  QuotationLine[]
-  stockLots       StockLot[]
-  packagingLevels PackagingLevel[]
+  id                String             @id @default(cuid())
+  shopId            String
+  name              String
+  sku               String?
+  barcode           String?
+  unit              String
+  price             Decimal            @db.Decimal(10, 2)
+  tradePrice        Decimal?           @db.Decimal(10, 2) // Optional wholesale/trade per-unit rate (contractors)
+  cartonPrice       Decimal?           @db.Decimal(10, 2) // Price for full carton
+  costPrice         Decimal?           @db.Decimal(10, 2)
+  category          String?
+  trackStock        Boolean            @default(false)
+  reorderLevel      Int?
+  cartonSize        Int? // Number of pieces in a carton
+  cartonBarcode     String?
+  archivedAt        DateTime? // Non-null = hidden from POS/lists/dashboard; history preserved
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  shop              Shop               @relation(fields: [shopId], references: [id])
+  invoiceLines      InvoiceLine[]
+  purchaseLines     PurchaseLine[]
+  stockLedger       StockLedger[]
+  saleReturnLines   SaleReturnLine[]
+  quotationLines    QuotationLine[]
+  stockLots         StockLot[]
+  packagingLevels   PackagingLevel[]
+  purchaseListLines PurchaseListLine[]
 
   @@unique([shopId, barcode], map: "unique_barcode_per_shop")
   @@index([shopId, name])
@@ -451,16 +454,17 @@ enum StockMoveType {
 // -----------------------------------------------------
 
 model Supplier {
-  id        String           @id @default(cuid())
-  shopId    String
-  name      String
-  phone     String?
-  address   String?
-  notes     String?
-  createdAt DateTime         @default(now())
-  shop      Shop             @relation(fields: [shopId], references: [id])
-  purchases Purchase[]
-  ledger    SupplierLedger[]
+  id            String           @id @default(cuid())
+  shopId        String
+  name          String
+  phone         String?
+  address       String?
+  notes         String?
+  createdAt     DateTime         @default(now())
+  shop          Shop             @relation(fields: [shopId], references: [id])
+  purchases     Purchase[]
+  ledger        SupplierLedger[]
+  purchaseLists PurchaseList[]
 
   @@index([shopId, name])
 }
@@ -505,20 +509,22 @@ enum SupplierEntryType {
 }
 
 model Purchase {
-  id              String         @id @default(cuid())
+  id              String               @id @default(cuid())
   shopId          String
   supplierId      String?
-  date            DateTime       @default(now())
+  date            DateTime             @default(now())
   reference       String?
   notes           String?
   /// Offline client id — dedupes purchases created offline so re-sync can't duplicate them.
   clientId        String?
   createdByUserId String?
-  createdAt       DateTime       @default(now())
-  shop            Shop           @relation(fields: [shopId], references: [id])
-  supplier        Supplier?      @relation(fields: [supplierId], references: [id])
+  createdAt       DateTime             @default(now())
+  shop            Shop                 @relation(fields: [shopId], references: [id])
+  supplier        Supplier?            @relation(fields: [supplierId], references: [id])
   lines           PurchaseLine[]
-  createdBy       User?          @relation("PurchaseCreatedBy", fields: [createdByUserId], references: [id])
+  createdBy       User?                @relation("PurchaseCreatedBy", fields: [createdByUserId], references: [id])
+  purchaseList    PurchaseList?
+  attachments     PurchaseAttachment[]
 
   @@unique([shopId, clientId])
   @@index([shopId, date])
@@ -533,6 +539,65 @@ model PurchaseLine {
   createdAt  DateTime @default(now())
   purchase   Purchase @relation(fields: [purchaseId], references: [id])
   product    Product  @relation(fields: [productId], references: [id])
+
+  @@index([purchaseId])
+}
+
+enum PurchaseListStatus {
+  DRAFT
+  SENT
+  RECEIVED
+}
+
+model PurchaseList {
+  id              String             @id @default(cuid())
+  shopId          String
+  supplierId      String?
+  name            String?
+  status          PurchaseListStatus @default(DRAFT)
+  notes           String?
+  sentAt          DateTime?
+  purchaseId      String?            @unique
+  createdByUserId String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  shop            Shop               @relation(fields: [shopId], references: [id])
+  supplier        Supplier?          @relation(fields: [supplierId], references: [id])
+  purchase        Purchase?          @relation(fields: [purchaseId], references: [id])
+  createdBy       User?              @relation("PurchaseListCreatedBy", fields: [createdByUserId], references: [id])
+  lines           PurchaseListLine[]
+
+  @@index([shopId, status])
+  @@index([shopId, createdAt])
+}
+
+model PurchaseListLine {
+  id             String       @id @default(cuid())
+  purchaseListId String
+  /// Null for an off-catalogue item the shopkeeper typed by hand. Such a line
+  /// goes to the supplier on the printed/shared list but is skipped on receive,
+  /// since there is no product to move stock against.
+  productId      String?
+  /// The hand-typed name, set only when productId is null.
+  customName     String?
+  quantity       Decimal      @db.Decimal(10, 3)
+  packName       String?
+  unitsPerItem   Decimal      @default(1) @db.Decimal(10, 3)
+  note           String?
+  createdAt      DateTime     @default(now())
+  purchaseList   PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
+  product        Product?     @relation(fields: [productId], references: [id])
+
+  @@unique([purchaseListId, productId])
+  @@index([purchaseListId])
+}
+
+model PurchaseAttachment {
+  id         String   @id @default(cuid())
+  purchaseId String
+  image      String   @db.Text
+  createdAt  DateTime @default(now())
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([purchaseId])
 }

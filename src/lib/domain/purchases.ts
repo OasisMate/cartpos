@@ -41,7 +41,7 @@ export interface PurchaseFilters {
 }
 
 // Check if user has permission to manage purchases in a shop
-async function checkPurchasePermission(userId: string, shopId: string): Promise<boolean> {
+export async function checkPurchasePermission(userId: string, shopId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
@@ -315,6 +315,10 @@ export async function listPurchases(shopId: string, filters: PurchaseFilters = {
         _count: {
           select: {
             lines: true,
+            // A count, never the images: a bill photo is a base64 blob of tens
+            // of kilobytes, so the list only learns whether any exist. The
+            // images load on demand from getPurchaseAttachments.
+            attachments: true,
           },
         },
       },
@@ -629,4 +633,28 @@ export async function deletePurchase(id: string, userId: string) {
   })
 
   return { success: true }
+}
+/**
+ * The supplier's bill photos for one purchase, newest last so they read in the
+ * order they were taken. Kept out of listPurchases on purpose: each image is a
+ * base64 data URL of tens of kilobytes, so the list only carries a count and
+ * these load when a shopkeeper actually opens them.
+ */
+export async function getPurchaseAttachments(id: string, userId: string) {
+  const purchase = await prisma.purchase.findUnique({
+    where: { id },
+    select: { shopId: true },
+  })
+  if (!purchase) throw new Error('Purchase not found')
+
+  const hasPermission = await checkPurchasePermission(userId, purchase.shopId)
+  if (!hasPermission) {
+    throw new Error('You do not have permission to view this purchase')
+  }
+
+  return prisma.purchaseAttachment.findMany({
+    where: { purchaseId: id },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, image: true, createdAt: true },
+  })
 }

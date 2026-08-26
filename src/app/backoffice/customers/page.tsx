@@ -14,6 +14,7 @@ import IconButton from '@/components/ui/IconButton'
 import { Pencil, Eye, Trash2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/money'
 import UdhaarReminderButton from '@/components/customers/UdhaarReminderButton'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface Customer {
   id: string
@@ -309,7 +310,9 @@ export default function CustomersPage() {
       </Modal>
 
       {loading ? (
-        <div className="text-[hsl(var(--muted-foreground))]">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : customers.length === 0 ? (
         <EmptyState title="No customers" description="Add your first customer to start tracking udhaar." />
       ) : (

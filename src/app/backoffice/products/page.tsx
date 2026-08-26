@@ -14,6 +14,7 @@ import { Pencil, Trash2, Package, Loader2, Plus, ArrowUpDown, ArrowUp, ArrowDown
 import IconButton from '@/components/ui/IconButton'
 import ImportProductsModal from '@/components/products/ImportProductsModal'
 import CatalogPickerModal from '@/components/products/CatalogPickerModal'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface Product {
   id: string
@@ -1141,7 +1142,9 @@ export default function ProductsPage() {
 
       {/* Products List */}
       {loading ? (
-        <div className="text-center py-8">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : products.length === 0 ? (
         <EmptyState
           title={searchTerm ? 'No products found' : 'No products yet'}

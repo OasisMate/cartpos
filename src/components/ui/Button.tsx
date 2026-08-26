@@ -1,4 +1,5 @@
 import React from 'react'
+import { cn } from '@/lib/utils'
 
 type Variant = 'primary' | 'outline' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
@@ -26,10 +27,8 @@ export default function Button({
         ? 'btn-danger'
         : 'btn-outline'
   return (
-    <button className={`${base} ${sizeClasses[size]} ${className}`} {...props}>
+    <button className={cn(base, sizeClasses[size], className)} {...props}>
       {children}
     </button>
   )
 }
-
-

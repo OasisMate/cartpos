@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getPendingExpenses, CachedExpense } from '@/lib/offline/indexedDb'
 import Button from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils/money'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface RecordedExpense {
     id: string
@@ -73,7 +74,9 @@ export default function ExpensesPage() {
                 <div className="bg-[hsl(var(--card))] rounded-lg border border-[hsl(var(--border))] p-4 mb-6">
                     <h2 className="text-lg font-semibold mb-4">Pending Sync ({pendingExpenses.length})</h2>
                     {loading ? (
-                        <div>Loading...</div>
+                        <div className="flex justify-center py-6">
+                          <BrandSpinner size={24} />
+                        </div>
                     ) : (
                         <div className="space-y-2">
                             {pendingExpenses.map((exp) => (
@@ -111,7 +114,9 @@ export default function ExpensesPage() {
                     )}
                 </div>
                 {loadingRecorded ? (
-                    <div>Loading...</div>
+                    <div className="flex justify-center py-6">
+                      <BrandSpinner size={24} />
+                    </div>
                 ) : recorded.length === 0 ? (
                     <div className="text-[hsl(var(--muted-foreground))]">No expenses recorded yet.</div>
                 ) : (

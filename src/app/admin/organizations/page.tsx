@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCNIC } from '@/lib/validation'
 import { BUSINESS_TYPE_GROUPS, formatOrganizationType } from '@/lib/domain/business-types'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 interface RequestedByUser {
   id: string
@@ -418,7 +419,9 @@ export default function OrganizationsPage() {
       {notice && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">{notice}</div>}
 
       {loading ? (
-        <div className="text-[hsl(var(--muted-foreground))]">Loading...</div>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <BrandSpinner size={40} />
+        </div>
       ) : filteredOrgs.length === 0 ? (
         <div className="text-[hsl(var(--muted-foreground))]">No organizations found</div>
       ) : (

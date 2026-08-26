@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import { getPendingStockAdjustments, CachedStockAdjustment } from '@/lib/offline/indexedDb'
 import Button from '@/components/ui/Button'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 
 export default function StockAdjustmentsPage() {
     const { user } = useAuth()
@@ -41,7 +42,9 @@ export default function StockAdjustmentsPage() {
             <div className="bg-[hsl(var(--card))] rounded-lg border border-[hsl(var(--border))] p-4 mb-6">
                 <h2 className="text-lg font-semibold mb-4">Pending Sync ({pendingAdjustments.length})</h2>
                 {loading ? (
-                    <div>Loading...</div>
+                    <div className="flex justify-center py-6">
+                      <BrandSpinner size={24} />
+                    </div>
                 ) : pendingAdjustments.length === 0 ? (
                     <div className="text-[hsl(var(--muted-foreground))]">No pending adjustments</div>
                 ) : (
