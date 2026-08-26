@@ -7,6 +7,7 @@ import { readFeatureConfig } from './business-presets'
 import { getOpenShiftId } from './shifts'
 import { shopDayStartUTC, DEFAULT_TIMEZONE } from '@/lib/utils/timezone'
 import { nextDocumentNumber, formatInvoiceNumber } from './documentNumbers'
+import { validateSaleLines, validateSaleHeader, validateSaleTotals } from './saleTotals'
 
 const invoiceDetailInclude = {
   lines: {
@@ -154,21 +155,10 @@ async function validateSaleInput(
   const allowNegativeStock = shopSettings?.allowNegativeStock ?? true // Default: allow
   const batchExpiryOn = readFeatureConfig(shopSettings?.featureConfig).batchExpiry === true
 
-  // Validate quantities and line amounts (reject NaN/Infinity/negative; verify line math)
-  for (const item of input.items) {
-    if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
-      throw new Error('All items must have a quantity greater than 0')
-    }
-    if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0 || !Number.isFinite(item.lineTotal) || item.lineTotal < 0) {
-      throw new Error('Invalid item price or line total')
-    }
-    if (Math.abs(item.lineTotal - item.quantity * item.unitPrice) > 0.01) {
-      throw new Error('Line total does not match quantity × unit price')
-    }
-  }
-  if (!Number.isFinite(input.subtotal) || !Number.isFinite(input.discount) || !Number.isFinite(input.total) || input.discount < 0) {
-    throw new Error('Invalid sale totals')
-  }
+  // Line and header arithmetic. Pure, and unit-tested in saleTotals.test.ts. Runs before the
+  // stock read so a malformed sale is rejected without touching the ledger.
+  validateSaleLines(input.items)
+  validateSaleHeader(input)
 
   // Batch stock check for all products that track stock
   const productIdsToCheck = products.filter((p) => p.trackStock).map((p) => p.id)
@@ -201,41 +191,11 @@ async function validateSaleInput(
     }
   }
 
-  // Validate totals. The client's `total` INCLUDES service/delivery charges and the
-  // card fee for PAID+CARD sales. Order of charges:
-  //   base = subtotal - discount + service + delivery -> preCardTotal; + card fee -> total
-  const calculatedSubtotal = input.items.reduce((sum, item) => sum + item.lineTotal, 0)
-  const baseTotal = calculatedSubtotal - input.discount
-  const serviceCharge = Number(input.serviceCharge ?? 0)
-  const deliveryCharge = Number(input.deliveryCharge ?? 0)
-  if (!Number.isFinite(serviceCharge) || serviceCharge < 0 || !Number.isFinite(deliveryCharge) || deliveryCharge < 0) {
-    throw new Error('Invalid service or delivery charge')
-  }
-  const preCardTotal = baseTotal + serviceCharge + deliveryCharge
-
-  let expectedTotal = preCardTotal
-  if (input.paymentStatus === 'PAID' && input.paymentMethod === 'CARD') {
-    const shopPct = Number(shopSettings?.cardFeePercent ?? 0)
-    const allowOverride = shopSettings?.allowCardFeeOverride ?? false
-    const configuredFee = Math.round(preCardTotal * shopPct) / 100
-    // Highest fee the client could legitimately have charged. With override the cashier can
-    // dial the percent up (the POS caps it at 100%), so allow up to the full pre-card total;
-    // otherwise the shop's configured percent is the ceiling.
-    const maxFee = allowOverride ? preCardTotal : configuredFee
-    const impliedFee = input.total - preCardTotal
-    // Accept any fee actually charged, from 0 up to that ceiling, and record what the customer
-    // paid. We do NOT force the server's computed fee: fee enforcement belongs at ring-up, not
-    // sync. A completed, paid sale must never be permanently stranded because the device rang it
-    // up with a stale/zero fee (e.g. offline before settings loaded) - that stalls the whole
-    // sync queue and loses the sale from the books.
-    if (impliedFee < -0.01 || impliedFee > maxFee + 0.01) {
-      throw new Error('Total calculation mismatch')
-    }
-    expectedTotal = input.total
-  }
-  if (Math.abs(expectedTotal - input.total) > 0.01) {
-    throw new Error('Total calculation mismatch')
-  }
+  // Totals + card-fee ceiling. Pure, and unit-tested in saleTotals.test.ts.
+  const { serviceCharge, deliveryCharge } = validateSaleTotals(input, {
+    cardFeePercent: shopSettings?.cardFeePercent as any,
+    allowCardFeeOverride: shopSettings?.allowCardFeeOverride,
+  })
 
   return { products, shopSettings, batchExpiryOn, serviceCharge, deliveryCharge, stockWarnings }
 }
@@ -245,7 +205,9 @@ async function validateSaleInput(
  * onto an already-existing invoice header. Shared by createSale and updateSale so both
  * post identical side-effects.
  */
-async function applySaleEffects(
+// Exported for direct testing: this is where a sale turns into stock movements and money,
+// so its side effects are asserted against a stub transaction in sales.effects.test.ts.
+export async function applySaleEffects(
   tx: Prisma.TransactionClient,
   params: {
     invoiceId: string
