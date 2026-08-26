@@ -167,7 +167,9 @@ export default function AdminSubscriptionsPage() {
       {summary && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
           {[
+            // Paying, not "active": a trial or a complimentary account is Rs 0.
             ['Monthly recurring', rs(summary.monthlyRecurring), 'text-green-700'],
+            ['Paying', summary.paying ?? 0, ''],
             ['Active', summary.active, ''],
             ['On trial', summary.trialing, ''],
             ['Past due', summary.pastDue, 'text-amber-700'],

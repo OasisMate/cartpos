@@ -532,26 +532,39 @@ export default function OrganizationsPage() {
                   {/* Free access: full features, no charge, and the owner's
                       plan picker is hidden so they are never offered a choice
                       that does nothing. */}
-                  <button
-                    className={`px-3 py-1 rounded text-sm border disabled:opacity-50 ${
-                      org.billingExempt
-                        ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                    }`}
-                    disabled={actioningId === org.id}
-                    onClick={() =>
-                      org.billingExempt
-                        ? setFreeAccess(org, false)
-                        : (setFreeAccessOrg(org), setFreeAccessNote(''))
-                    }
+                  <label
+                    className="flex items-center gap-2 self-center pr-1 select-none"
                     title={
                       org.billingExempt
-                        ? 'Revoke free access and put this org back on billing'
+                        ? org.billingExemptNote
+                          ? `Free access: ${org.billingExemptNote}`
+                          : 'Free access is on. Click to put this org back on billing.'
                         : 'Give this org every feature at no charge'
                     }
                   >
-                    {org.billingExempt ? 'Free access: ON' : 'Free access: OFF'}
-                  </button>
+                    <span className="text-xs font-medium text-gray-600 whitespace-nowrap">Free access</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!org.billingExempt}
+                      aria-label={`Free access for ${org.name}`}
+                      disabled={actioningId === org.id}
+                      onClick={() =>
+                        org.billingExempt
+                          ? setFreeAccess(org, false)
+                          : (setFreeAccessOrg(org), setFreeAccessNote(''))
+                      }
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
+                        org.billingExempt ? 'bg-emerald-600' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          org.billingExempt ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </label>
                   {org.status === 'ACTIVE' && (
                     <button
                       className="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 disabled:opacity-50"

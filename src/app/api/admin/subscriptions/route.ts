@@ -63,6 +63,8 @@ export async function GET(request: Request) {
         name: org.name.trim(),
         city: org.city,
         isDemo: org.isDemo,
+        freeAccess: org.billingExempt,
+        freeAccessNote: org.billingExemptNote,
         orgStatus: org.status,
         referralSource: org.referralSource,
         shops: org._count.shops,
@@ -92,14 +94,28 @@ export async function GET(request: Request) {
       rows = rows.filter((r) => !r.canWrite || r.pendingClaims > 0)
     }
 
-    const revenue = rows
-      .filter((r) => r.status === 'ACTIVE' && !r.isDemo)
-      .reduce((sum, r) => sum + (r.agreedMonthlyPrice ?? 0), 0)
+    // Money actually being collected, not money we hope to collect. A row only
+    // counts once somebody has paid for a period that has not run out: an org
+    // sitting on a trial, a grace window or a complimentary account is worth
+    // zero. Counting effective-ACTIVE here reported Rs 23,996 of revenue while
+    // the SubscriptionPayment table was empty.
+    const paying = rows.filter(
+      (r) =>
+        !r.isDemo &&
+        !r.freeAccess &&
+        !r.isComplimentary &&
+        !r.inTrial &&
+        r.status === 'ACTIVE' &&
+        r.daysLeft !== null &&
+        r.daysLeft > 0
+    )
+    const revenue = paying.reduce((sum, r) => sum + (r.agreedMonthlyPrice ?? 0), 0)
 
     return NextResponse.json({
       rows,
       summary: {
         total: rows.length,
+        paying: paying.length,
         trialing: rows.filter((r) => r.status === 'TRIALING').length,
         active: rows.filter((r) => r.status === 'ACTIVE').length,
         pastDue: rows.filter((r) => r.status === 'PAST_DUE').length,
