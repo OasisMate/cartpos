@@ -51,7 +51,12 @@ export async function sweepSubscriptions(now = new Date()): Promise<SweepResult>
   for (const sub of candidates) {
     // Which field is the deadline depends on status. Reading the wrong one
     // would expire a paying customer the moment their trial date passed.
-    const deadline = sub.status === 'TRIALING' ? sub.trialEndsAt : sub.currentPeriodEnd
+    //
+    // The fallback to trialEndsAt matters: once this sweep moves a trial to
+    // PAST_DUE its currentPeriodEnd is still null, so reading only that field
+    // made the row invisible here forever and it could never reach EXPIRED.
+    const deadline =
+      sub.status === 'TRIALING' ? sub.trialEndsAt : sub.currentPeriodEnd ?? sub.trialEndsAt
     if (!deadline) continue
 
     if (deadline > now) continue

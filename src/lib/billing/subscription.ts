@@ -171,7 +171,15 @@ export function resolveBillingState(org: BillingInput | null | undefined, now = 
     }
 
     const inTrial = sub.status === 'TRIALING'
-    const deadline = inTrial ? sub.trialEndsAt : sub.currentPeriodEnd
+    // A lapsed trial keeps its deadline in trialEndsAt: currentPeriodEnd is only
+    // set once somebody actually pays. Reading currentPeriodEnd alone here meant
+    // that the moment the sweep moved a trial to PAST_DUE its deadline read as
+    // null, it fell into the grandfathered branch below, and every expired trial
+    // silently became a permanent free account.
+    const deadline = inTrial ? sub.trialEndsAt : sub.currentPeriodEnd ?? sub.trialEndsAt
+    // Whether the deadline we ended up with is a trial deadline. Drives the
+    // wording, and stays true after the stored status has moved off TRIALING.
+    const onTrialDeadline = inTrial || (!sub.currentPeriodEnd && !!sub.trialEndsAt)
 
     // Grandfathered: ACTIVE with no period end. Never expires, never warns.
     if (!deadline) {
@@ -181,7 +189,7 @@ export function resolveBillingState(org: BillingInput | null | undefined, now = 
         canWrite: true,
         daysLeft: null,
         deadline: null,
-        inTrial,
+        inTrial: onTrialDeadline,
         inGrace: false,
         blockedReason: '',
       }
@@ -198,7 +206,7 @@ export function resolveBillingState(org: BillingInput | null | undefined, now = 
         canWrite: true,
         daysLeft,
         deadline,
-        inTrial,
+        inTrial: onTrialDeadline,
         inGrace: false,
         blockedReason: '',
       }
@@ -212,7 +220,7 @@ export function resolveBillingState(org: BillingInput | null | undefined, now = 
         canWrite: true,
         daysLeft,
         deadline,
-        inTrial,
+        inTrial: onTrialDeadline,
         inGrace: true,
         blockedReason: '',
       }
@@ -224,9 +232,9 @@ export function resolveBillingState(org: BillingInput | null | undefined, now = 
       canWrite: false,
       daysLeft,
       deadline,
-      inTrial,
+      inTrial: onTrialDeadline,
       inGrace: false,
-      blockedReason: inTrial
+      blockedReason: onTrialDeadline
         ? 'Your free trial has ended. Choose a plan to start selling again.'
         : 'Your subscription has expired. Send your payment to start selling again.',
     }
