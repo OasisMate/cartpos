@@ -65,7 +65,12 @@ export default async function Home() {
               }),
             { maxRetries: 2, initialDelay: 200 }
           )
-          if (!org || org.status === 'PENDING' || org.status === 'SUSPENDED' || org.status === 'INACTIVE') {
+          // A suspended org is usually suspended for non-payment, so send the
+          // owner where they can fix it rather than to a dead end.
+          if (org?.status === 'SUSPENDED') {
+            redirect('/billing')
+          }
+          if (!org || org.status === 'PENDING' || org.status === 'INACTIVE') {
             redirect('/waiting-approval')
           }
 

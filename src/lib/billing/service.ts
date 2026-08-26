@@ -108,6 +108,13 @@ export async function recordPayment(params: {
       include: { plan: true },
     })
 
+    // Paying reopens the account. Without this an org suspended by the sweep
+    // stayed locked out after settling up, and needed an admin to notice.
+    await tx.organization.updateMany({
+      where: { id: params.orgId, status: 'SUSPENDED' },
+      data: { status: 'ACTIVE', suspensionReason: null },
+    })
+
     return { payment, subscription }
   })
 }

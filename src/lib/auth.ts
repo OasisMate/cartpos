@@ -147,6 +147,10 @@ export async function getCurrentUser() {
                         isDemo: true,
                         billingExempt: true,
                         billingExemptNote: true,
+                        // The resolver needs both: status to honour suspension,
+                        // createdAt to derive a trial deadline when dates are missing.
+                        status: true,
+                        createdAt: true,
                         type: true,
                         // Managers and cashiers have no OrganizationUser row, so
                         // their billing state has to come via their shop's org.

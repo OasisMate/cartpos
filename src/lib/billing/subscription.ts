@@ -16,6 +16,9 @@ import { BUSINESS_FEATURES, PLAN_FEATURES, type FeatureKey } from './features'
 /** Days a shop keeps working past its deadline before going read-only. */
 export const GRACE_DAYS = 3
 
+/** Length of the free trial every new org gets. */
+export const TRIAL_DAYS = 14
+
 /** How early we start warning them in the UI. */
 export const WARN_DAYS = 5
 
@@ -85,6 +88,11 @@ export interface BillingInput {
   isDemo?: boolean | null
   billingExempt?: boolean | null
   billingExemptNote?: string | null
+  /** Org lifecycle status. A suspended org is blocked whatever its dates say. */
+  status?: string | null
+  /** Signup date. The fallback deadline is createdAt + TRIAL_DAYS, so an org can
+   *  never end up with no deadline at all. */
+  createdAt?: Date | null
   subscription?: {
     status: SubscriptionStatus
     cycle: BillingCycle
@@ -112,6 +120,58 @@ function toNumber(v: unknown): number {
 }
 
 /**
+ * Turn a single deadline into a state. One place decides writable / grace /
+ * read-only, so no caller can accidentally reintroduce a never-expires path.
+ *
+ * A null deadline means we could not work one out even from the join date, and
+ * that is the only case that still fails open.
+ */
+type DeadlineBase = Omit<
+  BillingState,
+  'canWrite' | 'daysLeft' | 'deadline' | 'inTrial' | 'inGrace' | 'blockedReason'
+> &
+  Partial<BillingState>
+
+function deadlineState(
+  base: DeadlineBase,
+  deadline: Date | null,
+  onTrialDeadline: boolean,
+  now: Date
+): BillingState {
+  if (!deadline) {
+    return {
+      ...base,
+      canWrite: true,
+      daysLeft: null,
+      deadline: null,
+      inTrial: onTrialDeadline,
+      inGrace: false,
+      blockedReason: '',
+    }
+  }
+
+  const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / DAY_MS)
+  const shared = { ...base, daysLeft, deadline, inTrial: onTrialDeadline }
+
+  if (daysLeft > 0) return { ...shared, canWrite: true, inGrace: false, blockedReason: '' }
+
+  // Overdue but inside the grace window: still fully working.
+  if (-daysLeft <= GRACE_DAYS) {
+    return { ...shared, status: 'PAST_DUE', canWrite: true, inGrace: true, blockedReason: '' }
+  }
+
+  return {
+    ...shared,
+    status: 'EXPIRED',
+    canWrite: false,
+    inGrace: false,
+    blockedReason: onTrialDeadline
+      ? 'Your free trial has ended. Choose a plan to start selling again.'
+      : 'Your subscription has expired. Send your payment to start selling again.',
+  }
+}
+
+/**
  * Work out what an org can do right now.
  *
  * Which field is the deadline depends on status, and getting this backwards
@@ -131,9 +191,48 @@ export function resolveBillingState(org: BillingInput | null | undefined, now = 
     // do nothing.
     if (org.billingExempt) return { ...FULL_ACCESS, enforced: true }
 
+    // The fallback deadline. Nothing is allowed to be deadline-less: an org with
+    // no subscription row, or one whose dates are both empty, is treated as
+    // having started its trial the day it signed up. Without this there were
+    // three separate routes to permanent free access.
+    const fallbackDeadline = org.createdAt
+      ? new Date(org.createdAt.getTime() + TRIAL_DAYS * DAY_MS)
+      : null
+
+    // Suspended or rejected: blocked outright, whatever the dates say. They can
+    // still reach the billing page to pay their way back in.
+    if (org.status === 'SUSPENDED' || org.status === 'INACTIVE') {
+      return {
+        ...FULL_ACCESS,
+        enforced: true,
+        bypass: false,
+        // EXPIRED rather than ACTIVE: the admin counters and filters read this,
+        // and a suspended org sitting under "Active" is exactly the kind of
+        // reporting that hid the problem in the first place.
+        status: 'EXPIRED',
+        canWrite: false,
+        daysLeft: null,
+        deadline: null,
+        inTrial: false,
+        inGrace: false,
+        blockedReason:
+          org.status === 'SUSPENDED'
+            ? 'This account is suspended. Send your payment or contact us to reopen it.'
+            : 'This account is closed. Contact us to reopen it.',
+      }
+    }
+
     const sub = org.subscription
-    // No subscription row yet (a signup mid-migration, say). Never punish them.
-    if (!sub) return { ...FULL_ACCESS, enforced: true }
+    // No subscription row (a signup mid-migration, say). They still get exactly
+    // the trial they are entitled to, counted from their join date.
+    if (!sub) {
+      return deadlineState({
+        ...FULL_ACCESS,
+        enforced: true,
+        bypass: false,
+        status: 'TRIALING',
+      }, fallbackDeadline, true, now)
+    }
 
     const plan = sub.plan
     const planCode = plan?.code ?? 'BUSINESS'
@@ -181,63 +280,14 @@ export function resolveBillingState(org: BillingInput | null | undefined, now = 
     // wording, and stays true after the stored status has moved off TRIALING.
     const onTrialDeadline = inTrial || (!sub.currentPeriodEnd && !!sub.trialEndsAt)
 
-    // Grandfathered: ACTIVE with no period end. Never expires, never warns.
-    if (!deadline) {
-      return {
-        ...base,
-        status: inTrial ? 'TRIALING' : 'ACTIVE',
-        canWrite: true,
-        daysLeft: null,
-        deadline: null,
-        inTrial: onTrialDeadline,
-        inGrace: false,
-        blockedReason: '',
-      }
-    }
-
-    const msLeft = deadline.getTime() - now.getTime()
-    const daysLeft = Math.ceil(msLeft / DAY_MS)
-    const daysOverdue = -daysLeft
-
-    if (msLeft > 0) {
-      return {
-        ...base,
-        status: inTrial ? 'TRIALING' : 'ACTIVE',
-        canWrite: true,
-        daysLeft,
-        deadline,
-        inTrial: onTrialDeadline,
-        inGrace: false,
-        blockedReason: '',
-      }
-    }
-
-    // Overdue but inside the grace window: still fully working.
-    if (daysOverdue <= GRACE_DAYS) {
-      return {
-        ...base,
-        status: 'PAST_DUE',
-        canWrite: true,
-        daysLeft,
-        deadline,
-        inTrial: onTrialDeadline,
-        inGrace: true,
-        blockedReason: '',
-      }
-    }
-
-    return {
-      ...base,
-      status: 'EXPIRED',
-      canWrite: false,
-      daysLeft,
-      deadline,
-      inTrial: onTrialDeadline,
-      inGrace: false,
-      blockedReason: onTrialDeadline
-        ? 'Your free trial has ended. Choose a plan to start selling again.'
-        : 'Your subscription has expired. Send your payment to start selling again.',
-    }
+    // No dates at all on the row: fall back to the trial from the join date
+    // rather than granting permanent access, which is what used to happen.
+    return deadlineState(
+      { ...base, status: inTrial ? 'TRIALING' : 'ACTIVE' },
+      deadline ?? fallbackDeadline,
+      onTrialDeadline || !deadline,
+      now
+    )
   } catch {
     // Something unexpected in the data. Let them work.
     return FULL_ACCESS

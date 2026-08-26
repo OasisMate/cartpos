@@ -65,7 +65,9 @@ What a hardware/sanitary shop needs that a kiryana doesn't.
 read-only on expiry), merged to `main`, and `BILLING_ENFORCED=true` is set in Vercel, so the
 paywall is enforcing in production. Daily status sweep on Vercel cron since 2026-08-26.
 Platform admins can grant per-org free access (`billingExempt`) from /admin/organizations, which
-hides the plan picker for that org.
+hides the plan picker for that org. Policy since 2026-08-26: 14-day trial from join date, 3-day
+grace, then the daily sweep AUTO-SUSPENDS. No never-expires state exists any more; only demo and
+Free access sit outside billing.
 See local `docs/BILLING_PLAN.md`.
 
 ## Parking lot

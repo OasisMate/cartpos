@@ -218,7 +218,6 @@ export default function BillingPage() {
   const pendingClaim = claims?.find((c: Claim) => c.status === 'PENDING')
   const lastRejected = claims?.find((c: Claim) => c.status === 'REJECTED')
   const isFree = subscription && Number(subscription.agreedMonthlyPrice) === 0
-  const neverExpires = subscription && subscription.currentPeriodEnd === null && subscription.status !== 'TRIALING'
 
   const waMessage = [
     `Cart POS payment`,
@@ -258,9 +257,9 @@ export default function BillingPage() {
             </p>
           </div>
           <div className="text-right">
-            {neverExpires ? (
+            {freeAccess ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
-                <Check className="h-4 w-4" /> No expiry
+                <Check className="h-4 w-4" /> Free access
               </span>
             ) : billing?.daysLeft !== null && billing?.daysLeft !== undefined ? (
               <>
@@ -329,7 +328,7 @@ export default function BillingPage() {
       )}
 
       {/* ---- Pay ---- */}
-      {!freeAccess && !isFree && !neverExpires && (
+      {!freeAccess && !isFree && (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900">Pay for your plan</h2>
           <p className="mt-1 text-sm text-gray-600">Choose how long you want to pay for. Longer periods cost less.</p>

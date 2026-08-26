@@ -9,12 +9,21 @@
  */
 import { prisma } from '@/lib/db/prisma'
 import { GRACE_DAYS } from './subscription'
+import { sendOrgSuspendedWarningEmail } from '../domain/organizations'
+
+/** Written to suspensionReason so the admin list explains itself. */
+const SUSPEND_REASON = 'Trial or subscription ended with no payment received'
+
+/** Stands in for an admin id in the audit trail when the cron acts on its own. */
+const SYSTEM_ACTOR = 'system:billing-sweep'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export interface SweepResult {
   toPastDue: number
   toExpired: number
+  /** Orgs moved to SUSPENDED because they never paid. */
+  suspended: number
   checked: number
 }
 
@@ -33,8 +42,9 @@ export async function sweepSubscriptions(now = new Date()): Promise<SweepResult>
   const candidates = await prisma.subscription.findMany({
     where: {
       status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE'] },
-      // Demo and free-access orgs are outside billing entirely.
-      organization: { isDemo: false, billingExempt: false },
+      // Demo and free-access orgs are outside billing entirely. Already
+      // suspended orgs have nothing left to do here.
+      organization: { isDemo: false, billingExempt: false, status: { not: 'SUSPENDED' } },
       OR: [{ trialEndsAt: { not: null } }, { currentPeriodEnd: { not: null } }],
     },
     select: {
@@ -42,11 +52,15 @@ export async function sweepSubscriptions(now = new Date()): Promise<SweepResult>
       status: true,
       trialEndsAt: true,
       currentPeriodEnd: true,
+      organizationId: true,
     },
   })
 
   const toPastDue: string[] = []
   const toExpired: string[] = []
+  // Expiring is not enough: an org that never paid gets suspended, which is what
+  // actually stops them using the service.
+  const toSuspend: string[] = []
 
   for (const sub of candidates) {
     // Which field is the deadline depends on status. Reading the wrong one
@@ -63,6 +77,7 @@ export async function sweepSubscriptions(now = new Date()): Promise<SweepResult>
 
     if (deadline < graceCutoff) {
       if (sub.status !== 'EXPIRED') toExpired.push(sub.id)
+      toSuspend.push(sub.organizationId)
     } else if (sub.status !== 'PAST_DUE') {
       toPastDue.push(sub.id)
     }
@@ -75,7 +90,27 @@ export async function sweepSubscriptions(now = new Date()): Promise<SweepResult>
     await prisma.subscription.updateMany({ where: { id: { in: toExpired } }, data: { status: 'EXPIRED' } })
   }
 
-  return { toPastDue: toPastDue.length, toExpired: toExpired.length, checked: candidates.length }
+  let suspended = 0
+  if (toSuspend.length) {
+    const result = await prisma.organization.updateMany({
+      where: { id: { in: toSuspend }, status: 'ACTIVE' },
+      data: { status: 'SUSPENDED', suspensionReason: SUSPEND_REASON },
+    })
+    suspended = result.count
+
+    // Tell them why, one email per org, after the status is written so a failed
+    // send cannot leave an org suspended with no explanation pending.
+    for (const orgId of toSuspend) {
+      await sendOrgSuspendedWarningEmail(orgId, SYSTEM_ACTOR, SUSPEND_REASON)
+    }
+  }
+
+  return {
+    toPastDue: toPastDue.length,
+    toExpired: toExpired.length,
+    suspended,
+    checked: candidates.length,
+  }
 }
 
 /**

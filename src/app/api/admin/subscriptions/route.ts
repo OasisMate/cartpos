@@ -84,7 +84,6 @@ export async function GET(request: Request) {
         extraShops: sub?.extraShops ?? 0,
         // A free account is a deliberate decision, so make it obvious in the list.
         isComplimentary: sub ? Number(sub.agreedMonthlyPrice) === 0 : false,
-        neverExpires: sub ? sub.currentPeriodEnd === null && sub.status !== 'TRIALING' : false,
       }
     })
 

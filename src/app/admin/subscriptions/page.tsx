@@ -33,7 +33,8 @@ interface Row {
   priceNote: string | null
   cycle: string | null
   isComplimentary: boolean
-  neverExpires: boolean
+  freeAccess: boolean
+  freeAccessNote: string | null
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -235,6 +236,11 @@ export default function AdminSubscriptionsPage() {
                     <div className="font-medium text-gray-900">
                       {r.name}
                       {r.isDemo && <span className="ml-2 text-xs text-gray-400">demo</span>}
+                      {r.freeAccess && (
+                        <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">
+                          free
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500">
                       {r.city || 'No city'} · {r.shops} shop{r.shops === 1 ? '' : 's'} · {r.users} user
@@ -260,8 +266,8 @@ export default function AdminSubscriptionsPage() {
                     {r.priceNote && <div className="text-xs text-gray-500">{r.priceNote}</div>}
                   </td>
                   <td className="px-4 py-3 text-gray-600">
-                    {r.neverExpires
-                      ? 'Never'
+                    {r.freeAccess
+                      ? 'Free access'
                       : r.daysLeft === null
                         ? '-'
                         : r.daysLeft < 0

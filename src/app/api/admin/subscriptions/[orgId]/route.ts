@@ -138,21 +138,20 @@ export async function PATCH(request: Request, { params }: { params: { orgId: str
       return NextResponse.json({ subscription })
     }
 
-    // ---- Extend or clear the expiry by hand ---------------------------
-    // The escape hatch: "give them another week while they sort the transfer",
-    // or put a grandfathered org back to never-expires.
+    // ---- Extend the expiry by hand ------------------------------------
+    // The escape hatch: "give them another week while they sort the transfer".
+    // Setting no deadline at all is deliberately not offered any more: it used
+    // to mean free forever. Use the Free access toggle for that, where it is
+    // visible and reversible.
     if (body.action === 'setDeadline') {
-      const neverExpires = body.neverExpires === true
       const deadline = body.deadline ? new Date(body.deadline) : null
-      if (!neverExpires && (!deadline || Number.isNaN(deadline.getTime()))) {
+      if (!deadline || Number.isNaN(deadline.getTime())) {
         return NextResponse.json({ error: 'Enter a valid date' }, { status: 400 })
       }
 
       const subscription = await prisma.subscription.update({
         where: { organizationId: params.orgId },
-        data: neverExpires
-          ? { currentPeriodEnd: null, trialEndsAt: null, status: 'ACTIVE' }
-          : { currentPeriodEnd: deadline, trialEndsAt: null, status: 'ACTIVE' },
+        data: { currentPeriodEnd: deadline, trialEndsAt: null, status: 'ACTIVE' },
         include: { plan: true },
       })
 
@@ -162,7 +161,7 @@ export async function PATCH(request: Request, { params }: { params: { orgId: str
         action: ActivityActions.UPDATE_SUBSCRIPTION_PRICE,
         entityType: EntityTypes.ORGANIZATION,
         entityId: params.orgId,
-        details: { setDeadline: neverExpires ? 'never' : deadline?.toISOString() },
+        details: { setDeadline: deadline.toISOString() },
       })
 
       return NextResponse.json({ subscription })
