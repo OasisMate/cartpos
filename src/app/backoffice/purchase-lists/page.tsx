@@ -7,6 +7,7 @@ import { Plus, Loader2, Trash2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import IconButton from '@/components/ui/IconButton'
 import EmptyState from '@/components/ui/EmptyState'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 import { Table, THead, TR, TH, EmptyRow } from '@/components/ui/DataTable'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/ToastProvider'
@@ -121,7 +122,9 @@ export default function PurchaseListsPage() {
       </div>
 
       {loading ? (
-        <div className="py-8 text-center text-gray-500">Loading...</div>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <BrandSpinner size={44} />
+        </div>
       ) : lists.length === 0 ? (
         <EmptyState
           title="No purchase lists yet"

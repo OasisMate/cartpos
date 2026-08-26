@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import IconButton from '@/components/ui/IconButton'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 import { useToast } from '@/components/ui/ToastProvider'
 import { formatCurrency } from '@/lib/utils/money'
 import { downscaleImage } from '@/lib/utils/downscaleImage'
@@ -260,7 +261,11 @@ export default function ReceiveListForm({ listId }: { listId: string }) {
   }
 
   if (loading) {
-    return <div className="p-6 text-center text-sm text-gray-500">Loading...</div>
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <BrandSpinner size={44} />
+      </div>
+    )
   }
   if (!list) {
     return (

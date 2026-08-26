@@ -9,6 +9,7 @@ import Input from '@/components/ui/Input'
 import IconButton from '@/components/ui/IconButton'
 import Select from '@/components/ui/Select'
 import EmptyState from '@/components/ui/EmptyState'
+import { BrandSpinner } from '@/components/ui/BrandSpinner'
 import { useToast } from '@/components/ui/ToastProvider'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatNumber } from '@/lib/utils/money'
@@ -851,7 +852,11 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   }
 
   if (loading) {
-    return <div className="p-6 text-center text-sm text-gray-500">Loading...</div>
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <BrandSpinner size={44} />
+      </div>
+    )
   }
   if (!list) {
     return (
