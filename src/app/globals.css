@@ -4,6 +4,12 @@
 
 @layer base {
   :root {
+    /* CartPOS is a light-only UI. Without this, a shopkeeper whose Windows is
+       set to dark mode gets OS-drawn controls in dark: native <select> popups
+       render as a solid black box, and CSS on <option> cannot override it
+       because the popup is painted by the platform, not the page. */
+    color-scheme: light;
+
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 

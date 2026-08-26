@@ -877,7 +877,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
   return (
     <div className="bg-gray-50 pb-24">
       <div className="sticky top-0 z-10 border-b border-gray-200 bg-white">
-        <div className="mx-auto w-full max-w-4xl space-y-2 px-4 py-3">
+        <div className="w-full max-w-5xl space-y-2 px-6 py-3">
         <div className="flex items-center gap-2">
           <Link
             href="/store/purchase-lists"
@@ -1010,7 +1010,7 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-4xl px-4 py-3">
+      <div className="w-full max-w-5xl px-6 py-3">
         {list.lines.length === 0 ? (
           <EmptyState title="Nothing on this list yet. Scan an item or search for it." />
         ) : (
@@ -1030,12 +1030,12 @@ export default function PurchaseListBuilderPage({ params }: { params: { id: stri
         )}
       </div>
 
-      <div className="mx-auto w-full max-w-4xl px-4 pb-3">
+      <div className="w-full max-w-5xl px-6 pb-3">
         <PurchaseListSuggestions listId={listId} onAdded={mergeLine} refreshSignal={suggestionsRefreshKey} />
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-white md:left-[60px]">
-        <div className="mx-auto flex w-full max-w-4xl items-center gap-2 px-4 py-3">
+        <div className="flex w-full max-w-5xl items-center gap-2 px-6 py-3 md:pl-12">
         <div className="mr-auto whitespace-nowrap text-sm text-gray-500">
           {list.lines.length} item{list.lines.length === 1 ? '' : 's'}
         </div>
