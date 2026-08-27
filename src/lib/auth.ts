@@ -245,6 +245,10 @@ export async function getCurrentUser() {
     const shops = user.shops.map((us) => ({
       shopId: us.shopId,
       shopRole: us.shopRole,
+      // This person's seat for this shop. Paused by a plan downgrade => they can read
+      // everything but cannot write (see billing/guards.ts). Free to carry: the shops
+      // relation is loaded with `include`, so the column was already in the payload.
+      seatActive: us.isActive,
       shop: us.shop,
     }))
 

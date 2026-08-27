@@ -26,6 +26,9 @@ interface User {
   shops?: Array<{
     shopId: string
     shopRole: string
+    // This person's seat for that shop. False = paused by a plan downgrade: they can sign
+    // in and read everything, but cannot write. See lib/billing/seats.ts.
+    seatActive?: boolean
     shop: {
       id: string
       name: string

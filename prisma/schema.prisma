@@ -240,9 +240,11 @@ model UserShop {
   userId    String
   shopId    String
   shopRole  ShopRole
-  // Seat paused by a plan downgrade. The membership row is kept so upgrading
-  // restores the exact same access. Seat caps are enforced when INVITING, never
-  // at login, so this is only ever set by an explicit downgrade.
+  // Seat paused by a plan downgrade. The membership row is kept so upgrading restores the
+  // exact same access. A paused person can still sign in and read everything but cannot
+  // WRITE (billing/guards.ts requirePaidWrite), and their seat STILL counts against the
+  // plan cap (billing/seats.ts), because pausing prompts an upgrade rather than shedding
+  // a seat. Never checked at login: nobody is locked out of the building mid-shift.
   isActive  Boolean   @default(true)
   pausedAt  DateTime?
   createdAt DateTime  @default(now())

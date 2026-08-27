@@ -16,6 +16,7 @@ import { prisma } from '@/lib/db/prisma'
 import { PaymentRequiredResponse } from '@/lib/permissions'
 import type { BillingState } from './subscription'
 import { FULL_ACCESS } from './subscription'
+import { countSeats, newSeatStartsPaused } from './seats'
 
 export interface BillingUser {
   billing?: BillingState | null
@@ -23,6 +24,8 @@ export interface BillingUser {
   currentOrgId?: string | null
   shops?: Array<{
     shopId: string
+    /** This person's seat for that shop. False = paused by a plan downgrade. */
+    seatActive?: boolean | null
     shop?: { isActive?: boolean | null; pausedReason?: string | null } | null
   }>
 }
@@ -52,6 +55,17 @@ export function requirePaidWrite(user: BillingUser, shopId?: string | null): Res
         'SHOP_PAUSED'
       )
     }
+
+    // The shop is open but THIS person's seat is not. A downgrade paused seats that no
+    // longer fit the plan; they keep their login and can read everything, so a cashier is
+    // never locked out of the building, but they cannot ring up a sale until the owner
+    // upgrades. Same `explicit false` rule: undefined means the flag was not loaded.
+    if (entry?.seatActive === false) {
+      return PaymentRequiredResponse(
+        'Your account is paused because the plan was downgraded. Ask the shop owner to upgrade so you can sell again.',
+        'SEAT_PAUSED'
+      )
+    }
   }
 
   if (!billing.canWrite) {
@@ -67,47 +81,74 @@ export function canWriteNow(user: BillingUser, shopId?: string | null): boolean 
 }
 
 /**
- * Seat cap, checked when INVITING someone.
+ * Explains why a cap is being hit when paused seats are part of the reason.
  *
- * Deliberately never consulted at login. Hitting the cap must stop the next
- * invite and nothing else: an existing user is never logged out, downgraded or
- * blocked mid-shift by this.
+ * Without this the owner reads "your plan includes 3 users", counts two people who can
+ * actually sell, and concludes the app is broken. Paused accounts are invisible on the
+ * shop floor but they still occupy seats, so the message has to say so, and has to name
+ * the two ways out.
+ */
+function pausedSeatNote(paused: number): string {
+  if (paused <= 0) return ''
+  return paused === 1
+    ? ' 1 paused account still uses a seat. Upgrade, or remove that person, to free it.'
+    : ` ${paused} paused accounts still use seats. Upgrade, or remove those people, to free them.`
+}
+
+/**
+ * Seat cap, checked when adding someone to the org.
+ *
+ * Never consulted at login: hitting the cap stops the next hire and nothing else, so an
+ * existing user is never signed out by it. What a paused seat DOES do is turn that person
+ * read-only (see requirePaidWrite) while still counting here, because pausing is a prompt
+ * to upgrade rather than a way to shed seats.
+ *
+ * Counts people, not membership rows. `candidateUserId` is the person being added when
+ * they may already hold a seat in this org (the assign-store path): putting someone in a
+ * second shop is not a second seat, so the cap must not fire for them.
  */
 export async function assertSeatAvailable(
   user: BillingUser,
   orgId: string,
-  role: 'STORE_MANAGER' | 'CASHIER'
+  role: 'STORE_MANAGER' | 'CASHIER',
+  candidateUserId?: string
 ): Promise<Response | null> {
   const billing = user.billing ?? FULL_ACCESS
   if (!billing.enforced || billing.bypass) return null
   if (billing.maxUsers === null && billing.maxCashiers === null) return null
 
   try {
+    // Paused rows included on purpose. Filtering them out was the leak: a downgrade
+    // paused staff who kept working, their seats read as free, and the owner could hire
+    // replacements into them.
     const seats = await prisma.userShop.findMany({
-      where: { shop: { orgId }, isActive: true },
-      select: { userId: true, shopRole: true },
+      where: { shop: { orgId } },
+      select: { userId: true, shopRole: true, isActive: true },
     })
+    const count = countSeats(seats)
+    const note = pausedSeatNote(count.paused)
 
-    // Distinct people, so someone attached to two shops is one seat.
-    const totalUsers = new Set(seats.map((s) => s.userId)).size
-    if (billing.maxUsers !== null && totalUsers >= billing.maxUsers) {
+    const alreadySeated = Boolean(candidateUserId) && seats.some((s) => s.userId === candidateUserId)
+
+    if (!alreadySeated && billing.maxUsers !== null && count.total >= billing.maxUsers) {
       return PaymentRequiredResponse(
-        billing.maxUsers === 1
+        (billing.maxUsers === 1
           ? `${billing.planName} is a single-user plan. Upgrade to Team to add cashiers.`
-          : `${billing.planName} includes ${billing.maxUsers} users. Upgrade to add more.`,
+          : `${billing.planName} includes ${billing.maxUsers} users. Upgrade to add more.`) + note,
         'PLAN_LIMIT'
       )
     }
 
     if (role === 'CASHIER' && billing.maxCashiers !== null) {
-      const cashiers = new Set(
-        seats.filter((s) => s.shopRole === 'CASHIER').map((s) => s.userId)
-      ).size
-      if (cashiers >= billing.maxCashiers) {
+      const alreadyCashier =
+        Boolean(candidateUserId) &&
+        seats.some((s) => s.userId === candidateUserId && s.shopRole === 'CASHIER')
+      if (!alreadyCashier && count.cashiers >= billing.maxCashiers) {
         return PaymentRequiredResponse(
-          billing.maxCashiers === 0
+          (billing.maxCashiers === 0
             ? `${billing.planName} does not include cashier accounts. Upgrade to Team to add up to 2.`
-            : `${billing.planName} includes ${billing.maxCashiers} cashiers. Upgrade to add more.`,
+            : `${billing.planName} includes ${billing.maxCashiers} cashiers. Upgrade to add more.`) +
+            pausedSeatNote(count.pausedCashiers),
           'PLAN_LIMIT'
         )
       }
@@ -116,6 +157,27 @@ export async function assertSeatAvailable(
     return null
   } catch {
     return null // fail open
+  }
+}
+
+/**
+ * Whether a new membership row for `userId` in this org must start paused, and what their
+ * existing memberships look like.
+ *
+ * Used by the assign-store path. A person whose every seat is paused is not covered by
+ * the plan, so giving them another store must not quietly hand them a working seat back.
+ */
+export async function resolveNewSeatState(
+  orgId: string,
+  userId: string
+): Promise<{ startsPaused: boolean; alreadySeated: boolean }> {
+  const existing = await prisma.userShop.findMany({
+    where: { userId, shop: { orgId } },
+    select: { isActive: true },
+  })
+  return {
+    startsPaused: newSeatStartsPaused(existing),
+    alreadySeated: existing.length > 0,
   }
 }
 

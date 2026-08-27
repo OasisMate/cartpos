@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { resolveOrgId } from '@/lib/org-scope'
+import { assertSeatAvailable, resolveNewSeatState } from '@/lib/billing/guards'
 
 function ensureOrgAdmin(user: any, orgId: string | null) {
   const isOrgAdmin = user?.organizations?.some(
@@ -99,8 +100,15 @@ export async function POST(
       },
     })
 
+    // Seat cap applies here too, not just when creating an account. Someone already
+    // holding a seat in this org is not a second seat, so the candidate is passed in and
+    // the cap only fires when this really adds a person (or a cashier).
+    const seatBlocked = await assertSeatAvailable(user, orgId, shopRole, userId)
+    if (seatBlocked) return seatBlocked
+
     if (existingAssignment) {
-      // Update existing assignment
+      // Update existing assignment. isActive is deliberately untouched: changing someone's
+      // role is not a reason to hand a paused seat back.
       await prisma.userShop.update({
         where: {
           userId_shopId: {
@@ -111,12 +119,19 @@ export async function POST(
         data: { shopRole },
       })
     } else {
-      // Create new assignment
+      // A person whose every other seat in this org is paused is not covered by the plan,
+      // so their new row starts paused too. Letting it default to active meant assigning a
+      // paused person to any store silently restored their access for free. Latent today
+      // (a downgrade never pauses org-level members, and this route only serves those),
+      // but it is one owner-protection change away from being live.
+      const { startsPaused } = await resolveNewSeatState(orgId, userId)
       await prisma.userShop.create({
         data: {
           userId,
           shopId,
           shopRole,
+          isActive: !startsPaused,
+          pausedAt: startsPaused ? new Date() : null,
         },
       })
     }

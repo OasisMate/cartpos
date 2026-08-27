@@ -74,7 +74,16 @@ export async function GET(request: Request) {
       }
       byId.set(us.user.id, entry)
     }
-    entry.shops.push({ shopId: us.shopId, shopRole: us.shopRole, shop: us.shop })
+    // seatActive/pausedAt so the owner can SEE a downgraded seat. Without them the list
+    // showed a paused cashier as perfectly normal while they were unable to sell, which
+    // reads as the app being broken rather than as the plan being too small.
+    entry.shops.push({
+      shopId: us.shopId,
+      shopRole: us.shopRole,
+      seatActive: us.isActive,
+      pausedAt: us.pausedAt,
+      shop: us.shop,
+    })
   }
 
   return NextResponse.json({ users: Array.from(byId.values()) })

@@ -12,14 +12,15 @@ import { useAuth } from '@/contexts/AuthContext'
  * both wrong and a support nightmare. What it does is say plainly what is
  * happening and what fixes it.
  *
- * Priority: shop frozen (most specific) > expired > expiring soon.
+ * Priority: shop frozen (most specific) > own seat paused > expired > expiring soon.
  */
 export function AccessBanner() {
   const { user } = useAuth()
   if (!user) return null
 
   const billing = user.billing
-  const currentShop = user.shops?.find((s) => s.shopId === user.currentShopId)?.shop
+  const membership = user.shops?.find((s) => s.shopId === user.currentShopId)
+  const currentShop = membership?.shop
   const isOrgAdmin = user.organizations?.some((o) => o.orgRole === 'ORG_ADMIN')
 
   // 1. This shop is frozen.
@@ -42,7 +43,28 @@ export function AccessBanner() {
 
   if (!billing || !billing.enforced || billing.bypass) return null
 
-  // 2. Subscription has run out.
+  // 2. The shop is open but THIS person's seat is paused.
+  //
+  // Placed after the enforcement gate on purpose: it must appear exactly when writes are
+  // actually blocked, never as a scare in a demo or billing-exempt org. Worded for the
+  // person reading it, who is almost never the one who can pay.
+  if (membership?.seatActive === false) {
+    return (
+      <Banner
+        tone="amber"
+        icon={<Lock className="h-4 w-4" />}
+        title="Your account is paused"
+        message={
+          isOrgAdmin
+            ? 'Your plan does not cover this many users. You can view everything, but nothing new can be recorded until you upgrade.'
+            : 'Your plan does not cover this many users, so you can view records but cannot record sales. Please ask the shop owner to upgrade.'
+        }
+        action={isOrgAdmin ? { href: '/billing', label: 'View plans' } : undefined}
+      />
+    )
+  }
+
+  // 3. Subscription has run out.
   //
   // The instruction has to match who is reading it. Staff cannot buy anything,
   // so telling a cashier to "choose a plan" sends them hunting for a screen they
@@ -65,7 +87,7 @@ export function AccessBanner() {
     )
   }
 
-  // 3. Running out. Warn from 5 days, and through the grace window.
+  // 4. Running out. Warn from 5 days, and through the grace window.
   const days = billing.daysLeft
   if (days === null || days > 5) return null
 

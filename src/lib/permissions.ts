@@ -172,7 +172,7 @@ export const NotFoundResponse = (message = 'Resource not found') =>
  */
 export const PaymentRequiredResponse = (
   message = 'Your subscription has expired.',
-  code: 'BILLING_EXPIRED' | 'SHOP_PAUSED' | 'PLAN_LIMIT' = 'BILLING_EXPIRED'
+  code: 'BILLING_EXPIRED' | 'SHOP_PAUSED' | 'SEAT_PAUSED' | 'PLAN_LIMIT' = 'BILLING_EXPIRED'
 ) =>
   new Response(JSON.stringify({ error: message, code }), {
     status: 402,

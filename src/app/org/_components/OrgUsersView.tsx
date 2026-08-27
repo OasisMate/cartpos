@@ -15,7 +15,13 @@ interface OrgUser {
   phone?: string | null
   cnic?: string | null
   orgRole: string
-  shops: Array<{ shopId: string; shopRole: string; shop: { id: string; name: string } }>
+  shops: Array<{
+    shopId: string
+    shopRole: string
+    /** False = seat paused by a plan downgrade: can sign in and read, cannot sell. */
+    seatActive?: boolean
+    shop: { id: string; name: string }
+  }>
 }
 
 interface OrgUsersViewProps {
@@ -495,6 +501,16 @@ export default function OrgUsersView({ orgId, orgName }: OrgUsersViewProps) {
                               <span className="text-sm text-gray-500 ml-2">
                                 ({s.shopRole === 'STORE_MANAGER' ? 'Store Manager' : s.shopRole === 'CASHIER' ? 'Cashier' : s.shopRole})
                               </span>
+                              {/* A paused seat looked identical to a working one here, so an
+                                  owner had no way to tell why their cashier could not sell. */}
+                              {s.seatActive === false && (
+                                <span
+                                  className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800"
+                                  title="Paused by a plan downgrade. This person can sign in and view records but cannot record sales. Upgrade the plan to restore them."
+                                >
+                                  Paused
+                                </span>
+                              )}
                             </div>
                           ))}
                         </div>
