@@ -161,6 +161,10 @@ model User {
   role                  UserRole                 @default(NORMAL)
   emailVerified         Boolean                  @default(false) // email ownership confirmed via verification link
   twoFactorEnabled      Boolean                  @default(false) // opt-in email 2FA on login
+  // Bumped whenever every session for this user must stop working (password reset or
+  // change). Sessions carry the version they were issued with, so a mismatch revokes the
+  // cookie. Kept on User so the check rides along on the query the auth path already runs.
+  tokenVersion          Int                      @default(0)
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   shops                 UserShop[]

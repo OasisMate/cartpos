@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     await prisma.loginCode.update({ where: { id: record.id }, data: { used: true } })
-    await createSession(user.id, user.email, user.role, Boolean(rememberMe))
+    await createSession(user, Boolean(rememberMe))
 
     return NextResponse.json({
       user: { id: user.id, name: user.name, email: user.email, role: user.role },

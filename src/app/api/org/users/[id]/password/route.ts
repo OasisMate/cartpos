@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getCurrentUser, hashPassword } from '@/lib/auth'
+import { REVOKE_SESSIONS } from '@/lib/auth/token-version'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { passwordPolicyError } from '@/lib/validation/password'
 import { resolveOrgId } from '@/lib/org-scope'
@@ -68,10 +69,12 @@ export async function PUT(
     // Hash new password
     const hashedPassword = await hashPassword(newPassword)
 
-    // Update password
+    // Update password. This ends that user's sessions on every device, which is the
+    // point when an owner resets a staff password after a handover or a suspected
+    // compromise. The admin's own session is untouched.
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, ...REVOKE_SESSIONS },
     })
 
     // Log activity

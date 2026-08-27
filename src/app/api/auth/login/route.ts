@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create session with remember me option
-    await createSession(user.id, user.email, user.role, rememberMe)
+    await createSession(user, rememberMe)
 
     return NextResponse.json({
       user: {

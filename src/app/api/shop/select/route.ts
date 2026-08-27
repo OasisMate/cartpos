@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { isSessionCurrent } from '@/lib/auth/token-version'
 import { cookies } from 'next/headers'
 import { getUserShops } from '@/lib/domain/shops'
 
@@ -34,12 +35,19 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // This is the only route that authenticates from the session cookie alone rather than
+    // going through getCurrentUser, so it makes the revocation check itself. Without it a
+    // cookie killed by a password reset could still switch shops.
+    if (!user || !isSessionCurrent(session.tokenVersion, user.tokenVersion)) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     let hasAccess = false
 
-    if (user?.role === 'PLATFORM_ADMIN') {
+    if (user.role === 'PLATFORM_ADMIN') {
       // Platform admin can access any shop
       hasAccess = true
-    } else if (user?.organizations && user.organizations.length > 0) {
+    } else if (user.organizations && user.organizations.length > 0) {
       // Check if shop belongs to user's organization
       const shop = await prisma.shop.findUnique({
         where: { id: shopId },

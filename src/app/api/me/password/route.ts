@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser, verifyPassword, hashPassword } from '@/lib/auth'
+import { getCurrentUser, verifyPassword, hashPassword, reissueSession } from '@/lib/auth'
+import { REVOKE_SESSIONS } from '@/lib/auth/token-version'
 import { prisma } from '@/lib/db/prisma'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 import { passwordPolicyError } from '@/lib/validation/password'
@@ -55,11 +56,18 @@ export async function PUT(request: Request) {
     // Hash new password
     const hashedPassword = await hashPassword(newPassword)
 
-    // Update password
-    await prisma.user.update({
+    // Update password. Changing it signs out every OTHER device this account is logged
+    // in on, which is what someone changing a password after a scare expects.
+    const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, ...REVOKE_SESSIONS },
+      select: { id: true, email: true, role: true, tokenVersion: true },
     })
+
+    // Every other device, but not this one: re-stamp the caller's own cookie with the new
+    // version so the person who just changed their password is not bounced to the login
+    // screen for their trouble. Their remember-me expiry is preserved.
+    await reissueSession(updated)
 
     // Log activity
     const orgId = user.currentOrgId || user.organizations?.[0]?.orgId

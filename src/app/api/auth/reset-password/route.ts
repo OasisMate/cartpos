@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { hashPassword } from '@/lib/auth'
+import { REVOKE_SESSIONS } from '@/lib/auth/token-version'
 import { passwordPolicyError } from '@/lib/validation/password'
 
 export async function POST(request: NextRequest) {
@@ -67,7 +68,10 @@ export async function POST(request: NextRequest) {
     await prisma.$transaction([
       prisma.user.update({
         where: { id: resetToken.userId },
-        data: { password: hashedPassword },
+        // A forgotten password is exactly the case where someone else may be holding a
+        // live session cookie, so the reset has to end every session this user has. Rides
+        // on the write that was happening anyway: no extra query.
+        data: { password: hashedPassword, ...REVOKE_SESSIONS },
       }),
       prisma.passwordResetToken.update({
         where: { id: resetToken.id },

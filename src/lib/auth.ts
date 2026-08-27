@@ -6,6 +6,7 @@ import { isDatabaseConnectionError } from './db/db-utils'
 import { withRetry } from './db/connection-retry'
 import { presetForType, readFeatureConfig, getShopUnits } from './domain/business-presets'
 import { resolveBillingState } from './billing/subscription'
+import { readTokenVersion, isSessionCurrent } from './auth/token-version'
 
 const secretKey = process.env.JWT_SECRET
 if (!secretKey || secretKey.length < 32) {
@@ -27,12 +28,17 @@ export async function verifyPassword(
   return bcrypt.compare(password, hashedPassword)
 }
 
-export async function createSession(userId: string, email: string, role: string, rememberMe: boolean = false) {
-  // If remember me is checked, set expiration to 30 days, otherwise 7 days
-  const expirationDays = rememberMe ? 30 : 7
-  const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000)
+/** The user fields a session cookie is built from. */
+export type SessionUser = { id: string; email: string; role: string; tokenVersion: number }
 
-  const session = await new SignJWT({ userId, email, role })
+async function writeSessionCookie(user: SessionUser, expiresAt: Date) {
+  const session = await new SignJWT({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    // Short claim name deliberately: this cookie rides on every single request.
+    v: user.tokenVersion,
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(expiresAt)
@@ -47,6 +53,42 @@ export async function createSession(userId: string, email: string, role: string,
     sameSite: 'lax',
     path: '/',
   })
+}
+
+/**
+ * Issues the session cookie.
+ *
+ * Takes the user row rather than loose fields so the tokenVersion cannot be left off by
+ * accident: a session issued without one can never be revoked.
+ */
+export async function createSession(user: SessionUser, rememberMe: boolean = false) {
+  // If remember me is checked, set expiration to 30 days, otherwise 7 days
+  const expirationDays = rememberMe ? 30 : 7
+  const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000)
+  await writeSessionCookie(user, expiresAt)
+}
+
+/**
+ * Re-stamps the caller's OWN cookie with a new tokenVersion, keeping its original expiry.
+ *
+ * Used when a user changes their own password: the point is to sign out their other
+ * devices, not the browser they are typing in. Keeping the expiry preserves their
+ * "remember me" choice instead of silently cutting a 30-day session down to 7.
+ */
+export async function reissueSession(user: SessionUser) {
+  const cookieStore = await cookies()
+  const current = cookieStore.get('session')?.value
+  let expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  if (current) {
+    try {
+      const { payload } = await jwtVerify(current, encodedKey, { algorithms: ['HS256'] })
+      if (typeof payload.exp === 'number') expiresAt = new Date(payload.exp * 1000)
+    } catch {
+      // Unreadable cookie: fall back to a fresh window rather than failing a password
+      // change that has already been written.
+    }
+  }
+  await writeSessionCookie(user, expiresAt)
 }
 
 /**
@@ -80,6 +122,7 @@ export async function getSession(): Promise<{
   userId: string
   email: string
   role: string
+  tokenVersion: number
 } | null> {
   try {
     const cookieStore = await cookies()
@@ -97,6 +140,10 @@ export async function getSession(): Promise<{
       userId: payload.userId as string,
       email: payload.email as string,
       role: payload.role as string,
+      // A claim, not a fact. Only meaningful once compared against the user row, which
+      // getCurrentUser does. Anything reading a session without that comparison is
+      // trusting a cookie that a password reset was supposed to have killed.
+      tokenVersion: readTokenVersion(payload.v),
     }
   } catch (error) {
     return null
@@ -127,6 +174,9 @@ export async function getCurrentUser() {
             isWhatsApp: true,
             role: true,
             twoFactorEnabled: true,
+            // One integer on a query that already runs: this is what makes session
+            // revocation free. See lib/auth/token-version.ts.
+            tokenVersion: true,
             organizations: {
               include: {
                 organization: {
@@ -177,6 +227,12 @@ export async function getCurrentUser() {
     )
 
     if (!user) {
+      return null
+    }
+
+    // Revoked session: the password was reset or changed after this cookie was issued, so
+    // the cookie is no longer proof of anything. Treated exactly like no session at all.
+    if (!isSessionCurrent(session.tokenVersion, user.tokenVersion)) {
       return null
     }
 
