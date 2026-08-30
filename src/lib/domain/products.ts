@@ -729,3 +729,79 @@ export async function setTrackStock(productId: string, trackStock: boolean, user
     return updated
   })
 }
+
+/**
+ * Set one sale price on a product straight from the POS.
+ *
+ * An admin who spots a stale price mid-sale used to have to fix the cart line for that
+ * one sale, then walk over to the products page and fix it again for good. This writes
+ * the single rate the cart line was priced from, leaving every other field untouched:
+ *
+ *   price       plain retail line
+ *   tradePrice  line sold in trade mode
+ *   cartonPrice carton line
+ *   packLevel   line sold at a named packaging level (needs `packName`)
+ *
+ * Where the rate did not exist yet (no trade rate, a carton price that was being derived
+ * from price x cartonSize), saving establishes it. That is the point: the admin has just
+ * told us what that level sells for.
+ */
+export async function setProductSalePrice(
+  productId: string,
+  field: 'price' | 'tradePrice' | 'cartonPrice' | 'packLevel',
+  value: number,
+  userId: string,
+  packName?: string
+) {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error('Price must be a valid positive number')
+  }
+  if (value >= 100000000) {
+    throw new Error('Price must be less than 100,000,000')
+  }
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { id: true, shopId: true, name: true, price: true, tradePrice: true, cartonPrice: true },
+  })
+  if (!product) throw new Error('Product not found')
+  if (!(await checkProductPermission(userId, product.shopId))) {
+    throw new Error('You do not have permission to update products in this shop')
+  }
+
+  if (field === 'packLevel') {
+    if (!packName?.trim()) throw new Error('Packaging level name is required')
+    const level = await prisma.packagingLevel.findUnique({
+      where: { productId_name: { productId, name: packName } },
+      select: { id: true, price: true },
+    })
+    if (!level) throw new Error('Packaging level not found')
+
+    await prisma.packagingLevel.update({
+      where: { id: level.id },
+      data: { price: new Decimal(value) },
+    })
+    return {
+      id: product.id,
+      name: product.name,
+      field,
+      packName,
+      previousPrice: level.price === null ? null : Number(level.price),
+      newPrice: value,
+    }
+  }
+
+  const previous = product[field]
+  await prisma.product.update({
+    where: { id: productId },
+    data: { [field]: new Decimal(value) },
+  })
+  return {
+    id: product.id,
+    name: product.name,
+    field,
+    packName: undefined,
+    previousPrice: previous === null ? null : Number(previous),
+    newPrice: value,
+  }
+}

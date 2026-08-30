@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { DemoBlockedResponse } from '@/lib/demo'
-import { updateProduct, getProduct, deleteProduct, archiveProduct, unarchiveProduct, setTrackStock, UpdateProductInput } from '@/lib/domain/products'
+import { updateProduct, getProduct, deleteProduct, archiveProduct, unarchiveProduct, setTrackStock, setProductSalePrice, UpdateProductInput } from '@/lib/domain/products'
 import { logActivity, ActivityActions, EntityTypes } from '@/lib/audit/activityLog'
 
 // GET: Get single product
@@ -192,6 +192,65 @@ export async function PATCH(
         })
       }
       return NextResponse.json({ success: true, trackStock: product.trackStock })
+    }
+
+    // A price fixed straight from the POS. Same reason trackStock lives here rather than in
+    // PUT: PUT rebuilds every field from the body, so a one-key request there would clear
+    // whatever it did not mention. `priceField` names which of the four sale rates the cart
+    // line was priced from, so we never rewrite a rate the cashier was not looking at.
+    if (body.priceField !== undefined) {
+      const allowed = ['price', 'tradePrice', 'cartonPrice', 'packLevel']
+      if (!allowed.includes(body.priceField)) {
+        return NextResponse.json(
+          { error: `priceField must be one of ${allowed.join(', ')}` },
+          { status: 400 }
+        )
+      }
+
+      const value = parseFloat(body.value)
+      if (isNaN(value) || value <= 0) {
+        return NextResponse.json(
+          { error: 'Price must be a valid positive number' },
+          { status: 400 }
+        )
+      }
+      if (value >= 100000000) {
+        return NextResponse.json(
+          { error: 'Price must be less than 100,000,000' },
+          { status: 400 }
+        )
+      }
+
+      const result = await setProductSalePrice(
+        params.id,
+        body.priceField,
+        value,
+        user.id,
+        typeof body.packName === 'string' ? body.packName : undefined
+      )
+
+      if (user.currentOrgId) {
+        await logActivity({
+          userId: user.id,
+          orgId: user.currentOrgId,
+          shopId: user.currentShopId || null,
+          action: ActivityActions.UPDATE_PRODUCT,
+          entityType: EntityTypes.PRODUCT,
+          entityId: result.id,
+          details: {
+            name: result.name,
+            priceField: result.field,
+            packName: result.packName,
+            from: result.previousPrice,
+            to: result.newPrice,
+            source: 'pos',
+          },
+          ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+          userAgent: request.headers.get('user-agent') || null,
+        })
+      }
+
+      return NextResponse.json({ success: true, price: result })
     }
 
     if (body.archived !== true && body.archived !== false) {

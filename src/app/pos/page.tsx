@@ -13,6 +13,7 @@ import { getCustomers, saveCustomers, saveProducts, addCustomer as addLocalCusto
 import { cuid } from '@/lib/utils/cuid'
 import { validatePhone } from '@/lib/validation'
 import { trapTab } from '@/lib/utils/focusTrap'
+import { resolvePriceTarget, savedPriceFor, type PriceField } from '@/lib/pos/priceTarget'
 import { sumCartLines, calculateTotals, formatNumber, formatCurrency, roundToTwo } from '@/lib/utils/money'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -111,6 +112,7 @@ interface CartItem {
   isCarton?: boolean  // true if selling by carton, false if by piece (legacy 2-level)
   packName?: string   // packaging level name when selling a defined level (e.g. "Box")
   unitsPerItem?: number // base units per sold item (cartonSize / level factor / 1). Drives stock.
+  priceField?: PriceField // which product rate this line represents (see addToCart)
 }
 
 // Identity of a cart line: the same product sold at the same level is one line.
@@ -391,6 +393,11 @@ export default function POSPage() {
   // Edit Item State
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
   const [editForm, setEditForm] = useState({ quantity: 0, price: 0 })
+  // Opt-in, admin/owner only: also write the edited price onto the product record so the
+  // next sale starts from it. Off by default, so a price typed for one customer stays a
+  // one-sale override exactly as before.
+  const [savePriceToProduct, setSavePriceToProduct] = useState(false)
+  const [savingProductPrice, setSavingProductPrice] = useState(false)
   const [cardFeePercentOverride, setCardFeePercentOverride] = useState<number | null>(null)
 
   // Edit-invoice mode: reopen a completed sale to correct it in place (?edit=<invoiceId>).
@@ -459,6 +466,22 @@ export default function POSPage() {
       (s: { shopId: string; shopRole: string }) =>
         s.shopId === user?.currentShopId && s.shopRole === 'STORE_MANAGER'
     ) ?? false)
+
+  // Which of the product's four sale rates this cart line was priced from. Resolved from
+  // the line itself, so editing a trade or carton line never rewrites the retail price.
+  const editPriceTarget = useMemo(
+    () => resolvePriceTarget(editingItem ?? {}, priceMode),
+    [editingItem, priceMode]
+  )
+  // Compare against the catalog, not the cart line: a line already overridden earlier in
+  // this sale should still be savable without typing the same number twice.
+  const editSavedPrice = useMemo(() => {
+    if (!editingItem) return null
+    const live = products.find((p) => p.id === editingItem.product.id) ?? editingItem.product
+    return savedPriceFor(live, editPriceTarget)
+  }, [editingItem, products, editPriceTarget])
+  const canSaveProductPrice =
+    canManageProducts && isOnline && editForm.price > 0 && editForm.price !== editSavedPrice
 
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const submitLockRef = useRef(false)
@@ -644,6 +667,7 @@ export default function POSPage() {
   useEffect(() => {
     if (editingItem) {
       setEditForm({ quantity: editingItem.quantity, price: editingItem.unitPrice })
+      setSavePriceToProduct(false)
     }
   }, [editingItem])
 
@@ -792,6 +816,18 @@ export default function POSPage() {
       ? product.tradePrice
       : product.price
 
+    // Which of the product's rates this line represents. Recorded now because the price mode
+    // can be toggled later in the same sale, and saving an edited price has to land on the rate
+    // the line was actually sold at. A trade-mode line represents the trade rate even when it
+    // fell back to retail for want of one.
+    const priceField: PriceField = packLevel
+      ? 'packLevel'
+      : isCarton
+      ? 'cartonPrice'
+      : priceMode === 'TRADE'
+      ? 'tradePrice'
+      : 'price'
+
     // Base units per sold item: level factor, carton size, or 1 (base unit).
     const unitsPerItem = packLevel ? packLevel.factor : isCarton ? (product.cartonSize || 1) : 1
     // Identity for cart dedup: same product + same sold level merge into one line.
@@ -878,6 +914,7 @@ export default function POSPage() {
           isCarton,
           packName: packLevel?.name,
           unitsPerItem,
+          priceField,
         },
       ])
     }
@@ -969,8 +1006,58 @@ export default function POSPage() {
     )
   }
 
-  function saveEditedItem() {
+  /** Write a saved price into the in-memory catalog and the offline cache. Cheaper and
+   *  more reliable mid-sale than refetching a catalog that can run to thousands of rows. */
+  async function applySavedPriceLocally(productId: string, value: number) {
+    const next = products.map((p) => {
+      if (p.id !== productId) return p
+      if (editPriceTarget.field === 'packLevel') {
+        return {
+          ...p,
+          packagingLevels: (p.packagingLevels || []).map((l) =>
+            l.name === editPriceTarget.packName ? { ...l, price: value } : l
+          ),
+        }
+      }
+      return { ...p, [editPriceTarget.field]: value }
+    })
+    setProducts(next)
+    if (user?.currentShopId) await saveProducts(user.currentShopId, next)
+  }
+
+  async function saveEditedItem() {
     if (!editingItem) return
+
+    // The catalog write goes first, but a failure never blocks the sale: the cart line is
+    // still edited and the toast says plainly that only this sale got the new price.
+    if (savePriceToProduct && canSaveProductPrice) {
+      setSavingProductPrice(true)
+      try {
+        const res = await fetch(`/api/products/${editingItem.product.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            priceField: editPriceTarget.field,
+            packName: editPriceTarget.packName,
+            value: editForm.price,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || 'Failed to update the product price')
+        await applySavedPriceLocally(editingItem.product.id, editForm.price)
+        show({
+          message: `${editingItem.product.name}: saved ${editPriceTarget.label} price is now ${formatCurrency(editForm.price)}`,
+          variant: 'success',
+        })
+      } catch (err: any) {
+        show({
+          message: `${err?.message || 'Could not save the product price'}. This sale still uses the new price.`,
+          variant: 'destructive',
+        })
+      } finally {
+        setSavingProductPrice(false)
+      }
+    }
 
     if (editForm.quantity <= 0) {
       removeFromCart(editingItem.product.id)
@@ -2594,19 +2681,49 @@ export default function POSPage() {
                 />
               </div>
 
+              {canManageProducts && (
+                <label
+                  className={`flex items-start gap-2 rounded-md border border-[hsl(var(--border))] p-2.5 ${
+                    canSaveProductPrice ? 'cursor-pointer' : 'opacity-70'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                    checked={savePriceToProduct && canSaveProductPrice}
+                    disabled={!canSaveProductPrice}
+                    onChange={(e) => setSavePriceToProduct(e.target.checked)}
+                  />
+                  <span className="text-sm leading-snug">
+                    <span className="font-medium">Also update saved {editPriceTarget.label} price</span>
+                    <span className="block text-xs text-[hsl(var(--muted-foreground))]">
+                      {!isOnline
+                        ? 'Needs internet. The price still applies to this sale.'
+                        : editForm.price > 0 && editForm.price === editSavedPrice
+                        ? 'Already the saved price.'
+                        : editSavedPrice == null
+                        ? 'No saved rate yet. Ticking this sets one for future sales.'
+                        : `Future sales use it instead of ${formatCurrency(editSavedPrice)}.`}
+                    </span>
+                  </span>
+                </label>
+              )}
+
               <div className="flex gap-2 pt-4">
                 <Button
                   variant="outline"
                   onClick={() => setEditingItem(null)}
                   className="flex-1"
+                  disabled={savingProductPrice}
                 >
                   {t('cancel')}
                 </Button>
                 <Button
                   onClick={saveEditedItem}
                   className="flex-1"
+                  disabled={savingProductPrice}
                 >
-                  {t('save')}
+                  {savingProductPrice ? 'Saving...' : t('save')}
                 </Button>
               </div>
             </div>
